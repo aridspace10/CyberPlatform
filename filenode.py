@@ -23,3 +23,9 @@ class FileNode:
             if (item[0].name == name):
                 return item[0]
         return None
+
+    def delete_child(self, name: str) -> None:
+        for idx, item in enumerate(self.items):
+            if (item[0].name == name):
+                self.items.pop(idx)
+                
