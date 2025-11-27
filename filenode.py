@@ -28,4 +28,11 @@ class FileNode:
         for idx, item in enumerate(self.items):
             if (item[0].name == name):
                 self.items.pop(idx)
-                
+
+    def list_content(self, deep: bool = False) -> list:
+        content = []
+        for item in self.items:
+            content.append(item[0].name)
+            if item[1] == "directory" and deep:
+                content.extend(item[0].list_content())
+        return content
