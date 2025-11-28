@@ -4,11 +4,21 @@ from typing import Literal, Tuple
 class FileNode:
     def __init__(self, parent: FileNode | None, name: str):
         self.name = name
-        self.parent = parent
+        self.parent: FileNode | None = parent
+        self.depth = 0
         self.items: list[Tuple[FileNode, Literal["directory", "file"]]] = []
+
+    def accumualate_depth(self) -> None:
+        self.depth += 1
+        if (self.parent != None):
+            self.parent.accumualate_depth()
 
     def add_child(self, name: str, mode: Literal["directory", "file"]) -> FileNode:
         file = FileNode(self, name)
+        if (not len(self.items)):
+            self.depth = 1
+            if (self.parent is not None):
+                self.parent.accumualate_depth()
         self.items.append((file, mode))
         return file
     
@@ -28,6 +38,9 @@ class FileNode:
         for idx, item in enumerate(self.items):
             if (item[0].name == name):
                 self.items.pop(idx)
+
+    def len(self) -> int:
+        return len(self.items)
 
     def list_content(self, deep: bool = False) -> list:
         content = []
