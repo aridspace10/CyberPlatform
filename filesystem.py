@@ -2,7 +2,7 @@ from filenode import FileNode
 
 class FileSystem:
     def __init__(self):
-        self.filehead = FileNode(None, "..")
+        self.filehead = FileNode(None, "root")
         self.current: FileNode = self.filehead
 
     def setup_system(self, textfile):
@@ -17,12 +17,30 @@ class FileSystem:
     def tree(self, path: str = "."):
         if (error := self.search(path)) != "":
             return error
+        lx = self.current.depth * 3
+        nodes = self.current.preorder_traversal([], 0)
+        print (nodes)
+        output = [[' ' for _ in range(lx)] for _ in range(len(nodes))]
+        idx = 0
+        for node in nodes:
+            output[idx][node[0]] = node[1]
+            idx += 1
 
-    def list_files(self, path):
+        for col in range(0, lx):
+            biggest = 0
+            for row in range(len(nodes)):
+                if (new := len(output[row][col])) > biggest:
+                    biggest = new
+            print (biggest)
+            for row in range(len(nodes)):
+                output[row][col] = output[row][col] + " " * (biggest - len(output[row][col]))
+        return output
+
+    def list_files(self, path: str, deep: int = 0):
         if (path != ""):
             if (error := self.search(path)) != "":
                 return error
-        return self.current.list_content()
+        return self.current.list_content(deep)
 
     def search(self, path: str) -> str:
         lst = path.split("/")
@@ -68,4 +86,7 @@ class FileSystem:
 
 f = FileSystem()
 f.setup_system("filesystems/example.txt")
-print (f.list_files(""))
+print (f.list_files("", 1))
+content = f.tree()
+for p in content:
+    print ("".join(p))
