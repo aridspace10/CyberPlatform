@@ -6,12 +6,20 @@ class FileNode:
         self.name = name
         self.parent: FileNode | None = parent
         self.depth = 0
+        self.nodes = 0
         self.items: list[Tuple[FileNode, Literal["directory", "file"]]] = []
 
     def accumualate_depth(self) -> None:
         self.depth += 1
         if (self.parent != None):
             self.parent.accumualate_depth()
+    
+    def preorder_traversal(self, content: list[Tuple[int, str]], move: int) -> list[Tuple[int, str]]:
+        content.append((move, self.name))
+        for idx, item in enumerate(self.items):
+            content = (item[0].preorder_traversal(content, move + 1))
+        return content
+
 
     def add_child(self, name: str, mode: Literal["directory", "file"]) -> FileNode:
         file = FileNode(self, name)
@@ -42,10 +50,11 @@ class FileNode:
     def len(self) -> int:
         return len(self.items)
 
-    def list_content(self, deep: bool = False) -> list:
+    def list_content(self, deep: int = 0) -> list:
         content = []
         for item in self.items:
             content.append(item[0].name)
             if item[1] == "directory" and deep:
-                content.extend(item[0].list_content())
+                deep -= 1
+                content.extend(item[0].list_content(deep))
         return content
