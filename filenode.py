@@ -15,9 +15,14 @@ class FileNode:
             self.parent.accumualate_depth()
     
     def preorder_traversal(self, content: list[Tuple[int, str]], move: int) -> list[Tuple[int, str]]:
-        content.append((move, self.name))
-        for idx, item in enumerate(self.items):
-            content = (item[0].preorder_traversal(content, move + 1))
+        if (self.items):
+            mid = len(self.items) // 2
+            for idx, item in enumerate(self.items):
+                if (idx == mid):
+                    content.append((move, self.name))
+                content = (item[0].preorder_traversal(content, move + 1))
+        else:
+            content.append((move, self.name))
         return content
 
 
