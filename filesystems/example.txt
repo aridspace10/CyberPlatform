@@ -1,0 +1,6 @@
+f1.txt
+f2.txt
+d1
+d2
+d1/f3.txt
+d1/f4.txt
