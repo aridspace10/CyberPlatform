@@ -19,12 +19,13 @@ class FileNode:
             mid = len(self.items) // 2
             for idx, item in enumerate(self.items):
                 if (idx == mid):
-                    content.append((move, self.name))
+                    content.append((move, self.name + "-|"))
                 content = (item[0].preorder_traversal(content, move + 1))
         else:
+            content.append((move, "--"))
+            move += 1
             content.append((move, self.name))
         return content
-
 
     def add_child(self, name: str, mode: Literal["directory", "file"]) -> FileNode:
         file = FileNode(self, name)
@@ -47,10 +48,12 @@ class FileNode:
                 return item[0]
         return None
 
-    def delete_child(self, name: str) -> None:
+    def delete_child(self, name: str) -> FileNode | None:
         for idx, item in enumerate(self.items):
             if (item[0].name == name):
-                self.items.pop(idx)
+                return self.items.pop(idx)[0]
+        return None
+                
 
     def len(self) -> int:
         return len(self.items)
