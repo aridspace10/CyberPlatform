@@ -6,8 +6,14 @@ class FileNode:
         self.name = name
         self.parent: FileNode | None = parent
         self.depth = 0
-        self.nodes = 0
         self.items: list[Tuple[FileNode, Literal["directory", "file"]]] = []
+        self.data: str = ""
+
+    @property
+    def size(self):
+        if isinstance(self.data, bytes):
+            return len(self.data)
+        return len(self.data.encode("utf-8"))
 
     def accumualate_depth(self) -> None:
         self.depth += 1
@@ -54,7 +60,6 @@ class FileNode:
                 return self.items.pop(idx)[0]
         return None
                 
-
     def len(self) -> int:
         return len(self.items)
 
