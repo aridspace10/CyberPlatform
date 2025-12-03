@@ -13,6 +13,8 @@ class CommandLine:
                 print (self.ls(args[1:]))
             case "mkdir":
                 self.mkdir(args[1:])
+            case "cd":
+                self.cd(args[1:])
     
     def mkdir(self, args: list[str]):
         permissions = {"r": True, "w": True, "x": True}
@@ -58,7 +60,17 @@ class CommandLine:
                             deep = True
             args = args[1:]
         return self.filesystem.list_files("", -1 if deep else 0)
+    
+    def cd(self, args: list[str]):
+        arg = args[0]
+        if (error := self.filesystem.search(arg)):
+            print (error)
+        print (self.filesystem.current.name)
+
 
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
+cl.enter_command("ls -R")
+cl.enter_command("mkdir d3")
+cl.enter_command("cd ..")
 cl.enter_command("ls -R")
