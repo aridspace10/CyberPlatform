@@ -17,15 +17,16 @@ class FileSystem:
     def tree(self, path: str = "."):
         if (error := self.search(path)) != "":
             return error
-        lx = self.current.depth * 3
+        lx = self.current.depth * 4
         nodes = self.current.preorder_traversal([], 0)
         print (nodes)
         output = [[' ' for _ in range(lx)] for _ in range(len(nodes))]
         idx = 0
         for node in nodes:
             output[idx][node[0]] = node[1]
-            idx += 1
-
+            if (len(node[1]) > 2):
+                idx += 1
+        print (output)
         for col in range(0, lx):
             biggest = 0
             for row in range(len(nodes)):
@@ -42,7 +43,7 @@ class FileSystem:
                 return error
         return self.current.list_content(deep)
 
-    def search(self, path: str) -> str:
+    def search(self, path: str, creating: bool = False) -> str:
         lst = path.split("/")
         while len(lst) > 1:
             if lst[0] == ".":
@@ -54,7 +55,10 @@ class FileSystem:
                 continue
 
             if self.current.search(lst[0]) in [None, "file"]:
-                return f"No directory named {lst[0]}"
+                if (creating):
+                    self.current.add_child(lst[0], 'directory')
+                else:
+                    return f"No directory named {lst[0]}"
             node = self.current.access(lst[0])
             if node is None:
                 return f"No directory named {lst[0]}"
@@ -68,7 +72,7 @@ class FileSystem:
         else:
             return self.add_directory(path)
 
-    def add_directory(self, path: str) -> str:
+    def add_directory(self, path: str, creating: bool = False, permissions: dict = {}) -> str:
         saved_current = self.current
         if (error := self.search(path)) != "":
             self.current = saved_current
@@ -84,9 +88,11 @@ class FileSystem:
         self.current = self.current.add_child(path, 'file')
         return ""
 
+"""
 f = FileSystem()
 f.setup_system("filesystems/example.txt")
 print (f.list_files("", 1))
 content = f.tree()
 for p in content:
     print ("".join(p))
+"""
