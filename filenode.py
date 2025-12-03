@@ -8,6 +8,7 @@ class FileNode:
         self.depth = 0
         self.items: list[Tuple[FileNode, Literal["directory", "file"]]] = []
         self.data: str = ""
+        self.permissions = {"r": True, "w": True, "x": True}
 
     @property
     def size(self):
@@ -63,11 +64,14 @@ class FileNode:
     def len(self) -> int:
         return len(self.items)
 
-    def list_content(self, deep: int = 0) -> list:
+    def list_content(self, prev: str, deep: int = 0) -> list:
         content = []
         for item in self.items:
-            content.append(item[0].name)
+            if (prev):
+                content.append(prev + "/" + item[0].name)
+            else:
+                content.append(item[0].name)
             if item[1] == "directory" and deep:
                 deep -= 1
-                content.extend(item[0].list_content(deep))
+                content.extend(item[0].list_content(prev + "/" + item[0].name, deep))
         return content
