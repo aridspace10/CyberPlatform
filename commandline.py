@@ -16,6 +16,7 @@ class CommandLine:
     
     def mkdir(self, args: list[str]):
         permissions = {"r": True, "w": True, "x": True}
+        verbose, parent = False, False
         while len(args) > 1:
             arg = args[0]
             if (arg == "-m" or arg == "--mode"):
@@ -33,8 +34,17 @@ class CommandLine:
                                 permissions["x"] = True
                         arg = arg[1:]
                 else:
-                    print ("mkdir: option given to -m or --mode is not correct")
+                    return "mkdir: option given to -m or --mode is not correct"
+            elif (arg == "-v" or arg == "--verbose"):
+                verbose = True
+            elif (arg == "-p" or arg == "--parents"):
+                parent = True
+            else:
+                return "mkdir: unknown argument given"
             args = args[1:]
+        self.filesystem.add_directory(args[0], parent, permissions)
+        if (verbose):
+            print (f"mkdir: sucessfully created ${args[0]}")
 
     def ls(self, args: list[str]):
         deep = False
