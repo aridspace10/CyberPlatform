@@ -15,7 +15,20 @@ class CommandLine:
                 self.mkdir(args[1:])
             case "cd":
                 self.cd(args[1:])
-    
+            case "pwd":
+                self.pwd()
+
+    def pwd(self):
+        pointer = self.filesystem.current
+        direct = ""
+        while (pointer != None):
+            if (direct):
+                direct = pointer.name + "/" + direct
+            else:
+                direct = pointer.name
+            pointer = pointer.parent
+        print (direct)
+        
     def mkdir(self, args: list[str]):
         permissions = {"r": True, "w": True, "x": True}
         verbose, parent = False, False
@@ -65,12 +78,12 @@ class CommandLine:
         arg = args[0]
         if (error := self.filesystem.search(arg)):
             print (error)
-        print (self.filesystem.current.name)
 
 
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
 cl.enter_command("ls -R")
 cl.enter_command("mkdir d3")
+cl.enter_command("pwd")
 cl.enter_command("cd ..")
 cl.enter_command("ls -R")
