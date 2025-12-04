@@ -41,11 +41,11 @@ class FileSystem:
         if (path != ""):
             if (error := self.search(path)) != "":
                 return error
-        return self.current.list_content(deep)
+        return self.current.list_content("", deep)
 
     def search(self, path: str, creating: bool = False) -> str:
         lst = path.split("/")
-        while len(lst) > 1:
+        while len(lst) > 0 and lst != ['']:
             if lst[0] == ".":
                 lst.pop(0)
                 continue
@@ -74,18 +74,20 @@ class FileSystem:
 
     def add_directory(self, path: str, creating: bool = False, permissions: dict = {}) -> str:
         saved_current = self.current
-        if (error := self.search(path)) != "":
+        lst = path.split("/")
+        if (error := self.search("/".join(lst[0:-1]))) != "":
             self.current = saved_current
             return error
-        self.current = self.current.add_child(path, 'directory')
+        self.current = self.current.add_child(lst[-1], 'directory')
         return ""
 
-    def add_file(self, path):
+    def add_file(self, path: str):
         saved_current = self.current
-        if (error := self.search(path)) != "":
+        lst = path.split("/")
+        if (error := self.search("/".join(lst[0:-1]))) != "":
             self.current = saved_current
             return error
-        self.current = self.current.add_child(path, 'file')
+        self.current = self.current.add_child(lst[-1], 'file')
         return ""
 
 """
