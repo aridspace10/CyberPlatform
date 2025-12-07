@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Literal, Tuple
+import datetime
 
 class FileNode:
     def __init__(self, parent: FileNode | None, name: str):
@@ -9,6 +10,10 @@ class FileNode:
         self.items: list[Tuple[FileNode, Literal["directory", "file"]]] = []
         self.data: str = ""
         self.permissions = {"r": True, "w": True, "x": True}
+        self.btime = datetime.datetime.now()
+        self.ctime = datetime.datetime.now()
+        self.atime = datetime.datetime.now()
+        self.mtimee = datetime.datetime.now()
 
     @property
     def size(self):
