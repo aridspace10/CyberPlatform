@@ -21,6 +21,9 @@ class FileNode:
             return len(self.data)
         return len(self.data.encode("utf-8"))
 
+    def get_data(self) -> str:
+        return self.data
+
     def accumualate_depth(self) -> None:
         self.depth += 1
         if (self.parent != None):
