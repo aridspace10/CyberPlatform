@@ -19,6 +19,26 @@ class CommandLine:
                 self.pwd()
             case "rm":
                 self.rm(args[1:])
+            case "touch":
+                self.touch(args[1:])
+            case "cat":
+                self.cat(args[1:])
+            case "head":
+                self.head(args[1:])
+            case "tail":
+                self.tail(args[1:])
+
+    def touch(self, args: list[str]):
+        pass
+
+    def cat(self, args: list[str]):
+        pass
+
+    def head(self, args: list[str]):
+        pass
+
+    def tail(self, args: list[str]):
+        pass
 
     def rm(self, args: list[str]):
         recurse, verbose = False, False
@@ -39,7 +59,6 @@ class CommandLine:
                 print("No file deleted")
             else:
                 print("File sucessfully deleted")
-
 
     def pwd(self):
         pointer = self.filesystem.current
