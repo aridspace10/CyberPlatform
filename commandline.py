@@ -17,6 +17,29 @@ class CommandLine:
                 self.cd(args[1:])
             case "pwd":
                 self.pwd()
+            case "rm":
+                self.rm(args[1:])
+
+    def rm(self, args: list[str]):
+        recurse, verbose = False, False
+        while len(args) > 1:
+            arg = args[0]
+            if (arg[0] == "-"):
+                options = arg[1:].split()
+                for option in options:
+                    if (option == "r" or option == "R"):
+                        recurse = True
+                    elif (option == "-v"):
+                        verbose = True
+            args = args[1:]
+        filename = args[0]
+        result = self.filesystem.current.delete_child(filename)
+        if (verbose):
+            if (result == None):
+                print("No file deleted")
+            else:
+                print("File sucessfully deleted")
+
 
     def pwd(self):
         pointer = self.filesystem.current
