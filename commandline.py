@@ -29,10 +29,19 @@ class CommandLine:
                 self.tail(args[1:])
 
     def touch(self, args: list[str]):
-        pass
+        pass 
 
     def cat(self, args: list[str]):
-        pass
+        while len(args) > 1:
+            arg = args[0]
+            pass
+            args = args[1:]
+        filename = args[0]
+        content = self.filesystem.get_file(filename)
+        if (content == None or isinstance(content, str)):
+            return None
+        for line in content.data.split("\n"):
+            print (line)
 
     def head(self, args: list[str]):
         pass
