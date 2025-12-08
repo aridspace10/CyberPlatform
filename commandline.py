@@ -44,7 +44,23 @@ class CommandLine:
             print (line)
 
     def head(self, args: list[str]):
-        pass
+        num = 10
+        while len(args) > 1:
+            arg = args[0]
+            if (arg == "-n"):
+                args = args[1:]
+                num = int(args[0])
+            args = args[1:]
+        filename = args[0]
+        content = self.filesystem.get_file(filename)
+        if (content == None or isinstance(content, str)):
+            return None
+        counter = 0
+        for line in content.data.split("\n"):
+            print (line)
+            counter += 1
+            if (counter >= num):
+                break
 
     def tail(self, args: list[str]):
         pass
