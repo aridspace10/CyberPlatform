@@ -27,6 +27,11 @@ class CommandLine:
                 self.head(args[1:])
             case "tail":
                 self.tail(args[1:])
+            case "echo":
+                self.echo(args[1:])
+    
+    def echo(self, args: list[str]):
+        print (" ".join(args))
 
     def touch(self, args: list[str]):
         pass 
@@ -154,3 +159,4 @@ cl.enter_command("mkdir d3")
 cl.enter_command("pwd")
 cl.enter_command("cd ..")
 cl.enter_command("ls -R")
+cl.enter_command("echo \"Fornite battle pass\"")
