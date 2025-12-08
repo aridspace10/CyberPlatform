@@ -14,6 +14,15 @@ class FileSystem:
                     raise Exception("Administrator Error, Code AAA123")
         self.current = self.filehead
 
+    def get_file(self, path: str) -> FileNode | str | None:
+        saved_current = self.current
+        lst = path.split("/")
+        if (error := self.search("/".join(lst[0:-1]))) != "":
+            self.current = saved_current
+            return error
+        self.current = saved_current
+        return self.current.access(lst[-1])
+
     def tree(self, path: str = "."):
         if (error := self.search(path)) != "":
             return error
