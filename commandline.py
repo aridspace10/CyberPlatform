@@ -29,6 +29,29 @@ class CommandLine:
                 self.tail(args[1:])
             case "echo":
                 self.echo(args[1:])
+            case "chmod":
+                self.chmod(args[1:])
+    
+    def chmod(self, args: list[str]):
+        recurse = False
+        verbose = False
+        if len(args) > 2:
+            print("chmod: expected at least two arguments")
+        while len(args) > 2:
+            arg = args[0]
+            if (arg[0] == "-"):
+                options = arg[1:].split()
+                for option in options:
+                    if (option == "R"):
+                        recurse = True
+                    elif (option == "v"):
+                        verbose = True
+            args = args[1:]
+        permissions = args[0]
+        ORDER = ["user", "group", "public"]
+        for idx, permission in enumerate(permissions):
+            byte = bytes(int(permission))
+        file = args[1]
     
     def echo(self, args: list[str]):
         print (" ".join(args))
