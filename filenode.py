@@ -9,7 +9,9 @@ class FileNode:
         self.depth = 0
         self.items: list[Tuple[FileNode, Literal["directory", "file"]]] = []
         self.data: str = ""
-        self.permissions = {"r": True, "w": True, "x": True}
+        self.permissions = {"user": {"r": True, "w": True, "x": True},
+                            "group": {"r": True, "w": True, "x": True},
+                            "public": {"r": True, "w": True, "x": True}}
         self.btime = datetime.datetime.now()
         self.ctime = datetime.datetime.now()
         self.atime = datetime.datetime.now()
@@ -21,9 +23,9 @@ class FileNode:
             return len(self.data)
         return len(self.data.encode("utf-8"))
     
-    def update_permissions(self, updated: dict):
+    def update_permissions(self, type: str, updated: dict):
         self.ctime = datetime.datetime.now()
-        self.permissions = updated
+        self.permissions[type] = updated
 
     def get_data(self) -> str:
         self.atime = datetime.datetime.now()
