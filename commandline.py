@@ -68,8 +68,17 @@ class CommandLine:
                 d[ORDER[idx]]["x"] = bool(bits[-1])
                 d[ORDER[idx]]["w"] = bool(bits[-2])
                 d[ORDER[idx]]["r"] = bool(bits[-3])
-
         file = args[1]
+        saved_current = self.filesystem.current
+        lst = file.split("/")
+        if (error := self.filesystem.search("/".join(lst[0:-1]))) != "":
+            self.current = saved_current
+            return error
+        for idx, item in enumerate(self.filesystem.current.items):
+            if (item[0].name == lst[-1]):
+                self.filesystem.current.items[idx][0].update_permissions(d)
+                return
+        print ("chmod: file given can not be found")
     
     def echo(self, args: list[str]):
         print (" ".join(args))
