@@ -48,9 +48,27 @@ class CommandLine:
                         verbose = True
             args = args[1:]
         permissions = args[0]
+        if (len(permissions.rstrip()) != 3):
+            print("chmod: value given for permissions which is not of length of 3")
+            return
         ORDER = ["user", "group", "public"]
+        d = {"user": {"r": False, "w": False, "x": False},
+                            "group": {"r": False, "w": False, "x": False},
+                            "public": {"r": False, "w": False, "x": False}}
         for idx, permission in enumerate(permissions):
-            byte = bytes(int(permission))
+            try:
+                if (int(permission) > 7):
+                    print("chmod: value given which is higher then needed")
+            except ValueError:
+                print("chmod: value other then given integer given for permissions")
+                return
+            finally:
+                permission = int(permission)
+                bits = [(permission >> i) & 1 for i in range(7, -1, -1)]
+                d[ORDER[idx]]["x"] = bool(bits[-1])
+                d[ORDER[idx]]["w"] = bool(bits[-2])
+                d[ORDER[idx]]["r"] = bool(bits[-3])
+
         file = args[1]
     
     def echo(self, args: list[str]):
