@@ -46,11 +46,11 @@ class FileSystem:
                 output[row][col] = output[row][col] + " " * (biggest - len(output[row][col]))
         return output
 
-    def list_files(self, path: str, deep: int = 0):
+    def list_files(self, path: str, deep: int = 0, detail: int = 0):
         if (path != ""):
             if (error := self.search(path)) != "":
                 return error
-        return self.current.list_content("", deep)
+        return self.current.list_content("", deep, detail)
 
     def search(self, path: str, creating: bool = False) -> str:
         lst = path.split("/")
