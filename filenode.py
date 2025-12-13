@@ -15,7 +15,7 @@ class FileNode:
         self.btime = datetime.datetime.now()
         self.ctime = datetime.datetime.now()
         self.atime = datetime.datetime.now()
-        self.mtimee = datetime.datetime.now()
+        self.mtime = datetime.datetime.now()
 
     @property
     def size(self):
@@ -79,13 +79,19 @@ class FileNode:
     def len(self) -> int:
         return len(self.items)
 
-    def list_content(self, prev: str, deep: int = 0) -> list:
+    def list_content(self, prev: str, deep: int = 0, detail: int = 0) -> list:
         content = []
         for item in self.items:
-            if (prev):
-                content.append(prev + "/" + item[0].name)
+            itemname = prev + "/" + item[0].name if prev else item[0].name
+            if (not detail):
+                content.append(itemname)
             else:
-                content.append(item[0].name)
+                permission = "d" if item[1] == "directory" else "-"
+                for i in item[0].permissions.values():
+                    for key, value in i.items():
+                        permission += key if value else ""
+                content.append([permission, str(1), "user", "user", item[0].size, str(self.mtime.month), str(self.mtime.day), str(self.mtime.year), itemname])
+
             if item[1] == "directory" and deep:
                 deep -= 1
                 content.extend(item[0].list_content(prev + "/" + item[0].name, deep))
