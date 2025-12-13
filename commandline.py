@@ -184,7 +184,7 @@ class CommandLine:
             print (f"mkdir: sucessfully created ${args[0]}")
 
     def ls(self, args: list[str]):
-        deep = False
+        deep, detail = False, 0
         while args:
             arg = args[0]
             if (arg[0] == "-"):
@@ -193,8 +193,10 @@ class CommandLine:
                     match option:
                         case "R":
                             deep = True
+                        case "l":
+                            detail = 1
             args = args[1:]
-        return self.filesystem.list_files("", -1 if deep else 0)
+        return self.filesystem.list_files("", -1 if deep else 0, detail)
     
     def cd(self, args: list[str]):
         arg = args[0]
