@@ -196,7 +196,12 @@ class CommandLine:
                         case "l":
                             detail = 1
             args = args[1:]
-        return self.filesystem.list_files("", -1 if deep else 0, detail)
+        lines = self.filesystem.list_files("", -1 if deep else 0, detail)
+        for line in lines:
+            if (not detail):
+                print(line)
+            else:
+                print(" ".join(line))
     
     def cd(self, args: list[str]):
         arg = args[0]
@@ -210,5 +215,6 @@ cl.enter_command("ls -R")
 cl.enter_command("mkdir d3")
 cl.enter_command("pwd")
 cl.enter_command("cd ..")
-cl.enter_command("ls -R")
+cl.enter_command("chmod 000 f1.txt")
+cl.enter_command("ls -l")
 cl.enter_command("echo \"Fornite battle pass\"")

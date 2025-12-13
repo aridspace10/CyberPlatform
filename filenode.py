@@ -89,8 +89,8 @@ class FileNode:
                 permission = "d" if item[1] == "directory" else "-"
                 for i in item[0].permissions.values():
                     for key, value in i.items():
-                        permission += key if value else ""
-                content.append([permission, str(1), "user", "user", item[0].size, str(self.mtime.month), str(self.mtime.day), str(self.mtime.year), itemname])
+                        permission += key if value else "-"
+                content.append([permission, str(1), "user", "user", str(item[0].size), str(self.mtime.strftime("%b")), str(self.mtime.day), str(self.mtime.year), itemname])
 
             if item[1] == "directory" and deep:
                 deep -= 1
