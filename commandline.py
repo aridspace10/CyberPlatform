@@ -31,6 +31,47 @@ class CommandLine:
                 self.echo(args[1:])
             case "chmod":
                 self.chmod(args[1:])
+            case "cp":
+                self.cp(args[1:])
+    
+    def cp(self, args: list[str]):
+        recurse = False
+        verbose = False
+        if len(args) > 2:
+            print("cp: expected at least two arguments")
+        while len(args) > 2:
+            arg = args[0]
+            if (arg[0] == "-"):
+                options = arg[1:].split()
+                for option in options:
+                    if (option == "r"):
+                        recurse = True
+                    elif (option == "v"):
+                        verbose = True
+            args = args[1:]
+        target = args[0]
+        tmp = self.filesystem.current
+        ftype = self.filesystem.search_withaccess(target)
+        if (ftype == None):
+            print ("Unknown error occured")
+            return
+        fnode = self.filesystem.current
+        if (not recurse and ftype == "directory"):
+            print ("cp: cannot not move directory without -r option")
+            return
+        name = self.filesystem.current.name
+        if (self.filesystem.current.parent == None):
+            print("Unsure how this happened")
+            return
+        self.filesystem.current = self.filesystem.current.parent
+        for idx, item in enumerate(self.filesystem.current.items):
+            if item[0].name == name:
+                self.filesystem.current.items.pop(idx)
+                break
+        destination = args[1]
+        self.filesystem.search(destination)
+        self.filesystem.current.items.append((fnode, ftype))
+        self.filesystem.current = tmp
     
     def chmod(self, args: list[str]):
         recurse = False
@@ -211,10 +252,10 @@ class CommandLine:
 
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
-cl.enter_command("ls -R")
 cl.enter_command("mkdir d3")
-cl.enter_command("pwd")
 cl.enter_command("cd ..")
 cl.enter_command("chmod 000 f1.txt")
-cl.enter_command("ls -l")
+cl.enter_command("rm f2.txt")
+cl.enter_command("cp f1.txt d1")
+cl.enter_command("ls -R")
 cl.enter_command("echo \"Fornite battle pass\"")
