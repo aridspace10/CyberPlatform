@@ -1,4 +1,5 @@
 from filenode import FileNode
+from typing import Literal, Tuple
 
 class FileSystem:
     def __init__(self):
@@ -74,6 +75,15 @@ class FileSystem:
             self.current = node
             lst.pop(0)
         return ""
+    
+    def search_withaccess(self, path: str, creating: bool = False) -> Literal["directory", "file"] | None: 
+        lst = path.split("/")
+        self.search("/".join(lst[0:-1]))
+        for item in self.current.items:
+            if item[0].name == lst[-1]:
+                self.current = item[0]
+                return item[1]
+        return None
     
     def add(self, path: str) -> str:
         if "." in path:
