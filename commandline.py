@@ -60,6 +60,8 @@ class CommandLine:
             ftype = self.filesystem.search_withaccess(files[0])
             ttype = "directory" if len(target.split(".")) == 1 else "file"
             if ftype == ttype:
+                if (verbose):
+                    print(f"Renamed '${self.filesystem.current.name}' -> '{target}'")
                 self.filesystem.current.name = target
                 return
 
@@ -74,6 +76,8 @@ class CommandLine:
             fnode = self.filesystem.current
             self.filesystem.current = targetfnode
             self.filesystem.current.items.append((fnode, ftype))
+            if verbose:
+                print(f"Moved '${file}' to '${target}'")
             self.filesystem.current = tmp
     
     def chmod(self, args: list[str]):
