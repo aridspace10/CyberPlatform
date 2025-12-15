@@ -37,46 +37,44 @@ class CommandLine:
                 self.mv(args[1:])
 
     def cp(self, args: list[str]):
-        
+        pass
     
     def mv(self, args: list[str]):
-        recurse = False
         verbose = False
+        clobber = False
         if len(args) > 2:
             print("cp: expected at least two arguments")
-        while len(args) > 2:
+        files = []
+        while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
                 options = arg[1:].split()
                 for option in options:
-                    if (option == "r"):
-                        recurse = True
-                    elif (option == "v"):
+                    if (option == "v"):
                         verbose = True
+            else:
+                files.append(arg)
             args = args[1:]
         target = args[0]
+        if (len(files) == 1):
+            ftype = self.filesystem.search_withaccess(files[0])
+            ttype = "directory" if len(target.split(".")) == 1 else "file"
+            if ftype == ttype:
+                self.filesystem.current.name = target
+                return
+
         tmp = self.filesystem.current
-        ftype = self.filesystem.search_withaccess(target)
-        if (ftype == None):
-            print ("Unknown error occured")
-            return
-        fnode = self.filesystem.current
-        if (not recurse and ftype == "directory"):
-            print ("cp: cannot not move directory without -r option")
-            return
-        name = self.filesystem.current.name
-        if (self.filesystem.current.parent == None):
-            print("Unsure how this happened")
-            return
-        self.filesystem.current = self.filesystem.current.parent
-        for idx, item in enumerate(self.filesystem.current.items):
-            if item[0].name == name:
-                self.filesystem.current.items.pop(idx)
-                break
-        destination = args[1]
-        self.filesystem.search(destination)
-        self.filesystem.current.items.append((fnode, ftype))
+        self.filesystem.search_withaccess(target)
+        targetfnode = self.filesystem.current
         self.filesystem.current = tmp
+        for file in files:
+            ftype = self.filesystem.search_withaccess(file)
+            if (ftype == None):
+                continue
+            fnode = self.filesystem.current
+            self.filesystem.current = targetfnode
+            self.filesystem.current.items.append((fnode, ftype))
+            self.filesystem.current = tmp
     
     def chmod(self, args: list[str]):
         recurse = False
