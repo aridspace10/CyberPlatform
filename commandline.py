@@ -37,7 +37,20 @@ class CommandLine:
                 self.mv(args[1:])
 
     def cp(self, args: list[str]):
-        pass
+        recurse = False
+        verbose = False
+        files = []
+        while len(args) > 1:
+            arg = args[0]
+            if (arg[0] == "-"):
+                options = arg[1:].split()
+                for option in options:
+                    if (option == "v"):
+                        verbose = True
+            else:
+                files.append(arg)
+            args = args[1:]
+        target = args[0]
     
     def mv(self, args: list[str]):
         verbose = False
