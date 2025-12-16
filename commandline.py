@@ -6,11 +6,11 @@ class CommandLine:
     def __init__(self):
         self.filesystem = FileSystem()
         self.history = []
-        self.hpoint = 0
+        self.hpoint = -1
     
     def enter_command(self, raw: str) -> None:
         self.history.append(raw)
-        self.hpoint += 1
+        self.hpoint = len(self.history)
         args = raw.split(" ")
         match args[0]:
             case "ls":
@@ -39,6 +39,11 @@ class CommandLine:
                 self.cp(args[1:])
             case "mv":
                 self.mv(args[1:])
+
+    def get_past_command(self) -> None:
+        r = self.history[self.hpoint]
+        self.hpoint -= 1
+        return r
 
     def cp(self, args: list[str]):
         recurse = False
