@@ -1,12 +1,16 @@
 from filenode import FileNode
 from filesystem import FileSystem
+from collections import deque
 
 class CommandLine:
     def __init__(self):
         self.filesystem = FileSystem()
         self.history = []
+        self.hpoint = 0
     
     def enter_command(self, raw: str) -> None:
+        self.history.append(raw)
+        self.hpoint += 1
         args = raw.split(" ")
         match args[0]:
             case "ls":
