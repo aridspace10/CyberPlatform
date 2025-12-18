@@ -60,6 +60,10 @@ class CommandLine:
                 files.append(arg)
             args = args[1:]
         target = args[0]
+
+    def mv_useage(self):
+        print("mv [OPTION]... SOURCE DEST\nmv [OPTION]... SOURCE... DIRECTORY")
+        print("Move or rename files.")
     
     def mv(self, args: list[str]):
         verbose = False
@@ -70,10 +74,16 @@ class CommandLine:
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
-                options = arg[1:].split()
-                for option in options:
-                    if (option == "v"):
-                        verbose = True
+                if (arg[1] == "-"):
+                    if (arg[2:] == "help"):
+                        self.mv_useage()
+                else:    
+                    options = arg[1:].split()
+                    for option in options:
+                        if (option == "v"):
+                            verbose = True
+                        elif (option == "h"):
+                            self.mv_useage()
             else:
                 files.append(arg)
             args = args[1:]
