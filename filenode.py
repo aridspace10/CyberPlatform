@@ -23,9 +23,12 @@ class FileNode:
             return len(self.data)
         return len(self.data.encode("utf-8"))
     
-    def update_permissions(self, updated: dict):
+    def update_permissions(self, updated: dict, recurse: bool):
         self.ctime = datetime.datetime.now()
         self.permissions = updated
+        if (recurse):
+            for item in self.items:
+                item[0].update_permissions(updated, recurse)
 
     def get_data(self) -> str:
         self.atime = datetime.datetime.now()
