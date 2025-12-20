@@ -42,8 +42,9 @@ class CommandLine:
 
     def get_past_command(self) -> None:
         r = self.history[self.hpoint]
-        self.hpoint -= 1
-        return r
+        if (self.hpoint < 0):
+            self.hpoint -= 1
+            return r
 
     def cp(self, args: list[str]):
         recurse = False
@@ -155,14 +156,17 @@ class CommandLine:
             if (error := self.filesystem.search(file)) != "":
                 self.current = saved_current
                 return error
-            self.filesystem.current.update_permissions(d, recurse)
+            output = self.filesystem.current.update_permissions(d, recurse, [])
+            if (verbose):
+                for line in output:
+                    print (line)
         else:
             if (error := self.filesystem.search("/".join(lst[0:-1]))) != "":
                 self.current = saved_current
                 return error
             for idx, item in enumerate(self.filesystem.current.items):
                 if (item[0].name == lst[-1]):
-                    self.filesystem.current.items[idx][0].update_permissions(d, False)
+                    self.filesystem.current.items[idx][0].update_permissions(d, False, [])
                     return
         print ("chmod: file given can not be found")
     
