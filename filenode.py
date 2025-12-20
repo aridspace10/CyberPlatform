@@ -3,10 +3,11 @@ from typing import Literal, Tuple
 import datetime
 
 class FileNode:
-    def __init__(self, parent: FileNode | None, name: str):
+    def __init__(self, parent: FileNode | None, name: str, type: Literal["directory", "file"]):
         self.name = name
         self.parent: FileNode | None = parent
         self.depth = 0
+        self.type = type
         self.items: list[Tuple[FileNode, Literal["directory", "file"]]] = []
         self.data: str = ""
         self.permissions = {"user": {"r": True, "w": True, "x": True},
@@ -23,12 +24,22 @@ class FileNode:
             return len(self.data)
         return len(self.data.encode("utf-8"))
     
-    def update_permissions(self, updated: dict, recurse: bool):
+    def get_permission_str(self, item: FileNode):
+        permission = "d" if item.type == "directory" else "-"
+        for i in item.permissions.values():
+            for key, value in i.items():
+                permission += key if value else "-"
+        return permission
+    
+    def update_permissions(self, updated: dict, recurse: bool, verbose: list[str]) -> list[str]:
         self.ctime = datetime.datetime.now()
         self.permissions = updated
+
+        verbose.append(f"Updated permissions of ${self.name} with ${self.get_permission_str(self)}")
         if (recurse):
             for item in self.items:
-                item[0].update_permissions(updated, recurse)
+                verbose.extend(item[0].update_permissions(updated, recurse, verbose))
+        return verbose
 
     def get_data(self) -> str:
         self.atime = datetime.datetime.now()
@@ -53,7 +64,7 @@ class FileNode:
         return content
 
     def add_child(self, name: str, mode: Literal["directory", "file"]) -> FileNode:
-        file = FileNode(self, name)
+        file = FileNode(self, name, mode)
         if (not len(self.items)):
             self.depth = 1
             if (self.parent is not None):
@@ -89,11 +100,7 @@ class FileNode:
             if (not detail):
                 content.append(itemname)
             else:
-                permission = "d" if item[1] == "directory" else "-"
-                for i in item[0].permissions.values():
-                    for key, value in i.items():
-                        permission += key if value else "-"
-                content.append([permission, str(1), "user", "user", str(item[0].size), str(self.mtime.strftime("%b")), str(self.mtime.day), str(self.mtime.year), itemname])
+                content.append([self.get_permission_str(item[0]), str(1), "user", "user", str(item[0].size), str(self.mtime.strftime("%b")), str(self.mtime.day), str(self.mtime.year), itemname])
 
             if item[1] == "directory" and deep:
                 deep -= 1
