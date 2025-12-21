@@ -12,6 +12,45 @@ class CommandLine:
         self.history.append(raw)
         self.hpoint = len(self.history)
         args = raw.split(" ")
+        output: list[str] = []
+        if (any(x in args for x in ["<", ">"])):
+            for ch in ("<", ">"):
+                if ch in args:
+                    idx = args.index(ch)
+                    output = self.run_command(" ".join(args[0:idx]))
+                    args = args[idx + 1:]
+                    if (len(args) > 1):
+                        print ("Not implemtned")
+                    else:
+                        lst = args[0].split("/")
+                        saved_current = self.filesystem.current
+                        if (len(lst) > 1 and (error := self.filesystem.search("/".join(lst[0:-1]))) != ""):
+                            self.filesystem.current = saved_current
+                            print (error)
+                        for idx, item in enumerate(self.filesystem.current.items):
+                                if item[0].name == lst[-1]:
+                                    if ch == ">":
+                                        self.filesystem.current.items[idx][0].set_data("\n".join(output))
+                                        return
+                                    elif ch == ">>":
+                                        self.filesystem.current.items[idx][0].append_data("\n".join(output))
+                                        return
+                        # Reaches here if no item found
+                        self.filesystem.current.add_child(lst[-1], 'file')       
+                        self.filesystem.search_withaccess(lst[-1])
+                        if ch == ">":
+                            self.filesystem.current.set_data("\n".join(output))
+                            return
+                        elif ch == ">>":
+                            self.filesystem.current.append_data("\n".join(output))
+                            return             
+            else:
+                idx = -1
+        else:
+            output = self.run_command(" ".join(args))
+
+    def run_command(self, raw: str) -> list[str]:
+        args = raw.split(" ")
         match args[0]:
             case "ls":
                 print (self.ls(args[1:]))
