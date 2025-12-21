@@ -44,6 +44,14 @@ class FileNode:
     def get_data(self) -> str:
         self.atime = datetime.datetime.now()
         return self.data
+    
+    def set_data(self, data: str) -> None:
+        self.mtime = datetime.datetime.now()
+        self.data = data
+    
+    def append_data(self, data: str) -> None:
+        self.mtime = datetime.datetime.now()
+        self.data += "\n" + data
 
     def accumualate_depth(self) -> None:
         self.depth += 1
