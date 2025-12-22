@@ -55,7 +55,7 @@ class CommandLine:
         args = raw.split(" ")
         match args[0]:
             case "ls":
-                return (self.ls(args[1:]))
+                return self.ls(args[1:])
             case "mkdir":
                 return self.mkdir(args[1:])
             case "cd":
@@ -159,11 +159,12 @@ class CommandLine:
             self.filesystem.current = tmp
         return output
     
-    def chmod(self, args: list[str]):
+    def chmod(self, args: list[str]) -> list[str]:
         recurse = False
         verbose = False
+        output = []
         if len(args) > 2:
-            print("chmod: expected at least two arguments")
+            output.append("chmod: expected at least two arguments")
         while len(args) > 2:
             arg = args[0]
             if (arg[0] == "-"):
@@ -176,8 +177,8 @@ class CommandLine:
             args = args[1:]
         permissions = args[0]
         if (len(permissions.rstrip()) != 3):
-            print("chmod: value given for permissions which is not of length of 3")
-            return
+            output.append("chmod: value given for permissions which is not of length of 3")
+            return output
         ORDER = ["user", "group", "public"]
         d = {"user": {"r": False, "w": False, "x": False},
                             "group": {"r": False, "w": False, "x": False},
@@ -185,10 +186,11 @@ class CommandLine:
         for idx, permission in enumerate(permissions):
             try:
                 if (int(permission) > 7):
-                    print("chmod: value given which is higher then needed")
+                    output.append("chmod: value given which is higher then needed")
+                    return output
             except ValueError:
-                print("chmod: value other then given integer given for permissions")
-                return
+                output.append("chmod: value other then given integer given for permissions")
+                return output
             finally:
                 permission = int(permission)
                 bits = [(permission >> i) & 1 for i in range(7, -1, -1)]
@@ -201,23 +203,25 @@ class CommandLine:
         if ("." in lst[-1].split("")):
             if (error := self.filesystem.search(file)) != "":
                 self.current = saved_current
-                return error
+                output.append(error)
+                return output
             output = self.filesystem.current.update_permissions(d, recurse, [])
             if (verbose):
                 for line in output:
-                    print (line)
+                    output.append(line)
         else:
             if (error := self.filesystem.search("/".join(lst[0:-1]))) != "":
                 self.current = saved_current
-                return error
+                output.append(error)
+                return output
             for idx, item in enumerate(self.filesystem.current.items):
                 if (item[0].name == lst[-1]):
                     self.filesystem.current.items[idx][0].update_permissions(d, False, [])
-                    return
-        print ("chmod: file given can not be found")
+                    return output
+        output.append("chmod: file given can not be found")
     
-    def echo(self, args: list[str]):
-        print (" ".join(args))
+    def echo(self, args: list[str]) -> list[str]:
+        return [(" ".join(args))]
 
     def touch(self, args: list[str]):
         pass 
