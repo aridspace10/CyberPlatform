@@ -226,7 +226,8 @@ class CommandLine:
     def touch(self, args: list[str]):
         pass 
 
-    def cat(self, args: list[str]):
+    def cat(self, args: list[str]) -> list[str]:
+        output = []
         while len(args) > 1:
             arg = args[0]
             pass
@@ -234,12 +235,14 @@ class CommandLine:
         filename = args[0]
         content = self.filesystem.get_file(filename)
         if (content == None or isinstance(content, str)):
-            return None
+            return []
         for line in content.data.split("\n"):
-            print (line)
+            output.append(line)
+        return output
 
-    def head(self, args: list[str]):
+    def head(self, args: list[str]) -> list[str]:
         num = 10
+        output = []
         while len(args) > 1:
             arg = args[0]
             if (arg == "-n"):
@@ -249,16 +252,17 @@ class CommandLine:
         filename = args[0]
         content = self.filesystem.get_file(filename)
         if (content == None or isinstance(content, str)):
-            return None
+            return []
         counter = 0
         for line in content.data.split("\n"):
-            print (line)
+            output.append(line)
             counter += 1
             if (counter >= num):
                 break
+        return output
 
-    def tail(self, args: list[str]):
-        pass
+    def tail(self, args: list[str]) -> list[str]:
+        return []
 
     def rm(self, args: list[str]):
         recurse, verbose = False, False
