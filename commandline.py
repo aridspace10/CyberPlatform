@@ -87,7 +87,7 @@ class CommandLine:
             self.hpoint -= 1
             return r
 
-    def cp(self, args: list[str]):
+    def cp(self, args: list[str]) -> list[str]:
         recurse = False
         verbose = False
         files = []
@@ -102,30 +102,34 @@ class CommandLine:
                 files.append(arg)
             args = args[1:]
         target = args[0]
+        return []
 
-    def mv_useage(self):
-        print("mv [OPTION]... SOURCE DEST\nmv [OPTION]... SOURCE... DIRECTORY")
-        print("Move or rename files.")
+    def mv_useage(self) -> list[str]:
+        output = []
+        output.append("mv [OPTION]... SOURCE DEST\nmv [OPTION]... SOURCE... DIRECTORY")
+        output.append("Move or rename files.")
+        return output
     
-    def mv(self, args: list[str]):
+    def mv(self, args: list[str]) -> list[str]:
         verbose = False
         clobber = False
+        output = []
         if len(args) > 2:
-            print("cp: expected at least two arguments")
+            output.append("cp: expected at least two arguments")
         files = []
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
                 if (arg[1] == "-"):
                     if (arg[2:] == "help"):
-                        self.mv_useage()
+                        return self.mv_useage()
                 else:    
                     options = arg[1:].split()
                     for option in options:
                         if (option == "v"):
                             verbose = True
                         elif (option == "h"):
-                            self.mv_useage()
+                            return self.mv_useage()
             else:
                 files.append(arg)
             args = args[1:]
@@ -135,9 +139,9 @@ class CommandLine:
             ttype = "directory" if len(target.split(".")) == 1 else "file"
             if ftype == ttype:
                 if (verbose):
-                    print(f"Renamed '${self.filesystem.current.name}' -> '{target}'")
+                    output.append(f"Renamed '${self.filesystem.current.name}' -> '{target}'")
                 self.filesystem.current.name = target
-                return
+                return output
 
         tmp = self.filesystem.current
         self.filesystem.search_withaccess(target)
@@ -151,8 +155,9 @@ class CommandLine:
             self.filesystem.current = targetfnode
             self.filesystem.current.items.append((fnode, ftype))
             if verbose:
-                print(f"Moved '${file}' to '${target}'")
+                output.append(f"Moved '${file}' to '${target}'")
             self.filesystem.current = tmp
+        return output
     
     def chmod(self, args: list[str]):
         recurse = False
