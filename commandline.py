@@ -48,36 +48,38 @@ class CommandLine:
                 idx = -1
         else:
             output = self.run_command(" ".join(args))
+            for line in output:
+                print (line)
 
     def run_command(self, raw: str) -> list[str]:
         args = raw.split(" ")
         match args[0]:
             case "ls":
-                print (self.ls(args[1:]))
+                return (self.ls(args[1:]))
             case "mkdir":
-                self.mkdir(args[1:])
+                return self.mkdir(args[1:])
             case "cd":
-                self.cd(args[1:])
+                return self.cd(args[1:])
             case "pwd":
-                self.pwd()
+                return self.pwd()
             case "rm":
-                self.rm(args[1:])
+                return self.rm(args[1:])
             case "touch":
-                self.touch(args[1:])
+                return self.touch(args[1:])
             case "cat":
-                self.cat(args[1:])
+                return self.cat(args[1:])
             case "head":
-                self.head(args[1:])
+                return self.head(args[1:])
             case "tail":
-                self.tail(args[1:])
+                return self.tail(args[1:])
             case "echo":
-                self.echo(args[1:])
+                return self.echo(args[1:])
             case "chmod":
-                self.chmod(args[1:])
+                return self.chmod(args[1:])
             case "cp":
-                self.cp(args[1:])
+                return self.cp(args[1:])
             case "mv":
-                self.mv(args[1:])
+                return self.mv(args[1:])
 
     def get_past_command(self) -> None:
         r = self.history[self.hpoint]
