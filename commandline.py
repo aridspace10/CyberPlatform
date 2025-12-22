@@ -62,7 +62,7 @@ class CommandLine:
             case "cd":
                 return self.cd(args[1:])
             case "pwd":
-                return self.pwd()
+                return self.pwd(args[1:])
             case "rm":
                 return self.rm(args[1:])
             case "touch":
@@ -290,7 +290,18 @@ class CommandLine:
                 output.append("File sucessfully deleted")
         return output
 
-    def pwd(self) -> list[str]:
+    def pwd(self, args: list[str]) -> list[str]:
+        ty = "l"
+        while len(args) > 1:
+            arg = args[0]
+            if (arg == "--help"):
+                print ("pwd [OPTION]...")
+                print ("Print working directory.")
+            elif (arg == "-l"):
+                ty = "l"
+            elif (arg == "-p"):
+                ty = "p"
+            args = args[1:]
         pointer = self.filesystem.current
         direct = ""
         while (pointer != None):
