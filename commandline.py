@@ -80,6 +80,8 @@ class CommandLine:
                 return self.cp(args[1:])
             case "mv":
                 return self.mv(args[1:])
+            case _:
+                return []
 
     def get_past_command(self) -> None:
         r = self.history[self.hpoint]
@@ -219,12 +221,13 @@ class CommandLine:
                     self.filesystem.current.items[idx][0].update_permissions(d, False, [])
                     return output
         output.append("chmod: file given can not be found")
+        return output
     
     def echo(self, args: list[str]) -> list[str]:
         return [(" ".join(args))]
 
-    def touch(self, args: list[str]):
-        pass 
+    def touch(self, args: list[str]) -> list[str]:
+        return []
 
     def cat(self, args: list[str]) -> list[str]:
         output = []
@@ -264,8 +267,9 @@ class CommandLine:
     def tail(self, args: list[str]) -> list[str]:
         return []
 
-    def rm(self, args: list[str]):
+    def rm(self, args: list[str]) -> list[str]:
         recurse, verbose = False, False
+        output = []
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
@@ -280,11 +284,12 @@ class CommandLine:
         result = self.filesystem.current.delete_child(filename)
         if (verbose):
             if (result == None):
-                print("No file deleted")
+                output.append("No file deleted")
             else:
-                print("File sucessfully deleted")
+                output.append("File sucessfully deleted")
+        return output
 
-    def pwd(self):
+    def pwd(self) -> list[str]:
         pointer = self.filesystem.current
         direct = ""
         while (pointer != None):
@@ -293,9 +298,9 @@ class CommandLine:
             else:
                 direct = pointer.name
             pointer = pointer.parent
-        print (direct)
+        return [direct]
         
-    def mkdir(self, args: list[str]):
+    def mkdir(self, args: list[str]) -> list[str]:
         permissions = {"r": True, "w": True, "x": True}
         verbose, parent = False, False
         while len(args) > 1:
@@ -315,20 +320,22 @@ class CommandLine:
                                 permissions["x"] = True
                         arg = arg[1:]
                 else:
-                    return "mkdir: option given to -m or --mode is not correct"
+                    return ["mkdir: option given to -m or --mode is not correct"]
             elif (arg == "-v" or arg == "--verbose"):
                 verbose = True
             elif (arg == "-p" or arg == "--parents"):
                 parent = True
             else:
-                return "mkdir: unknown argument given"
+                return ["mkdir: unknown argument given"]
             args = args[1:]
         self.filesystem.add_directory(args[0], parent, permissions)
         if (verbose):
-            print (f"mkdir: sucessfully created ${args[0]}")
+            return [f"mkdir: sucessfully created ${args[0]}"]
+        return []
 
-    def ls(self, args: list[str]):
+    def ls(self, args: list[str]) -> list[str]:
         deep, detail = False, 0
+        output = []
         while args:
             arg = args[0]
             if (arg[0] == "-"):
@@ -343,14 +350,16 @@ class CommandLine:
         lines = self.filesystem.list_files("", -1 if deep else 0, detail)
         for line in lines:
             if (not detail):
-                print(line)
+                output.append(line)
             else:
-                print(" ".join(line))
+                output.append(" ".join(line))
+        return output
     
-    def cd(self, args: list[str]):
+    def cd(self, args: list[str]) -> list[str]:
         arg = args[0]
         if (error := self.filesystem.search(arg)):
-            print (error)
+            return [error]
+        return []
 
 
 cl = CommandLine()
