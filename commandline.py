@@ -24,17 +24,18 @@ class CommandLine:
                     else:
                         lst = args[0].split("/")
                         saved_current = self.filesystem.current
+                        # only go to path if a path is given
                         if (len(lst) > 1 and (error := self.filesystem.search("/".join(lst[0:-1]))) != ""):
                             self.filesystem.current = saved_current
                             print (error)
                         for idx, item in enumerate(self.filesystem.current.items):
-                                if item[0].name == lst[-1]:
-                                    if ch == ">":
-                                        self.filesystem.current.items[idx][0].set_data("\n".join(output))
-                                        return
-                                    elif ch == ">>":
-                                        self.filesystem.current.items[idx][0].append_data("\n".join(output))
-                                        return
+                            if item[0].name == lst[-1]:
+                                if ch == ">":
+                                    self.filesystem.current.items[idx][0].set_data("\n".join(output))
+                                    return
+                                elif ch == ">>":
+                                    self.filesystem.current.items[idx][0].append_data("\n".join(output))
+                                    return
                         # Reaches here if no item found
                         self.filesystem.current.add_child(lst[-1], 'file')       
                         self.filesystem.search_withaccess(lst[-1])
@@ -43,7 +44,7 @@ class CommandLine:
                             return
                         elif ch == ">>":
                             self.filesystem.current.append_data("\n".join(output))
-                            return             
+                            return           
             else:
                 idx = -1
         else:
