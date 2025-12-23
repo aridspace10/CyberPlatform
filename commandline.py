@@ -137,6 +137,7 @@ class CommandLine:
                 files.append(arg)
             args = args[1:]
         target = args[0]
+        tmp = self.filesystem.current
         if (len(files) == 1):
             ftype = self.filesystem.search_withaccess(files[0])
             ttype = "directory" if len(target.split(".")) == 1 else "file"
@@ -144,9 +145,27 @@ class CommandLine:
                 if (verbose):
                     output.append(f"Renamed '${self.filesystem.current.name}' -> '{target}'")
                 self.filesystem.current.name = target
+                self.filesystem.current = tmp
                 return output
-
-        tmp = self.filesystem.current
+            elif (ftype == "file" and ttype == "directory"):
+                if (self.filesystem.current.parent == None): # literally impossible to be true
+                    return []
+                self.filesystem.current = self.filesystem.current.parent
+                saved = None
+                for idx, item in enumerate(self.filesystem.current.items):
+                    if (item[0].name == files[0]):
+                        saved = item
+                        self.filesystem.current.items.pop(idx)
+                        break
+                if (saved == None):
+                    return []
+                self.filesystem.search(target)
+                self.filesystem.current.items.append(saved)
+                if (verbose):
+                    output.append(f"Moved '${files[0]}' to '{target}'")
+                self.filesystem.current = tmp
+                return output
+        # multiple files were given
         self.filesystem.search_withaccess(target)
         targetfnode = self.filesystem.current
         self.filesystem.current = tmp
@@ -203,7 +222,7 @@ class CommandLine:
         file = args[1]
         saved_current = self.filesystem.current
         lst = file.split("/")
-        if ("." in lst[-1].split("")):
+        if ("." in lst[-1].split()):
             if (error := self.filesystem.search(file)) != "":
                 self.current = saved_current
                 output.append(error)
