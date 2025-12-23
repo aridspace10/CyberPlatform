@@ -41,9 +41,11 @@ class CommandLine:
                         self.filesystem.search_withaccess(lst[-1])
                         if ch == ">":
                             self.filesystem.current.set_data("\n".join(output))
+                            self.filesystem.current = saved_current
                             return
                         elif ch == ">>":
                             self.filesystem.current.append_data("\n".join(output))
+                            self.filesystem.current = saved_current
                             return
             else:
                 idx = -1
@@ -228,7 +230,6 @@ class CommandLine:
             args = args[1:]
         pattern = args[0]
         files = args[1:]
-
     
     def chmod(self, args: list[str]) -> list[str]:
         recurse = False
@@ -449,5 +450,7 @@ cl.enter_command("cd ..")
 cl.enter_command("chmod 000 f1.txt")
 cl.enter_command("rm f2.txt")
 cl.enter_command("mv f1.txt d1")
+cl.enter_command("echo \"Hey There\" >> f5.txt")
+cl.enter_command("cat f5.txt")
 cl.enter_command("ls -R")
-cl.enter_command("echo \"Fornite battle pass\"")
+cl.enter_command("echo \"Hello there\"")
