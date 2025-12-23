@@ -3,7 +3,7 @@ from typing import Literal, Tuple
 
 class FileSystem:
     def __init__(self):
-        self.filehead = FileNode(None, "root")
+        self.filehead = FileNode(None, "root", 'directory')
         self.current: FileNode = self.filehead
 
     def setup_system(self, textfile):
