@@ -191,6 +191,9 @@ class CommandLine:
         matchline = False
         showmatched = False
         quiet = False
+        recursive = False
+        include = []
+        exclude = []
         while args[0][0] == "\"":
             arg = args[0]
             if (arg[0] == "-"):
@@ -214,6 +217,14 @@ class CommandLine:
                             showmatched = True
                         case "q":
                             quiet = True
+                        case "r":
+                            recursive = True
+            elif (arg[0].startswith("--include=")):
+                lst = arg[0].split("=")
+                include.append(lst[1])
+            elif (arg[0].startswith("--exclude-dir=")):
+                lst = arg[0].split("=")
+                exclude.append(lst[1])
             args = args[1:]
         pattern = args[0]
         files = args[1:]
