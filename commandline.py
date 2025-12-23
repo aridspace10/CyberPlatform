@@ -13,8 +13,8 @@ class CommandLine:
         self.hpoint = len(self.history)
         args = raw.split(" ")
         output: list[str] = []
-        if (any(x in args for x in ["<", ">"])):
-            for ch in ("<", ">"):
+        if (any(x in args for x in ["<", ">", ">>", "<<"])):
+            for ch in ("<", ">", ">>", "<<"):
                 if ch in args:
                     idx = args.index(ch)
                     output = self.run_command(" ".join(args[0:idx]))
@@ -44,7 +44,7 @@ class CommandLine:
                             return
                         elif ch == ">>":
                             self.filesystem.current.append_data("\n".join(output))
-                            return           
+                            return
             else:
                 idx = -1
         else:
@@ -180,6 +180,44 @@ class CommandLine:
                 output.append(f"Moved '${file}' to '${target}'")
             self.filesystem.current = tmp
         return output
+    
+    def grep(self, args: list[str]) -> list[str]:
+        case_sentive = False
+        invert = False
+        linenum = False
+        filename = False
+        countmatch = False
+        matchwhole = False
+        matchline = False
+        showmatched = False
+        quiet = False
+        while args[0][0] == "\"":
+            arg = args[0]
+            if (arg[0] == "-"):
+                for option in args[1:]:
+                    match (option):
+                        case "i":
+                            case_sentive = True
+                        case "v":
+                            invert = True
+                        case "n":
+                            linenum = True
+                        case "l":
+                            filename = True
+                        case "c":
+                            countmatch = True
+                        case "w":
+                            matchwhole = True
+                        case "x":
+                            matchline = True
+                        case "o":
+                            showmatched = True
+                        case "q":
+                            quiet = True
+            args = args[1:]
+        pattern = args[0]
+        files = args[1:]
+
     
     def chmod(self, args: list[str]) -> list[str]:
         recurse = False
