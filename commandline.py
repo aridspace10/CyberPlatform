@@ -229,17 +229,22 @@ class CommandLine:
                 exclude.append(lst[1])
             args = args[1:]
 
-        def search_file(item: FileNode):
+        def search_file(item: FileNode) -> None:
             lst = item.data.split("\n")
             for idx, line in enumerate(lst):
                 if (not case_sentive):
                     line = line.lower()
                 # if the pattern exists in the line, there will be an element in the string comp
                 if ((l := len([w for w in line.split() if pattern in w])) and not invert) or (l == 0 and invert):
-                    if (linenum):
-                        output.append(f"${idx}: ${line}")
+                    if (filename):
+                        tmp = item.name
                     else:
-                        output.append(line)
+                        tmp = line
+                    if (linenum):
+                        tmp = f"${idx}: ${tmp}"
+                    output.append(tmp)
+                    if (filename and not linenum):
+                        return
 
         pattern = args[0]
         files = args[1:]
@@ -264,8 +269,10 @@ class CommandLine:
             else:
                 output.append(f"Can't open file/directory given: ${file}")
             self.filesystem.current = saved_current
-            #[w for w in text.split() if pattern in w]
-        return []
+        if (countmatch):
+            return [str(len(output))]
+        else:
+            return output
     
     def chmod(self, args: list[str]) -> list[str]:
         recurse = False
