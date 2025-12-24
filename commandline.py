@@ -228,8 +228,38 @@ class CommandLine:
                 lst = arg[0].split("=")
                 exclude.append(lst[1])
             args = args[1:]
+
+        def search_file(item: FileNode):
+            lst = item.data.split("\n")
+            for line in lst:
+                if len([w for w in line.split() if pattern in w]):
+                    output.append(line)
+
         pattern = args[0]
         files = args[1:]
+        saved_current = self.filesystem.current
+        output = []
+        for file in files:
+            ty = self.filesystem.search_withaccess(file)
+            if (ty == "directory"):
+                if (recursive):
+                    def recursively_search(pointer: FileNode):
+                        for item in pointer.items:
+                            if item[1] == "directory":
+                                recursively_search(item[0])
+                            else:
+                                search_file(item[0])
+                    pointer = self.filesystem.current
+                    recursively_search(pointer)
+                else:
+                    output.append("Can't recursivly search directory without -r option")
+            elif (ty == "file"):
+                search_file(self.filesystem.current)
+            else:
+                output.append(f"Can't open file/directory given: ${file}")
+            self.filesystem.current = saved_current
+            #[w for w in text.split() if pattern in w]
+        return []
     
     def chmod(self, args: list[str]) -> list[str]:
         recurse = False
