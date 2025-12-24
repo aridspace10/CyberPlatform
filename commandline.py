@@ -231,9 +231,15 @@ class CommandLine:
 
         def search_file(item: FileNode):
             lst = item.data.split("\n")
-            for line in lst:
-                if len([w for w in line.split() if pattern in w]):
-                    output.append(line)
+            for idx, line in enumerate(lst):
+                if (not case_sentive):
+                    line = line.lower()
+                # if the pattern exists in the line, there will be an element in the string comp
+                if ((l := len([w for w in line.split() if pattern in w])) and not invert) or (l == 0 and invert):
+                    if (linenum):
+                        output.append(f"${idx}: ${line}")
+                    else:
+                        output.append(line)
 
         pattern = args[0]
         files = args[1:]
