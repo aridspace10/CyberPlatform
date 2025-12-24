@@ -235,7 +235,13 @@ class CommandLine:
                 if (not case_sentive):
                     line = line.lower()
                 # if the pattern exists in the line, there will be an element in the string comp
-                if ((l := len([w for w in line.split() if pattern in w])) and not invert) or (l == 0 and invert):
+                if (matchwhole):
+                    match_cond_func = lambda line: len([w for w in line if pattern == w])
+                elif (matchline):
+                    match_cond_func = lambda line: line == pattern
+                else:
+                    match_cond_func = lambda line: len([w for w in line.split() if pattern in w])
+                if ((l := match_cond_func(line)) and not invert) or (l == 0 and invert):
                     if (filename):
                         tmp = item.name
                     else:
