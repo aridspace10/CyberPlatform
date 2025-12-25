@@ -10,9 +10,17 @@ class FileSystem:
         with open(textfile) as f:
             for line in f:
                 self.current = self.filehead
+                if ("*" in line):
+                    line = line[0:line.index("*")]
+                    with open(f"filesystems/{line}") as f:
+                        data = f.read()
+                else:
+                    data = ""
                 if (err := self.add(line.strip())):
                     print(err)
                     raise Exception("Administrator Error, Code AAA123")
+                if (data):
+                    self.current.data = data
         self.current = self.filehead
 
     def get_file(self, path: str) -> FileNode | str | None:
