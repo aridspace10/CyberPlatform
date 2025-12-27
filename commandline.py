@@ -234,16 +234,18 @@ class CommandLine:
             for idx, line in enumerate(lst):
                 if (not case_sentive):
                     line = line.lower()
-                # if the pattern exists in the line, there will be an element in the string comp
                 if (matchwhole):
                     match_cond_func = lambda line: len([w for w in line if pattern == w])
                 elif (matchline):
                     match_cond_func = lambda line: line == pattern
                 else:
+                    # if the pattern exists in the line, there will be an element in the string comp
                     match_cond_func = lambda line: len([w for w in line.split() if pattern in w])
                 if ((l := match_cond_func(line)) and not invert) or (l == 0 and invert):
                     if (filename):
                         tmp = item.name
+                    elif (showmatched):
+                        tmp = [w for w in line.split() if pattern in w][0]
                     else:
                         tmp = line
                     if (linenum):
@@ -357,7 +359,7 @@ class CommandLine:
         filename = args[0]
         content = self.filesystem.get_file(filename)
         if (content == None or isinstance(content, str)):
-            return []
+            return [f"File {filename} does not exist"]
         for line in content.data.split("\n"):
             output.append(line)
         return output
@@ -497,9 +499,10 @@ cl.filesystem.setup_system("filesystems/example.txt")
 cl.enter_command("mkdir d3")
 cl.enter_command("cd ..")
 cl.enter_command("chmod 000 f1.txt")
-cl.enter_command("rm f2.txt")
+#cl.enter_command("rm f2.txt")
 cl.enter_command("mv f1.txt d1")
 cl.enter_command("echo \"Hey There\" >> f5.txt")
 cl.enter_command("cat f5.txt")
+cl.enter_command("cat f2.txt")
 cl.enter_command("ls -R")
 cl.enter_command("echo \"Hello there\"")
