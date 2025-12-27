@@ -83,6 +83,8 @@ class CommandLine:
                 return self.cp(args[1:])
             case "mv":
                 return self.mv(args[1:])
+            case "grep":
+                return self.grep(args[1:])
             case _:
                 return []
 
@@ -196,7 +198,7 @@ class CommandLine:
         recursive = False
         include = []
         exclude = []
-        while args[0][0] == "\"":
+        while args[0][0] != "\"":
             arg = args[0]
             if (arg[0] == "-"):
                 for option in args[1:]:
@@ -229,18 +231,26 @@ class CommandLine:
                 exclude.append(lst[1])
             args = args[1:]
 
+        pattern = args[0].replace("\"", '').replace("\"", '')
+        if (not case_sentive):
+            pattern = pattern.lower()
+        files = args[1:]
+        saved_current = self.filesystem.current
+        output = []
+        
+        if (matchwhole):
+            match_cond_func = lambda line: len([w for w in line if pattern == w])
+        elif (matchline):
+            match_cond_func = lambda line: line == pattern
+        else:
+            # if the pattern exists in the line, there will be an element in the string comp
+            match_cond_func = lambda line: len([w for w in line.split() if pattern in w])
+
         def search_file(item: FileNode) -> None:
             lst = item.data.split("\n")
             for idx, line in enumerate(lst):
                 if (not case_sentive):
                     line = line.lower()
-                if (matchwhole):
-                    match_cond_func = lambda line: len([w for w in line if pattern == w])
-                elif (matchline):
-                    match_cond_func = lambda line: line == pattern
-                else:
-                    # if the pattern exists in the line, there will be an element in the string comp
-                    match_cond_func = lambda line: len([w for w in line.split() if pattern in w])
                 if ((l := match_cond_func(line)) and not invert) or (l == 0 and invert):
                     if (filename):
                         tmp = item.name
@@ -254,10 +264,6 @@ class CommandLine:
                     if (filename and not linenum):
                         return
 
-        pattern = args[0]
-        files = args[1:]
-        saved_current = self.filesystem.current
-        output = []
         for file in files:
             ty = self.filesystem.search_withaccess(file)
             if (ty == "directory"):
@@ -496,13 +502,4 @@ class CommandLine:
 
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
-cl.enter_command("mkdir d3")
-cl.enter_command("cd ..")
-cl.enter_command("chmod 000 f1.txt")
-#cl.enter_command("rm f2.txt")
-cl.enter_command("mv f1.txt d1")
-cl.enter_command("echo \"Hey There\" >> f5.txt")
-cl.enter_command("cat f5.txt")
-cl.enter_command("cat f2.txt")
-cl.enter_command("ls -R")
-cl.enter_command("echo \"Hello there\"")
+cl.enter_command("grep \"ERROR\" f2.txt")
