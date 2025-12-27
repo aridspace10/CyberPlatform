@@ -17,6 +17,12 @@ class FileNode:
         self.ctime = datetime.datetime.now()
         self.atime = datetime.datetime.now()
         self.mtime = datetime.datetime.now()
+    
+    def __str__(self):
+        return f"name: {self.name}, items: {self.items}"
+    
+    def __repr__(self):
+        return self.__str__()
 
     @property
     def size(self):
