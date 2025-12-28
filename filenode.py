@@ -8,7 +8,6 @@ class FileNode:
         self.name = name
         self.parent: FileNode | None = parent
         self.depth = 0
-        self.type = type
         self.items: list[FileNode] = []
         self.inode: Inode = inode
     
@@ -25,8 +24,8 @@ class FileNode:
         return self.inode.size
     
     def get_permission_str(self, item: FileNode):
-        permission = "d" if item.type == NodeType.DIRECTORY else "-"
-        for i in item.permissions.values():
+        permission = "d" if item.get_type() == NodeType.DIRECTORY else "-"
+        for i in item.inode.permissions.values():
             for key, value in i.items():
                 permission += key if value else "-"
         return permission
@@ -98,14 +97,21 @@ class FileNode:
     def len(self) -> int:
         return len(self.items)
 
-    def list_content(self, prev: str, deep: int = 0, detail: int = 0) -> list:
-        content = []
+    def list_content(self, prev: str, deep: int = 0, detail: int = 0, extras: dict[str, bool] = {}) -> list:
+        content: list[list] = []
         for item in self.items:
             itemname = prev + "/" + item.name if prev else item.name
+            tmp = []
+
+            if "inode" in extras:
+                tmp.append(str(self.inode.id))
+
             if (not detail):
-                content.append(itemname)
+                tmp.append(itemname)
             else:
-                content.append([self.get_permission_str(item), str(1), "user", "user", str(item.get_size()), str(self.inode.mtime.strftime("%b")), str(self.inode.mtime.day), str(self.inode.mtime.year), itemname])
+                tmp.extend([self.get_permission_str(item), str(1), "user", "user", str(item.get_size()), str(self.inode.mtime.strftime("%b")), str(self.inode.mtime.day), str(self.inode.mtime.year), itemname])
+
+            content.append(tmp)
 
             if item.get_type() == NodeType.DIRECTORY and deep:
                 deep -= 1
