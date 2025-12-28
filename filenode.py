@@ -9,7 +9,7 @@ class FileNode:
         self.parent: FileNode | None = parent
         self.depth = 0
         self.type = type
-        self.items: list[Tuple[FileNode, Literal["directory", "file"]]] = []
+        self.items: list[FileNode] = []
         self.inode: Inode = inode
     
     def __str__(self):
@@ -32,7 +32,7 @@ class FileNode:
         verbose.append(f"Updated permissions of ${self.name} with ${self.get_permission_str(self)}")
         if (recurse):
             for item in self.items:
-                verbose.extend(item[0].update_permissions(updated, recurse, verbose))
+                verbose.extend(item.update_permissions(updated, recurse, verbose))
         return verbose
 
     def get_data(self) -> str:
@@ -55,7 +55,7 @@ class FileNode:
             for idx, item in enumerate(self.items):
                 if (idx == mid):
                     content.append((move, self.name + "-|"))
-                content = (item[0].preorder_traversal(content, move + 1))
+                content = (item.preorder_traversal(content, move + 1))
         else:
             content.append((move, "--"))
             move += 1
@@ -68,25 +68,25 @@ class FileNode:
             self.depth = 1
             if (self.parent is not None):
                 self.parent.accumualate_depth()
-        self.items.append((file, mode))
+        self.items.append(file)
         return file
     
     def search(self, name: str) -> Literal["directory", "file", None]:
         for item in self.items:
-            if (item[0].name == name):
-                return item[1]
+            if (item.name == name):
+                return item.get_type()
         return None
     
     def access(self, name: str) -> FileNode | None:
         for item in self.items:
-            if (item[0].name == name):
-                return item[0]
+            if (item.name == name):
+                return item
         return None
 
     def delete_child(self, name: str) -> FileNode | None:
         for idx, item in enumerate(self.items):
-            if (item[0].name == name):
-                return self.items.pop(idx)[0]
+            if (item.name == name):
+                return self.items.pop(idx)
         return None
                 
     def len(self) -> int:
@@ -95,13 +95,13 @@ class FileNode:
     def list_content(self, prev: str, deep: int = 0, detail: int = 0) -> list:
         content = []
         for item in self.items:
-            itemname = prev + "/" + item[0].name if prev else item[0].name
+            itemname = prev + "/" + item.name if prev else item.name
             if (not detail):
                 content.append(itemname)
             else:
-                content.append([self.get_permission_str(item[0]), str(1), "user", "user", str(item[0].size), str(self.mtime.strftime("%b")), str(self.mtime.day), str(self.mtime.year), itemname])
+                content.append([self.get_permission_str(item), str(1), "user", "user", str(item.get_size()), str(self.inode.mtime.strftime("%b")), str(self.inode.mtime.day), str(self.inode.mtime.year), itemname])
 
-            if item[1] == "directory" and deep:
+            if item.get_type() == "directory" and deep:
                 deep -= 1
-                content.extend(item[0].list_content(prev + "/" + item[0].name, deep))
+                content.extend(item.list_content(prev + "/" + item.name, deep))
         return content
