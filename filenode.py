@@ -116,4 +116,22 @@ class FileNode:
             if item.get_type() == NodeType.DIRECTORY and deep:
                 deep -= 1
                 content.extend(item.list_content(prev + "/" + item.name, deep))
+        
+        if "sortby" in extras:
+            method = extras["sortby"]
+            if ("reverse" in extras):
+                rev = bool(extras["reverse"])
+            else:
+                rev = False
+            if (method == "ext"):
+                def ext_sort(val):
+                    lst = val[-1].split(".")
+                    if (len(lst) == 1):
+                        return ""
+                    return lst[1]
+
+                content = sorted(content, key=ext_sort, reverse=rev)
+        else:
+            if ("reverse" in extras):
+                content = content[::-1]
         return content
