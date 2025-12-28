@@ -1,22 +1,16 @@
 from __future__ import annotations
 from typing import Literal, Tuple
 import datetime
+from inode import Inode
 
 class FileNode:
-    def __init__(self, parent: FileNode | None, name: str, type: Literal["directory", "file"]):
+    def __init__(self, parent: FileNode | None, name: str, type: Literal["directory", "file"], inode: Inode):
         self.name = name
         self.parent: FileNode | None = parent
         self.depth = 0
         self.type = type
         self.items: list[Tuple[FileNode, Literal["directory", "file"]]] = []
-        self.data: str = ""
-        self.permissions = {"user": {"r": True, "w": True, "x": True},
-                            "group": {"r": True, "w": True, "x": True},
-                            "public": {"r": True, "w": True, "x": True}}
-        self.btime = datetime.datetime.now()
-        self.ctime = datetime.datetime.now()
-        self.atime = datetime.datetime.now()
-        self.mtime = datetime.datetime.now()
+        self.inode: Inode = inode
     
     def __str__(self):
         return f"name: {self.name}, items: {self.items}"
@@ -48,16 +42,13 @@ class FileNode:
         return verbose
 
     def get_data(self) -> str:
-        self.atime = datetime.datetime.now()
-        return self.data
+        return self.inode.get_data()
     
     def set_data(self, data: str) -> None:
-        self.mtime = datetime.datetime.now()
-        self.data = data
+        self.inode.set_data(data)
     
     def append_data(self, data: str) -> None:
-        self.mtime = datetime.datetime.now()
-        self.data += "\n" + data
+        self.inode.append_data(data)
 
     def accumualate_depth(self) -> None:
         self.depth += 1
@@ -77,8 +68,8 @@ class FileNode:
             content.append((move, self.name))
         return content
 
-    def add_child(self, name: str, mode: Literal["directory", "file"]) -> FileNode:
-        file = FileNode(self, name, mode)
+    def add_child(self, name: str, mode: Literal["directory", "file"], inode: Inode) -> FileNode:
+        file = FileNode(self, name, mode, inode)
         if (not len(self.items)):
             self.depth = 1
             if (self.parent is not None):
