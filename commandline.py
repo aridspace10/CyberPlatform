@@ -1,6 +1,7 @@
 from filenode import FileNode
 from filesystem import FileSystem
 from collections import deque
+from inode import Inode
 
 class CommandLine:
     def __init__(self):
@@ -37,7 +38,8 @@ class CommandLine:
                                     self.filesystem.current.items[idx][0].append_data("\n".join(output))
                                     return
                         # Reaches here if no item found
-                        self.filesystem.current.add_child(lst[-1], 'file')       
+                        inode = Inode('file')
+                        self.filesystem.current.add_child(lst[-1], inode)       
                         self.filesystem.search_withaccess(lst[-1])
                         if ch == ">":
                             self.filesystem.current.set_data("\n".join(output))
@@ -247,7 +249,7 @@ class CommandLine:
             match_cond_func = lambda line: len([w for w in line.split() if pattern in w])
 
         def search_file(item: FileNode) -> None:
-            lst = item.data.split("\n")
+            lst = item.get_data().split("\n")
             for idx, line in enumerate(lst):
                 if (not case_sentive):
                     line = line.lower()
@@ -366,7 +368,8 @@ class CommandLine:
         content = self.filesystem.get_file(filename)
         if (content == None or isinstance(content, str)):
             return [f"File {filename} does not exist"]
-        for line in content.data.split("\n"):
+        data = content.get_data()
+        for line in data.split("\n"):
             output.append(line)
         return output
 
@@ -384,7 +387,8 @@ class CommandLine:
         if (content == None or isinstance(content, str)):
             return []
         counter = 0
-        for line in content.data.split("\n"):
+        data = content.get_data()
+        for line in data.split("\n"):
             output.append(line)
             counter += 1
             if (counter >= num):
@@ -493,6 +497,9 @@ class CommandLine:
                 output.append(" ".join(line))
         return output
     
+    def find(self, args: list[str]) -> list[str]:
+        return []
+    
     def cd(self, args: list[str]) -> list[str]:
         arg = args[0]
         if (error := self.filesystem.search(arg)):
@@ -503,3 +510,4 @@ class CommandLine:
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
 cl.enter_command("grep \"ERROR\" f2.txt")
+cl.enter_command("ls -l")

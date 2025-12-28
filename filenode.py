@@ -4,7 +4,7 @@ import datetime
 from inode import Inode
 
 class FileNode:
-    def __init__(self, parent: FileNode | None, name: str, type: Literal["directory", "file"], inode: Inode):
+    def __init__(self, parent: FileNode | None, name: str, inode: Inode):
         self.name = name
         self.parent: FileNode | None = parent
         self.depth = 0
@@ -17,12 +17,6 @@ class FileNode:
     
     def __repr__(self):
         return self.__str__()
-
-    @property
-    def size(self):
-        if isinstance(self.data, bytes):
-            return len(self.data)
-        return len(self.data.encode("utf-8"))
     
     def get_permission_str(self, item: FileNode):
         permission = "d" if item.type == "directory" else "-"
@@ -68,8 +62,8 @@ class FileNode:
             content.append((move, self.name))
         return content
 
-    def add_child(self, name: str, mode: Literal["directory", "file"], inode: Inode) -> FileNode:
-        file = FileNode(self, name, mode, inode)
+    def add_child(self, name: str, inode: Inode) -> FileNode:
+        file = FileNode(self, name, inode)
         if (not len(self.items)):
             self.depth = 1
             if (self.parent is not None):

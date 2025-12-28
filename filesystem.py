@@ -1,9 +1,11 @@
 from filenode import FileNode
 from typing import Literal, Tuple
+from inode import Inode
 
 class FileSystem:
     def __init__(self):
-        self.filehead = FileNode(None, "root", 'directory')
+        inode = Inode('directory')
+        self.filehead = FileNode(None, "root", inode)
         self.current: FileNode = self.filehead
 
     def setup_system(self, textfile):
@@ -20,7 +22,7 @@ class FileSystem:
                     print(err)
                     raise Exception("Administrator Error, Code AAA123")
                 if (data):
-                    self.current.data = data
+                    self.current.set_data(data)
         self.current = self.filehead
 
     def get_file(self, path: str) -> FileNode | str | None:
@@ -74,7 +76,8 @@ class FileSystem:
 
             if self.current.search(lst[0]) in [None, "file"]:
                 if (creating):
-                    self.current.add_child(lst[0], 'directory')
+                    inode = Inode('directory')
+                    self.current.add_child(lst[0], inode)
                 else:
                     return f"No directory named {lst[0]}"
             node = self.current.access(lst[0])
@@ -105,7 +108,8 @@ class FileSystem:
         if (error := self.search("/".join(lst[0:-1]))) != "":
             self.current = saved_current
             return error
-        self.current = self.current.add_child(lst[-1], 'directory')
+        inode = Inode('directory')
+        self.current = self.current.add_child(lst[-1], inode)
         return ""
 
     def add_file(self, path: str):
@@ -114,7 +118,8 @@ class FileSystem:
         if (error := self.search("/".join(lst[0:-1]))) != "":
             self.current = saved_current
             return error
-        self.current = self.current.add_child(lst[-1], 'file')
+        inode = Inode('file')
+        self.current = self.current.add_child(lst[-1], inode)
         return ""
 
 """
