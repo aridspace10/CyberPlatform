@@ -146,14 +146,14 @@ class CommandLine:
         tmp = self.filesystem.current
         if (len(files) == 1):
             ftype = self.filesystem.search_withaccess(files[0])
-            ttype = "directory" if len(target.split(".")) == 1 else "file"
+            ttype = NodeType.DIRECTORY if len(target.split(".")) == 1 else NodeType.FILE
             if ftype == ttype:
                 if (verbose):
                     output.append(f"Renamed '${self.filesystem.current.name}' -> '{target}'")
                 self.filesystem.current.name = target
                 self.filesystem.current = tmp
                 return output
-            elif (ftype == "file" and ttype == "directory"):
+            elif (ftype == NodeType.FILE and ttype == NodeType.DIRECTORY):
                 if (self.filesystem.current.parent == None): # literally impossible to be true
                     return []
                 self.filesystem.current = self.filesystem.current.parent
