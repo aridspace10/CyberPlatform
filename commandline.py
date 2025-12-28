@@ -1,7 +1,7 @@
 from filenode import FileNode
 from filesystem import FileSystem
 from collections import deque
-from inode import Inode
+from inode import Inode, NodeType
 
 class CommandLine:
     def __init__(self):
@@ -30,15 +30,15 @@ class CommandLine:
                             self.filesystem.current = saved_current
                             print (error)
                         for idx, item in enumerate(self.filesystem.current.items):
-                            if item[0].name == lst[-1]:
+                            if item.name == lst[-1]:
                                 if ch == ">":
-                                    self.filesystem.current.items[idx][0].set_data("\n".join(output))
+                                    self.filesystem.current.items[idx].set_data("\n".join(output))
                                     return
                                 elif ch == ">>":
-                                    self.filesystem.current.items[idx][0].append_data("\n".join(output))
+                                    self.filesystem.current.items[idx].append_data("\n".join(output))
                                     return
                         # Reaches here if no item found
-                        inode = Inode('file')
+                        inode = Inode(NodeType.FILE)
                         self.filesystem.current.add_child(lst[-1], inode)       
                         self.filesystem.search_withaccess(lst[-1])
                         if ch == ">":
@@ -159,7 +159,7 @@ class CommandLine:
                 self.filesystem.current = self.filesystem.current.parent
                 saved = None
                 for idx, item in enumerate(self.filesystem.current.items):
-                    if (item[0].name == files[0]):
+                    if (item.name == files[0]):
                         saved = item
                         self.filesystem.current.items.pop(idx)
                         break
@@ -181,7 +181,7 @@ class CommandLine:
                 continue
             fnode = self.filesystem.current
             self.filesystem.current = targetfnode
-            self.filesystem.current.items.append((fnode, ftype))
+            self.filesystem.current.items.append(fnode)
             if verbose:
                 output.append(f"Moved '${file}' to '${target}'")
             self.filesystem.current = tmp
@@ -272,10 +272,10 @@ class CommandLine:
                 if (recursive):
                     def recursively_search(pointer: FileNode):
                         for item in pointer.items:
-                            if item[1] == "directory":
-                                recursively_search(item[0])
+                            if item.get_type() == NodeType.DIRECTORY:
+                                recursively_search(item)
                             else:
-                                search_file(item[0])
+                                search_file(item)
                     pointer = self.filesystem.current
                     recursively_search(pointer)
                 else:
@@ -346,8 +346,8 @@ class CommandLine:
                 output.append(error)
                 return output
             for idx, item in enumerate(self.filesystem.current.items):
-                if (item[0].name == lst[-1]):
-                    self.filesystem.current.items[idx][0].update_permissions(d, False, [])
+                if (item.name == lst[-1]):
+                    self.filesystem.current.items[idx].update_permissions(d, False, [])
                     return output
         output.append("chmod: file given can not be found")
         return output

@@ -1,10 +1,10 @@
 from filenode import FileNode
 from typing import Literal, Tuple
-from inode import Inode
+from inode import Inode, NodeType
 
 class FileSystem:
     def __init__(self):
-        inode = Inode('directory')
+        inode = Inode(NodeType.DIRECTORY)
         self.filehead = FileNode(None, "root", inode)
         self.current: FileNode = self.filehead
 
@@ -76,7 +76,7 @@ class FileSystem:
 
             if self.current.search(lst[0]) in [None, "file"]:
                 if (creating):
-                    inode = Inode('directory')
+                    inode = Inode(NodeType.DIRECTORY)
                     self.current.add_child(lst[0], inode)
                 else:
                     return f"No directory named {lst[0]}"
@@ -87,13 +87,13 @@ class FileSystem:
             lst.pop(0)
         return ""
     
-    def search_withaccess(self, path: str, creating: bool = False) -> Literal["directory", "file"] | None: 
+    def search_withaccess(self, path: str, creating: bool = False) -> NodeType | None: 
         lst = path.split("/")
         self.search("/".join(lst[0:-1]))
         for item in self.current.items:
-            if item[0].name == lst[-1]:
-                self.current = item[0]
-                return item[1]
+            if item.name == lst[-1]:
+                self.current = item
+                return item.get_type()
         return None
     
     def add(self, path: str) -> str:
@@ -108,7 +108,7 @@ class FileSystem:
         if (error := self.search("/".join(lst[0:-1]))) != "":
             self.current = saved_current
             return error
-        inode = Inode('directory')
+        inode = Inode(NodeType.DIRECTORY)
         self.current = self.current.add_child(lst[-1], inode)
         return ""
 
@@ -118,7 +118,7 @@ class FileSystem:
         if (error := self.search("/".join(lst[0:-1]))) != "":
             self.current = saved_current
             return error
-        inode = Inode('file')
+        inode = Inode(NodeType.FILE)
         self.current = self.current.add_child(lst[-1], inode)
         return ""
 

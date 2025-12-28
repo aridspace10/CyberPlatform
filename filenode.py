@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Literal, Tuple
 import datetime
-from inode import Inode
+from inode import Inode, NodeType
 
 class FileNode:
     def __init__(self, parent: FileNode | None, name: str, inode: Inode):
@@ -25,7 +25,7 @@ class FileNode:
         return self.inode.size
     
     def get_permission_str(self, item: FileNode):
-        permission = "d" if item.type == "directory" else "-"
+        permission = "d" if item.type == NodeType.DIRECTORY else "-"
         for i in item.permissions.values():
             for key, value in i.items():
                 permission += key if value else "-"
@@ -77,7 +77,7 @@ class FileNode:
         self.items.append(file)
         return file
     
-    def search(self, name: str) -> Literal["directory", "file", None]:
+    def search(self, name: str) -> NodeType | None:
         for item in self.items:
             if (item.name == name):
                 return item.get_type()
@@ -107,7 +107,7 @@ class FileNode:
             else:
                 content.append([self.get_permission_str(item), str(1), "user", "user", str(item.get_size()), str(self.inode.mtime.strftime("%b")), str(self.inode.mtime.day), str(self.inode.mtime.year), itemname])
 
-            if item.get_type() == "directory" and deep:
+            if item.get_type() == NodeType.DIRECTORY and deep:
                 deep -= 1
                 content.extend(item.list_content(prev + "/" + item.name, deep))
         return content
