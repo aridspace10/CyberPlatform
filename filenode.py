@@ -97,7 +97,7 @@ class FileNode:
     def len(self) -> int:
         return len(self.items)
 
-    def list_content(self, prev: str, deep: int = 0, detail: int = 0, extras: dict[str, bool] = {}) -> list:
+    def list_content(self, prev: str, deep: int = 0, detail: int = 0, extras: dict[str, bool | str] = {}) -> list:
         content: list[list] = []
         for item in self.items:
             itemname = prev + "/" + item.name if prev else item.name

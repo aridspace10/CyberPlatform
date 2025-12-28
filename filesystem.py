@@ -57,7 +57,7 @@ class FileSystem:
                 output[row][col] = output[row][col] + " " * (biggest - len(output[row][col]))
         return output
 
-    def list_files(self, path: str, deep: int = 0, detail: int = 0, extras: dict[str, bool] = {}):
+    def list_files(self, path: str, deep: int = 0, detail: int = 0, extras: dict[str, bool | str] = {}):
         if (path != ""):
             if (error := self.search(path)) != "":
                 return error

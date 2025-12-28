@@ -477,7 +477,9 @@ class CommandLine:
 
     def ls(self, args: list[str]) -> list[str]:
         deep, detail = False, 0
-        extra: dict[str, bool] = {}
+        extra: dict[str, bool | str] = {}
+        oneline = False
+        listdir = False
         output = []
         while args:
             arg = args[0]
@@ -491,6 +493,30 @@ class CommandLine:
                             detail = 1
                         case "i":
                             extra["inode"] = True
+                        case "1":
+                            oneline = True
+                        case "a":
+                            extra["showhiddenall"] = True
+                        case "A":
+                            extra["showhidden"] = True
+                        case "d":
+                            extra["listdir"] = True
+                        case "h":
+                            extra["humanreadable"] = True
+                        case "s":
+                            extra["showblocks"] = True
+                        case "t":
+                            extra["sortby"] = "mod"
+                        case "c":
+                            extra["sortby"] = "ctime"
+                        case "u":
+                            extra["sortby"] = "atime"
+                        case "r":
+                            extra["reverse"] = True
+                        case "S":
+                            extra["sortby"] = "size"
+                        case "X":
+                            extra["sortby"] = "ext"  
             args = args[1:]
         lines = self.filesystem.list_files("", -1 if deep else 0, detail, extra)
         for line in lines: 
