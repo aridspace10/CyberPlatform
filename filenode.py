@@ -129,8 +129,31 @@ class FileNode:
                     if (len(lst) == 1):
                         return ""
                     return lst[1]
-
                 content = sorted(content, key=ext_sort, reverse=rev)
+            elif method == "size":
+                def size_sort(val):
+                    itemname = val[-1]
+                    item = self.access(itemname)
+                    if item == None:
+                        return ""
+                    return item.inode.size
+
+                content = sorted(content, key=size_sort, reverse=rev)
+            else:
+                def time_sort(val):
+                    itemname = val[-1]
+                    item = self.access(itemname)
+                    if item == None:
+                        return ""
+                    if method == "mod":
+                        return item.inode.mtime
+                    elif method == "atime":
+                        return item.inode.atime
+                    elif method == "ctime":
+                        return item.inode.ctime
+                    return ""
+
+                content = sorted(content, key=time_sort, reverse=rev)
         else:
             if ("reverse" in extras):
                 content = content[::-1]
