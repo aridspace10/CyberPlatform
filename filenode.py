@@ -18,6 +18,12 @@ class FileNode:
     def __repr__(self):
         return self.__str__()
     
+    def get_type(self) -> NodeType:
+        return self.inode.type
+
+    def get_size(self) -> int:
+        return self.inode.size
+    
     def get_permission_str(self, item: FileNode):
         permission = "d" if item.type == "directory" else "-"
         for i in item.permissions.values():
