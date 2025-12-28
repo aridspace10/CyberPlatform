@@ -268,7 +268,7 @@ class CommandLine:
 
         for file in files:
             ty = self.filesystem.search_withaccess(file)
-            if (ty == "directory"):
+            if (ty == NodeType.DIRECTORY):
                 if (recursive):
                     def recursively_search(pointer: FileNode):
                         for item in pointer.items:
@@ -280,10 +280,10 @@ class CommandLine:
                     recursively_search(pointer)
                 else:
                     output.append("Can't recursivly search directory without -r option")
-            elif (ty == "file"):
+            elif (ty == NodeType.FILE):
                 search_file(self.filesystem.current)
             else:
-                output.append(f"Can't open file/directory given: ${file}")
+                output.append(f"Can't open file/directory given: {file}")
             self.filesystem.current = saved_current
         if (countmatch):
             return [str(len(output))]
@@ -535,5 +535,5 @@ class CommandLine:
 
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
+cl.enter_command("ls -liX")
 cl.enter_command("grep \"ERROR\" f2.txt")
-cl.enter_command("ls -li")
