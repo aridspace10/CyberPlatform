@@ -477,24 +477,24 @@ class CommandLine:
 
     def ls(self, args: list[str]) -> list[str]:
         deep, detail = False, 0
+        extra: dict[str, bool] = {}
         output = []
         while args:
             arg = args[0]
             if (arg[0] == "-"):
-                options = arg[1:].split()
+                options = arg[1:]
                 for option in options:
                     match option:
                         case "R":
                             deep = True
                         case "l":
                             detail = 1
+                        case "i":
+                            extra["inode"] = True
             args = args[1:]
-        lines = self.filesystem.list_files("", -1 if deep else 0, detail)
-        for line in lines:
-            if (not detail):
-                output.append(line)
-            else:
-                output.append(" ".join(line))
+        lines = self.filesystem.list_files("", -1 if deep else 0, detail, extra)
+        for line in lines: 
+            output.append(" ".join(line))
         return output
     
     def find(self, args: list[str]) -> list[str]:
@@ -510,4 +510,4 @@ class CommandLine:
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
 cl.enter_command("grep \"ERROR\" f2.txt")
-cl.enter_command("ls -l")
+cl.enter_command("ls -li")
