@@ -2,14 +2,21 @@ from __future__ import annotations
 from typing import Literal, Tuple
 import datetime
 
+from enum import Enum
+
+class NodeType(Enum):
+    FILE = "file"
+    DIRECTORY = "directory"
+    SYMLINK = "symlink"
+
 class Inode:
     _next_id = 1
 
-    def __init__(self, type: Literal["directory", "file", "symlink"]):
+    def __init__(self, type: NodeType):
         self.id = Inode._next_id
         Inode._next_id += 1
 
-        self.type = type
+        self.type: NodeType = type
         self.link_count = 1
         self.data: str = ""
 
