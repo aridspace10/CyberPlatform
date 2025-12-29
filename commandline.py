@@ -87,6 +87,8 @@ class CommandLine:
                 return self.mv(args[1:])
             case "grep":
                 return self.grep(args[1:])
+            case "ln":
+                return self.ln(args[1:])
             case _:
                 return []
 
@@ -530,6 +532,27 @@ class CommandLine:
         arg = args[0]
         if (error := self.filesystem.search(arg)):
             return [error]
+        return []
+    
+    def ln(self, args: list[str]) -> list[str]:
+        linkty = "hard"
+        while len(args) > 2:
+            arg = args.pop(0)
+            if (arg[0] == "-"):
+                options = arg[1:]
+                for option in options:
+                    match option:
+                        case "s":
+                            linkty = "sym"
+        target = args[0]
+        destination = args[1]
+        saved_current = self.filesystem.current
+        self.filesystem.search_withaccess(target)
+        old = self.filesystem.current
+        self.filesystem.current = saved_current
+        self.filesystem.add(destination)
+        self.filesystem.current.inode = old.inode
+        self.filesystem.current.inode.link_count += 1
         return []
 
 
