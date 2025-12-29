@@ -548,11 +548,17 @@ class CommandLine:
         destination = args[1]
         saved_current = self.filesystem.current
         self.filesystem.search_withaccess(target)
-        old = self.filesystem.current
+        target_inode = self.filesystem.current.inode
         self.filesystem.current = saved_current
         self.filesystem.add(destination)
-        self.filesystem.current.inode = old.inode
-        self.filesystem.current.inode.link_count += 1
+        if (linkty == "hard"):
+            self.filesystem.current.inode = target_inode
+            self.filesystem.current.inode.link_count += 1
+        else:
+            inode = Inode(NodeType.SYMLINK)
+            inode.data = target
+            self.filesystem.current.inode = inode
+        self.filesystem.current = saved_current
         return []
 
 
