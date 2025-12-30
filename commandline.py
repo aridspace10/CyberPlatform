@@ -90,7 +90,7 @@ class CommandLine:
             case "ln":
                 return self.ln(args[1:])
             case _:
-                return []
+                return ["Unknown command given"]
 
     def get_past_command(self) -> None:
         r = self.history[self.hpoint]
@@ -564,5 +564,6 @@ class CommandLine:
 
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
-cl.enter_command("ls -liX")
-cl.enter_command("grep \"ERROR\" f2.txt")
+while (1):
+    command = input("Input: ")
+    cl.enter_command(command)
