@@ -447,32 +447,44 @@ class CommandLine:
     def mkdir(self, args: list[str]) -> list[str]:
         permissions = {"r": True, "w": True, "x": True}
         verbose, parent = False, False
-        while len(args) > 1:
-            arg = args[0]
-            if (arg == "-m" or arg == "--mode"):
-                args = args[1:]
-                arg = args[0]
-                if (arg.startswith("a=")):
-                    permissions = {"r": False, "w": False, "x": False}
-                    while arg:
-                        match arg[0]:
-                            case "r":
-                                permissions["r"] = True
-                            case "w":
-                                permissions["w"] = True
-                            case "x":
-                                permissions["x"] = True
-                        arg = arg[1:]
+        if (len(args) >= 1):
+            return ["mkdir: at least one argument should be given"]
+        name = ""
+        while len(args) > 0:
+            arg = args.pop(0)
+            if (arg[0] == "-"): 
+                if (arg == "-m" or arg == "--mode"):
+                    args = args[1:]
+                    arg = args[0]
+                    if (arg.startswith("a=")):
+                        permissions = {"r": False, "w": False, "x": False}
+                        while arg:
+                            match arg[0]:
+                                case "r":
+                                    permissions["r"] = True
+                                case "w":
+                                    permissions["w"] = True
+                                case "x":
+                                    permissions["x"] = True
+                            arg = arg[1:]
+                    else:
+                        return ["mkdir: option given to -m or --mode is not correct"]
+                elif (arg == "-v" or arg == "--verbose"):
+                    verbose = True
+                elif (arg == "-p" or arg == "--parents"):
+                    parent = True
+                elif (arg == "-h" or arg == "--help"):
+                    return ["mkdir: mkdir [OPTIONS...] name", "Create directories"]
                 else:
-                    return ["mkdir: option given to -m or --mode is not correct"]
-            elif (arg == "-v" or arg == "--verbose"):
-                verbose = True
-            elif (arg == "-p" or arg == "--parents"):
-                parent = True
+                    return ["mkdir: unknown argument given"]
             else:
-                return ["mkdir: unknown argument given"]
-            args = args[1:]
-        self.filesystem.add_directory(args[0], parent, permissions)
+                name = args[0]
+        if (name == ""):
+            return ["mkdir: no name given for new directory"]
+        
+        saved_current = self.filesystem.current
+        self.filesystem.add_directory(name, parent, permissions)
+        self.filesystem.current = saved_current
         if (verbose):
             return [f"mkdir: sucessfully created ${args[0]}"]
         return []
