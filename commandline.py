@@ -202,6 +202,7 @@ class CommandLine:
         recursive = False
         include = []
         exclude = []
+        output = []
         while args[0][0] != "\"":
             arg = args[0]
             if (arg[0] == "-"):
@@ -227,12 +228,18 @@ class CommandLine:
                             quiet = True
                         case "r":
                             recursive = True
-            elif (arg[0].startswith("--include=")):
+            if (arg.startswith("--include=")):
                 lst = arg[0].split("=")
                 include.append(lst[1])
-            elif (arg[0].startswith("--exclude-dir=")):
+            elif (arg.startswith("--exclude-dir=")):
                 lst = arg[0].split("=")
                 exclude.append(lst[1])
+            elif (arg == "--help"):
+                print ("a")
+                with open("static/help/grep.txt") as f:
+                    for line in f:
+                        output.append(line)
+                return output
             args = args[1:]
 
         pattern = args[0].replace("\"", '').replace("\"", '')
@@ -240,7 +247,6 @@ class CommandLine:
             pattern = pattern.lower()
         files = args[1:]
         saved_current = self.filesystem.current
-        output = []
         
         if (matchwhole):
             match_cond_func = lambda line: len([w for w in line if pattern == w])
@@ -454,8 +460,7 @@ class CommandLine:
             arg = args.pop(0)
             if (arg[0] == "-"): 
                 if (arg == "-m" or arg == "--mode"):
-                    args = args[1:]
-                    arg = args[0]
+                    arg = args.pop(0)
                     if (arg.startswith("a=")):
                         permissions = {"r": False, "w": False, "x": False}
                         while arg:
