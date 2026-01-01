@@ -97,6 +97,13 @@ class CommandLine:
         if (self.hpoint < 0):
             self.hpoint -= 1
             return r
+        
+    def useage(self, type: str) -> list[str]:
+        output = []
+        with open(f"static/help/{type}.txt") as f:
+            for line in f:
+                output.append(line)
+        return output
 
     def cp(self, args: list[str]) -> list[str]:
         recurse = False
@@ -114,12 +121,6 @@ class CommandLine:
             args = args[1:]
         target = args[0]
         return []
-
-    def mv_useage(self) -> list[str]:
-        output = []
-        output.append("mv [OPTION]... SOURCE DEST\nmv [OPTION]... SOURCE... DIRECTORY")
-        output.append("Move or rename files.")
-        return output
     
     def mv(self, args: list[str]) -> list[str]:
         verbose = False
@@ -133,14 +134,14 @@ class CommandLine:
             if (arg[0] == "-"):
                 if (arg[1] == "-"):
                     if (arg[2:] == "help"):
-                        return self.mv_useage()
+                        return self.useage("mv")
                 else:    
                     options = arg[1:].split()
                     for option in options:
                         if (option == "v"):
                             verbose = True
                         elif (option == "h"):
-                            return self.mv_useage()
+                            return self.useage("mv")
             else:
                 files.append(arg)
             args = args[1:]
@@ -235,11 +236,7 @@ class CommandLine:
                 lst = arg[0].split("=")
                 exclude.append(lst[1])
             elif (arg == "--help"):
-                print ("a")
-                with open("static/help/grep.txt") as f:
-                    for line in f:
-                        output.append(line)
-                return output
+                return self.useage("grep")
             args = args[1:]
 
         pattern = args[0].replace("\"", '').replace("\"", '')
@@ -307,12 +304,15 @@ class CommandLine:
         while len(args) > 2:
             arg = args[0]
             if (arg[0] == "-"):
+                if (arg[1:] == "-help"):
+                    return self.useage("chmod")
                 options = arg[1:].split()
                 for option in options:
                     if (option == "R"):
                         recurse = True
                     elif (option == "v"):
                         verbose = True
+                
             args = args[1:]
         permissions = args[0]
         if (len(permissions.rstrip()) != 3):
@@ -370,7 +370,8 @@ class CommandLine:
         output = []
         while len(args) > 1:
             arg = args[0]
-            pass
+            if (arg == "--help"):
+                return self.useage("cat")
             args = args[1:]
         filename = args[0]
         content = self.filesystem.get_file(filename)
@@ -386,6 +387,8 @@ class CommandLine:
         output = []
         while len(args) > 1:
             arg = args[0]
+            if (arg == "--help"):
+                return self.useage("head")
             if (arg == "-n"):
                 args = args[1:]
                 num = int(args[0])
@@ -412,6 +415,8 @@ class CommandLine:
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
+                if (arg == "--help"):
+                    return self.useage("rm")
                 options = arg[1:].split()
                 for option in options:
                     if (option == "r" or option == "R"):
@@ -433,8 +438,7 @@ class CommandLine:
         while len(args) > 1:
             arg = args[0]
             if (arg == "--help"):
-                print ("pwd [OPTION]...")
-                print ("Print working directory.")
+                return self.useage("pwd")
             elif (arg == "-l"):
                 ty = "l"
             elif (arg == "-p"):
@@ -479,7 +483,7 @@ class CommandLine:
                 elif (arg == "-p" or arg == "--parents"):
                     parent = True
                 elif (arg == "-h" or arg == "--help"):
-                    return ["mkdir: mkdir [OPTIONS...] name", "Create directories"]
+                    return self.useage("mkdir")
                 else:
                     return ["mkdir: unknown argument given"]
             else:
@@ -503,6 +507,9 @@ class CommandLine:
         while args:
             arg = args[0]
             if (arg[0] == "-"):
+                if (arg == "--help"):
+                    return self.useage("ls")
+
                 options = arg[1:]
                 for option in options:
                     match option:
@@ -556,6 +563,8 @@ class CommandLine:
         while len(args) > 2:
             arg = args.pop(0)
             if (arg[0] == "-"):
+                if (arg == "--help"):
+                    return self.useage("ln")
                 options = arg[1:]
                 for option in options:
                     match option:
@@ -577,7 +586,6 @@ class CommandLine:
             self.filesystem.current.inode = inode
         self.filesystem.current = saved_current
         return []
-
 
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
