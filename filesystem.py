@@ -83,6 +83,15 @@ class FileSystem:
             node = self.current.access(lst[0])
             if node is None:
                 return f"No directory named {lst[0]}"
+            if node.inode.type == NodeType.SYMLINK:
+                target = node.inode.data
+                # Resolve target relative to symlink's parent
+                saved = self.current
+                err = self.search(target)
+                if err != "":
+                    return err
+                node = self.current
+                self.current = saved
             self.current = node
             lst.pop(0)
         return ""
