@@ -457,7 +457,7 @@ class CommandLine:
     def mkdir(self, args: list[str]) -> list[str]:
         permissions = {"r": True, "w": True, "x": True}
         verbose, parent = False, False
-        if (len(args) >= 1):
+        if (len(args) <= 1):
             return ["mkdir: at least one argument should be given"]
         name = ""
         while len(args) > 0:
@@ -487,13 +487,15 @@ class CommandLine:
                 else:
                     return ["mkdir: unknown argument given"]
             else:
-                name = args[0]
+                name = arg
         if (name == ""):
             return ["mkdir: no name given for new directory"]
         
         saved_current = self.filesystem.current
-        self.filesystem.add_directory(name, parent, permissions)
+        err = self.filesystem.add_directory(name, parent, permissions)
         self.filesystem.current = saved_current
+        if (err):
+            return [err]
         if (verbose):
             return [f"mkdir: sucessfully created ${args[0]}"]
         return []

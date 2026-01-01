@@ -114,7 +114,7 @@ class FileSystem:
     def add_directory(self, path: str, creating: bool = False, permissions: dict = {}) -> str:
         saved_current = self.current
         lst = path.split("/")
-        if (error := self.search("/".join(lst[0:-1]))) != "":
+        if (error := self.search("/".join(lst[0:-1]), creating)) != "":
             self.current = saved_current
             return error
         inode = Inode(NodeType.DIRECTORY)
