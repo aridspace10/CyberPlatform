@@ -1,6 +1,7 @@
 from filenode import FileNode
 from filesystem import FileSystem
 from collections import deque
+from typing import Literal, Tuple
 from inode import Inode, NodeType
 
 class CommandLine:
@@ -56,7 +57,7 @@ class CommandLine:
             for line in output:
                 print (line)
 
-    def run_command(self, raw: str) -> list[str]:
+    def run_command(self, raw: str) -> Tuple[int, list[str]]:
         args = raw.split(" ")
         match args[0]:
             case "ls":
@@ -105,7 +106,7 @@ class CommandLine:
                 output.append(line)
         return output
 
-    def cp(self, args: list[str]) -> list[str]:
+    def cp(self, args: list[str]) -> Tuple[int, list[str]]:
         recurse = False
         verbose = False
         files = []
@@ -120,9 +121,9 @@ class CommandLine:
                 files.append(arg)
             args = args[1:]
         target = args[0]
-        return []
+        return (1, [])
     
-    def mv(self, args: list[str]) -> list[str]:
+    def mv(self, args: list[str]) -> Tuple[int, list[str]]:
         verbose = False
         clobber = False
         output = []
@@ -190,7 +191,7 @@ class CommandLine:
             self.filesystem.current = tmp
         return output
     
-    def grep(self, args: list[str]) -> list[str]:
+    def grep(self, args: list[str]) -> Tuple[int, list[str]]:
         case_sentive = False
         invert = False
         linenum = False
@@ -295,7 +296,7 @@ class CommandLine:
         else:
             return output
     
-    def chmod(self, args: list[str]) -> list[str]:
+    def chmod(self, args: list[str]) -> Tuple[int, list[str]]:
         recurse = False
         verbose = False
         output = []
@@ -360,13 +361,13 @@ class CommandLine:
         output.append("chmod: file given can not be found")
         return output
     
-    def echo(self, args: list[str]) -> list[str]:
+    def echo(self, args: list[str]) -> Tuple[int, list[str]]:
         return [(" ".join(args))]
 
-    def touch(self, args: list[str]) -> list[str]:
+    def touch(self, args: list[str]) -> Tuple[int, list[str]]:
         return []
 
-    def cat(self, args: list[str]) -> list[str]:
+    def cat(self, args: list[str]) -> Tuple[int, list[str]]:
         output = []
         while len(args) > 1:
             arg = args[0]
@@ -382,7 +383,7 @@ class CommandLine:
             output.append(line)
         return output
 
-    def head(self, args: list[str]) -> list[str]:
+    def head(self, args: list[str]) -> Tuple[int, list[str]]:
         num = 10
         output = []
         while len(args) > 1:
@@ -406,10 +407,10 @@ class CommandLine:
                 break
         return output
 
-    def tail(self, args: list[str]) -> list[str]:
+    def tail(self, args: list[str]) -> Tuple[int, list[str]]:
         return []
 
-    def rm(self, args: list[str]) -> list[str]:
+    def rm(self, args: list[str]) -> Tuple[int, list[str]]:
         recurse, verbose = False, False
         output = []
         while len(args) > 1:
@@ -433,7 +434,7 @@ class CommandLine:
                 output.append("File sucessfully deleted")
         return output
 
-    def pwd(self, args: list[str]) -> list[str]:
+    def pwd(self, args: list[str]) -> Tuple[int, list[str]]:
         ty = "l"
         while len(args) > 1:
             arg = args[0]
@@ -454,7 +455,7 @@ class CommandLine:
             pointer = pointer.parent
         return [direct]
         
-    def mkdir(self, args: list[str]) -> list[str]:
+    def mkdir(self, args: list[str]) -> Tuple[int, list[str]]:
         permissions = {"r": True, "w": True, "x": True}
         verbose, parent = False, False
         if (len(args) <= 1):
@@ -500,7 +501,7 @@ class CommandLine:
             return [f"mkdir: sucessfully created ${args[0]}"]
         return []
 
-    def ls(self, args: list[str]) -> list[str]:
+    def ls(self, args: list[str]) -> Tuple[int, list[str]]:
         deep, detail = False, 0
         extra: dict[str, bool | str] = {}
         oneline = False
@@ -551,16 +552,16 @@ class CommandLine:
             output.append(" ".join(line))
         return output
     
-    def find(self, args: list[str]) -> list[str]:
+    def find(self, args: list[str]) -> Tuple[int, list[str]]:
         return []
     
-    def cd(self, args: list[str]) -> list[str]:
+    def cd(self, args: list[str]) -> Tuple[int, list[str]]]:
         arg = args[0]
         if (error := self.filesystem.search(arg)):
             return [error]
         return []
     
-    def ln(self, args: list[str]) -> list[str]:
+    def ln(self, args: list[str]) -> Tuple[int, list[str]]:
         linkty = "hard"
         while len(args) > 2:
             arg = args.pop(0)
