@@ -555,11 +555,11 @@ class CommandLine:
     def find(self, args: list[str]) -> Tuple[int, list[str]]:
         return []
     
-    def cd(self, args: list[str]) -> Tuple[int, list[str]]]:
+    def cd(self, args: list[str]) -> Tuple[int, list[str]]:
         arg = args[0]
         if (error := self.filesystem.search(arg)):
-            return [error]
-        return []
+            return (1, [error])
+        return (0, [])
     
     def ln(self, args: list[str]) -> Tuple[int, list[str]]:
         linkty = "hard"
