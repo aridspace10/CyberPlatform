@@ -573,6 +573,8 @@ class CommandLine:
                     match option:
                         case "s":
                             linkty = "sym"
+                        case _:
+                            return (2, ["Unknown Argument Given"])
         target = args[0]
         destination = args[1]
         saved_current = self.filesystem.current
@@ -588,7 +590,7 @@ class CommandLine:
             inode.data = target
             self.filesystem.current.inode = inode
         self.filesystem.current = saved_current
-        return []
+        return (1, [])
 
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
