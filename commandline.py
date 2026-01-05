@@ -24,25 +24,47 @@ class CommandLine:
                     item.set_data("")
                 return item
         inode = Inode(NodeType.FILE)
-        self.filesystem.current.add_child(lst[-1], inode)     
+        self.filesystem.current.add_child(lst[-1], inode)  
+        self.filesystem.search_withaccess(lst[-1]) # search with access will set new filenode as self.filesystem.current
+        result = self.filesystem.current
+        self.filesystem.current = saved_current
+        return result
     
     def enter_command(self, raw: str) -> None:
         self.history.append(raw)
         self.hpoint = len(self.history)
         commands = raw.split("|")
         fdin, fdout = None, None
-        for command in commands:
+        for idx, command in enumerate(commands):
             lst = command.split(" ")
             args = []
             while lst:
-                arg = args.pop(0)
+                arg = lst.pop(0)
                 if (arg == "<"):
-                    fdin = self.get_fd(args.pop(0))
+                    fdin = self.get_fd(lst.pop(0))
                 elif (arg == ">"):
-                    fdout = self.get_fd(args.pop(0), True)
+                    fdout = self.get_fd(lst.pop(0), True)
                 elif (arg == ">>"):
-                    fdout = self.get_fd(args.pop(0))
-
+                    fdout = self.get_fd(lst.pop(0))
+                else:
+                    args.append(arg)
+            input = fdin.get_data().split("\n") if fdin else []
+            self.lcs, output = self.run_command(" ".join(args), input)
+            # stdout given
+            if fdout is not None:
+                fdout.append_data("\n".join(output))
+            # last command
+            elif idx + 1 == len(commands):
+                for line in output:
+                    print (line)
+                return
+            # more commands to go
+            else:
+                inode = Inode(NodeType.FILE)
+                inode.set_data("\n".join(output))
+                fdout = FileNode(None, "stdout", inode)
+            fdin = fdout
+            fdout = None
         """
         args = raw.split(" ")
         output: list[str] = []
@@ -88,7 +110,7 @@ class CommandLine:
             for line in output:
                 print (line)
         """
-    def run_command(self, raw: str) -> Tuple[int, list[str]]:
+    def run_command(self, raw: str, fdin: list[str] = []) -> Tuple[int, list[str]]:
         args = raw.split(" ")
         match args[0]:
             case "ls":
