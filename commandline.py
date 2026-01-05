@@ -36,7 +36,7 @@ class CommandLine:
         commands = raw.split("|")
         fdin, fdout = None, None
         for idx, command in enumerate(commands):
-            lst = command.split(" ")
+            lst = command.rstrip().lstrip().split(" ")
             args = []
             while lst:
                 arg = lst.pop(0)
@@ -214,7 +214,7 @@ class CommandLine:
         include = []
         exclude = []
         output = []
-        while args[0][0] != "\"":
+        while len(args) and args[0][0] != "\"":
             arg = args[0]
             if (arg[0] == "-"):
                 for option in args[1:]:
@@ -250,11 +250,18 @@ class CommandLine:
             else:
                 return (1, ["grep: unknown argument given"])
             args = args[1:]
-
-        pattern = args[0].replace("\"", '').replace("\"", '')
+        if (not len(args)):
+            return (1, "grep: pattern not given")
+        pattern = args.pop(0).replace("\"", '').replace("\"", '')
         if (not case_sentive):
             pattern = pattern.lower()
-        files = args[1:]
+        if (len(args)):
+            files = args
+            for idx, file in enumerate(files):
+                if (file == "-"):
+                    files[idx] = input
+        else:
+            files = [input]
         saved_current = self.filesystem.current
         
         if (matchwhole):
@@ -284,7 +291,11 @@ class CommandLine:
                         return
 
         for file in files:
-            ty = self.filesystem.search_withaccess(file)
+            if (isinstance(file, FileNode)):
+                ty = file.inode.type
+                self.filesystem.current = file
+            else:
+                ty = self.filesystem.search_withaccess(file)
             if (ty == NodeType.DIRECTORY):
                 if (recursive):
                     def recursively_search(pointer: FileNode):
