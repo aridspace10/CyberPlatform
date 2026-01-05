@@ -10,10 +10,40 @@ class CommandLine:
         self.history = []
         self.hpoint = -1
         self.lcs = 0
+
+    def get_fd(self, path: str, removing: bool = False) -> FileNode:
+        lst = path.split("/")
+        saved_current = self.filesystem.current
+        # only go to path if a path is given
+        if (len(lst) > 1 and (error := self.filesystem.search("/".join(lst[0:-1]))) != ""):
+            self.filesystem.current = saved_current
+            print (error)
+        for idx, item in enumerate(self.filesystem.current.items):
+            if item.name == lst[-1]:
+                if (removing):
+                    item.set_data("")
+                return item
+        inode = Inode(NodeType.FILE)
+        self.filesystem.current.add_child(lst[-1], inode)     
     
     def enter_command(self, raw: str) -> None:
         self.history.append(raw)
         self.hpoint = len(self.history)
+        commands = raw.split("|")
+        fdin, fdout = None, None
+        for command in commands:
+            lst = command.split(" ")
+            args = []
+            while lst:
+                arg = args.pop(0)
+                if (arg == "<"):
+                    fdin = self.get_fd(args.pop(0))
+                elif (arg == ">"):
+                    fdout = self.get_fd(args.pop(0), True)
+                elif (arg == ">>"):
+                    fdout = self.get_fd(args.pop(0))
+
+        """
         args = raw.split(" ")
         output: list[str] = []
         if (any(x in args for x in ["<", ">", ">>", "<<"])):
@@ -57,7 +87,7 @@ class CommandLine:
             self.lcs, output = self.run_command(" ".join(args[0:idx]))
             for line in output:
                 print (line)
-
+        """
     def run_command(self, raw: str) -> Tuple[int, list[str]]:
         args = raw.split(" ")
         match args[0]:
