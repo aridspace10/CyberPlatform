@@ -344,44 +344,45 @@ class CommandLine:
             if (error := self.filesystem.search(file)) != "":
                 self.current = saved_current
                 output.append(error)
-                return output
+                return (1, output)
             output = self.filesystem.current.update_permissions(d, recurse, [])
             if (verbose):
                 for line in output:
                     output.append(line)
+            return (0, output)
         else:
             if (error := self.filesystem.search("/".join(lst[0:-1]))) != "":
                 self.current = saved_current
                 output.append(error)
-                return output
+                return (1, output)
             for idx, item in enumerate(self.filesystem.current.items):
                 if (item.name == lst[-1]):
                     self.filesystem.current.items[idx].update_permissions(d, False, [])
-                    return output
+                    return (0, output)
         output.append("chmod: file given can not be found")
-        return output
+        return (1, output)
     
     def echo(self, args: list[str]) -> Tuple[int, list[str]]:
-        return [(" ".join(args))]
+        return (0, [(" ".join(args))])
 
     def touch(self, args: list[str]) -> Tuple[int, list[str]]:
-        return []
+        return (0, [])
 
     def cat(self, args: list[str]) -> Tuple[int, list[str]]:
         output = []
         while len(args) > 1:
             arg = args[0]
             if (arg == "--help"):
-                return self.useage("cat")
+                return (0, self.useage("cat"))
             args = args[1:]
         filename = args[0]
         content = self.filesystem.get_file(filename)
         if (content == None or isinstance(content, str)):
-            return [f"File {filename} does not exist"]
+            return (1, [f"File {filename} does not exist"])
         data = content.get_data()
         for line in data.split("\n"):
             output.append(line)
-        return output
+        return (0, output)
 
     def head(self, args: list[str]) -> Tuple[int, list[str]]:
         num = 10
@@ -389,7 +390,7 @@ class CommandLine:
         while len(args) > 1:
             arg = args[0]
             if (arg == "--help"):
-                return self.useage("head")
+                return (0, self.useage("head"))
             if (arg == "-n"):
                 args = args[1:]
                 num = int(args[0])
@@ -405,7 +406,7 @@ class CommandLine:
             counter += 1
             if (counter >= num):
                 break
-        return output
+        return (0, output)
 
     def tail(self, args: list[str]) -> Tuple[int, list[str]]:
         return []
@@ -417,7 +418,7 @@ class CommandLine:
             arg = args[0]
             if (arg[0] == "-"):
                 if (arg == "--help"):
-                    return self.useage("rm")
+                    return (0, self.useage("rm"))
                 options = arg[1:].split()
                 for option in options:
                     if (option == "r" or option == "R"):
@@ -432,14 +433,14 @@ class CommandLine:
                 output.append("No file deleted")
             else:
                 output.append("File sucessfully deleted")
-        return output
+        return (0, output)
 
     def pwd(self, args: list[str]) -> Tuple[int, list[str]]:
         ty = "l"
         while len(args) > 1:
             arg = args[0]
             if (arg == "--help"):
-                return self.useage("pwd")
+                return (0, self.useage("pwd"))
             elif (arg == "-l"):
                 ty = "l"
             elif (arg == "-p"):
@@ -453,13 +454,13 @@ class CommandLine:
             else:
                 direct = pointer.name
             pointer = pointer.parent
-        return [direct]
+        return (0, [direct])
         
     def mkdir(self, args: list[str]) -> Tuple[int, list[str]]:
         permissions = {"r": True, "w": True, "x": True}
         verbose, parent = False, False
         if (len(args) <= 1):
-            return ["mkdir: at least one argument should be given"]
+            return (0, ["mkdir: at least one argument should be given"])
         name = ""
         while len(args) > 0:
             arg = args.pop(0)
@@ -484,22 +485,22 @@ class CommandLine:
                 elif (arg == "-p" or arg == "--parents"):
                     parent = True
                 elif (arg == "-h" or arg == "--help"):
-                    return self.useage("mkdir")
+                    return (0, self.useage("mkdir"))
                 else:
-                    return ["mkdir: unknown argument given"]
+                    return (1, ["mkdir: unknown argument given"])
             else:
                 name = arg
         if (name == ""):
-            return ["mkdir: no name given for new directory"]
+            return (1, ["mkdir: no name given for new directory"])
         
         saved_current = self.filesystem.current
         err = self.filesystem.add_directory(name, parent, permissions)
         self.filesystem.current = saved_current
         if (err):
-            return [err]
+            return (1, [err])
         if (verbose):
-            return [f"mkdir: sucessfully created ${args[0]}"]
-        return []
+            return (0, [f"mkdir: sucessfully created ${args[0]}"])
+        return (1, ["mkdir: Unknown error occured"])
 
     def ls(self, args: list[str]) -> Tuple[int, list[str]]:
         deep, detail = False, 0
@@ -511,8 +512,7 @@ class CommandLine:
             arg = args[0]
             if (arg[0] == "-"):
                 if (arg == "--help"):
-                    return self.useage("ls")
-
+                    return (0, self.useage("ls"))
                 options = arg[1:]
                 for option in options:
                     match option:
@@ -545,15 +545,17 @@ class CommandLine:
                         case "S":
                             extra["sortby"] = "size"
                         case "X":
-                            extra["sortby"] = "ext"  
+                            extra["sortby"] = "ext"
+                        case _:
+                            return (2, ["ls: unknown directory given"])
             args = args[1:]
         lines = self.filesystem.list_files("", -1 if deep else 0, detail, extra)
         for line in lines: 
             output.append(" ".join(line))
-        return output
+        return (0, output)
     
     def find(self, args: list[str]) -> Tuple[int, list[str]]:
-        return []
+        return (1, [])
     
     def cd(self, args: list[str]) -> Tuple[int, list[str]]:
         arg = args[0]
