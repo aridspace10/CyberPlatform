@@ -65,51 +65,7 @@ class CommandLine:
                 fdout = FileNode(None, "stdout", inode)
             fdin = fdout
             fdout = None
-        """
-        args = raw.split(" ")
-        output: list[str] = []
-        if (any(x in args for x in ["<", ">", ">>", "<<"])):
-            for ch in ("<", ">", ">>", "<<"):
-                if ch in args:
-                    idx = args.index(ch)
-                    self.lcs, output = self.run_command(" ".join(args[0:idx]))
-                    args = args[idx + 1:]
-                    if (len(args) > 1):
-                        print ("Not implemtned")
-                    else:
-                        lst = args[0].split("/")
-                        saved_current = self.filesystem.current
-                        # only go to path if a path is given
-                        if (len(lst) > 1 and (error := self.filesystem.search("/".join(lst[0:-1]))) != ""):
-                            self.filesystem.current = saved_current
-                            print (error)
-                        for idx, item in enumerate(self.filesystem.current.items):
-                            if item.name == lst[-1]:
-                                if ch == ">":
-                                    self.filesystem.current.items[idx].set_data("\n".join(output))
-                                    return
-                                elif ch == ">>":
-                                    self.filesystem.current.items[idx].append_data("\n".join(output))
-                                    return
-                        # Reaches here if no item found
-                        inode = Inode(NodeType.FILE)
-                        self.filesystem.current.add_child(lst[-1], inode)       
-                        self.filesystem.search_withaccess(lst[-1])
-                        if ch == ">":
-                            self.filesystem.current.set_data("\n".join(output))
-                            self.filesystem.current = saved_current
-                            return
-                        elif ch == ">>":
-                            self.filesystem.current.append_data("\n".join(output))
-                            self.filesystem.current = saved_current
-                            return
-            else:
-                idx = -1
-        else:
-            self.lcs, output = self.run_command(" ".join(args[0:idx]))
-            for line in output:
-                print (line)
-        """
+            
     def run_command(self, raw: str, fdin: list[str] = []) -> Tuple[int, list[str]]:
         args = raw.split(" ")
         match args[0]:
