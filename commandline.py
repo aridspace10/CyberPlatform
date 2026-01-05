@@ -65,40 +65,40 @@ class CommandLine:
                 fdout = FileNode(None, "stdout", inode)
             fdin = fdout
             fdout = None
-            
+
     def run_command(self, raw: str, fdin: list[str] = []) -> Tuple[int, list[str]]:
         args = raw.split(" ")
         match args[0]:
             case "ls":
-                return self.ls(args[1:])
+                return self.ls(args[1:], fdin)
             case "mkdir":
-                return self.mkdir(args[1:])
+                return self.mkdir(args[1:], fdin)
             case "cd":
-                return self.cd(args[1:])
+                return self.cd(args[1:], fdin)
             case "pwd":
-                return self.pwd(args[1:])
+                return self.pwd(args[1:], fdin)
             case "rm":
-                return self.rm(args[1:])
+                return self.rm(args[1:], fdin)
             case "touch":
-                return self.touch(args[1:])
+                return self.touch(args[1:], fdin)
             case "cat":
-                return self.cat(args[1:])
+                return self.cat(args[1:], fdin)
             case "head":
-                return self.head(args[1:])
+                return self.head(args[1:], fdin)
             case "tail":
-                return self.tail(args[1:])
+                return self.tail(args[1:], fdin)
             case "echo":
-                return self.echo(args[1:])
+                return self.echo(args[1:], fdin)
             case "chmod":
-                return self.chmod(args[1:])
+                return self.chmod(args[1:], fdin)
             case "cp":
-                return self.cp(args[1:])
+                return self.cp(args[1:], fdin)
             case "mv":
-                return self.mv(args[1:])
+                return self.mv(args[1:], fdin)
             case "grep":
-                return self.grep(args[1:])
+                return self.grep(args[1:], fdin)
             case "ln":
-                return self.ln(args[1:])
+                return self.ln(args[1:], fdin)
             case _:
                 return ["Unknown command given"]
 
@@ -115,7 +115,7 @@ class CommandLine:
                 output.append(line)
         return output
 
-    def cp(self, args: list[str]) -> Tuple[int, list[str]]:
+    def cp(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         recurse = False
         verbose = False
         files = []
@@ -132,7 +132,7 @@ class CommandLine:
         target = args[0]
         return (1, [])
     
-    def mv(self, args: list[str]) -> Tuple[int, list[str]]:
+    def mv(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         verbose = False
         clobber = False
         output = []
@@ -200,7 +200,7 @@ class CommandLine:
             self.filesystem.current = tmp
         return (0, output)
     
-    def grep(self, args: list[str]) -> Tuple[int, list[str]]:
+    def grep(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         case_sentive = False
         invert = False
         linenum = False
@@ -307,7 +307,7 @@ class CommandLine:
         else:
             return (0, output)
     
-    def chmod(self, args: list[str]) -> Tuple[int, list[str]]:
+    def chmod(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         recurse = False
         verbose = False
         output = []
@@ -376,16 +376,16 @@ class CommandLine:
         output.append("chmod: file given can not be found")
         return (1, output)
     
-    def echo(self, args: list[str]) -> Tuple[int, list[str]]:
+    def echo(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         output = " ".join(args)
         if (output == "$?"):
             return (0, [(str(self.lcs))])
         return (0, [(" ".join(args))])
 
-    def touch(self, args: list[str]) -> Tuple[int, list[str]]:
+    def touch(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         return (0, [])
 
-    def cat(self, args: list[str]) -> Tuple[int, list[str]]:
+    def cat(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         output = []
         while len(args) > 1:
             arg = args[0]
@@ -401,7 +401,7 @@ class CommandLine:
             output.append(line)
         return (0, output)
 
-    def head(self, args: list[str]) -> Tuple[int, list[str]]:
+    def head(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         num = 10
         output = []
         while len(args) > 1:
@@ -425,10 +425,10 @@ class CommandLine:
                 break
         return (0, output)
 
-    def tail(self, args: list[str]) -> Tuple[int, list[str]]:
+    def tail(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         return []
 
-    def rm(self, args: list[str]) -> Tuple[int, list[str]]:
+    def rm(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         recurse, verbose = False, False
         output = []
         while len(args) > 1:
@@ -452,7 +452,7 @@ class CommandLine:
                 output.append("File sucessfully deleted")
         return (0, output)
 
-    def pwd(self, args: list[str]) -> Tuple[int, list[str]]:
+    def pwd(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         ty = "l"
         while len(args) > 1:
             arg = args[0]
@@ -473,7 +473,7 @@ class CommandLine:
             pointer = pointer.parent
         return (0, [direct])
         
-    def mkdir(self, args: list[str]) -> Tuple[int, list[str]]:
+    def mkdir(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         permissions = {"r": True, "w": True, "x": True}
         verbose, parent = False, False
         if (len(args) <= 1):
@@ -519,7 +519,7 @@ class CommandLine:
             return (0, [f"mkdir: sucessfully created ${args[0]}"])
         return (1, ["mkdir: Unknown error occured"])
 
-    def ls(self, args: list[str]) -> Tuple[int, list[str]]:
+    def ls(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         deep, detail = False, 0
         extra: dict[str, bool | str] = {}
         oneline = False
@@ -571,16 +571,16 @@ class CommandLine:
             output.append(" ".join(line))
         return (0, output)
     
-    def find(self, args: list[str]) -> Tuple[int, list[str]]:
+    def find(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         return (1, [])
     
-    def cd(self, args: list[str]) -> Tuple[int, list[str]]:
+    def cd(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         arg = args[0]
         if (error := self.filesystem.search(arg)):
             return (1, [error])
         return (0, [])
     
-    def ln(self, args: list[str]) -> Tuple[int, list[str]]:
+    def ln(self, args: list[str], input: list[str]) -> Tuple[int, list[str]]:
         linkty = "hard"
         while len(args) > 2:
             arg = args.pop(0)
