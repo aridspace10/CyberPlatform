@@ -9,6 +9,7 @@ class CommandLine:
         self.filesystem = FileSystem()
         self.history = []
         self.hpoint = -1
+        self.lcs = 0
     
     def enter_command(self, raw: str) -> None:
         self.history.append(raw)
@@ -19,7 +20,7 @@ class CommandLine:
             for ch in ("<", ">", ">>", "<<"):
                 if ch in args:
                     idx = args.index(ch)
-                    output = self.run_command(" ".join(args[0:idx]))
+                    self.lcs, output = self.run_command(" ".join(args[0:idx]))
                     args = args[idx + 1:]
                     if (len(args) > 1):
                         print ("Not implemtned")
@@ -53,7 +54,7 @@ class CommandLine:
             else:
                 idx = -1
         else:
-            output = self.run_command(" ".join(args))
+            self.lcs, output = self.run_command(" ".join(args[0:idx]))
             for line in output:
                 print (line)
 
@@ -368,6 +369,9 @@ class CommandLine:
         return (1, output)
     
     def echo(self, args: list[str]) -> Tuple[int, list[str]]:
+        output = " ".join(args)
+        if (output == "$?"):
+            return (0, [(str(self.lcs))])
         return (0, [(" ".join(args))])
 
     def touch(self, args: list[str]) -> Tuple[int, list[str]]:
