@@ -135,14 +135,14 @@ class CommandLine:
             if (arg[0] == "-"):
                 if (arg[1] == "-"):
                     if (arg[2:] == "help"):
-                        return self.useage("mv")
+                        return (0, self.useage("mv"))
                 else:    
                     options = arg[1:].split()
                     for option in options:
                         if (option == "v"):
                             verbose = True
                         elif (option == "h"):
-                            return self.useage("mv")
+                            return (0, self.useage("mv"))
             else:
                 files.append(arg)
             args = args[1:]
@@ -156,7 +156,7 @@ class CommandLine:
                     output.append(f"Renamed '${self.filesystem.current.name}' -> '{target}'")
                 self.filesystem.current.name = target
                 self.filesystem.current = tmp
-                return output
+                return (0, output)
             elif (ftype == NodeType.FILE and ttype == NodeType.DIRECTORY):
                 if (self.filesystem.current.parent == None): # literally impossible to be true
                     return []
@@ -174,7 +174,7 @@ class CommandLine:
                 if (verbose):
                     output.append(f"Moved '${files[0]}' to '{target}'")
                 self.filesystem.current = tmp
-                return output
+                return (0, output)
         # multiple files were given
         self.filesystem.search_withaccess(target)
         targetfnode = self.filesystem.current
@@ -189,7 +189,7 @@ class CommandLine:
             if verbose:
                 output.append(f"Moved '${file}' to '${target}'")
             self.filesystem.current = tmp
-        return output
+        return (0, output)
     
     def grep(self, args: list[str]) -> Tuple[int, list[str]]:
         case_sentive = False
@@ -238,6 +238,8 @@ class CommandLine:
                 exclude.append(lst[1])
             elif (arg == "--help"):
                 return self.useage("grep")
+            else:
+                return (1, ["grep: unknown argument given"])
             args = args[1:]
 
         pattern = args[0].replace("\"", '').replace("\"", '')
@@ -292,9 +294,9 @@ class CommandLine:
                 output.append(f"Can't open file/directory given: {file}")
             self.filesystem.current = saved_current
         if (countmatch):
-            return [str(len(output))]
+            return (0, [str(len(output))])
         else:
-            return output
+            return (0, output)
     
     def chmod(self, args: list[str]) -> Tuple[int, list[str]]:
         recurse = False
@@ -302,23 +304,26 @@ class CommandLine:
         output = []
         if len(args) > 2:
             output.append("chmod: expected at least two arguments")
+            return (1, output)
         while len(args) > 2:
             arg = args[0]
             if (arg[0] == "-"):
                 if (arg[1:] == "-help"):
-                    return self.useage("chmod")
+                    return (0, self.useage("chmod"))
                 options = arg[1:].split()
                 for option in options:
                     if (option == "R"):
                         recurse = True
                     elif (option == "v"):
                         verbose = True
+                    else:
+                        return (1, ["chmod: Unknown output given"])
                 
             args = args[1:]
         permissions = args[0]
         if (len(permissions.rstrip()) != 3):
             output.append("chmod: value given for permissions which is not of length of 3")
-            return output
+            return (1, output)
         ORDER = ["user", "group", "public"]
         d = {"user": {"r": False, "w": False, "x": False},
                             "group": {"r": False, "w": False, "x": False},
@@ -327,10 +332,10 @@ class CommandLine:
             try:
                 if (int(permission) > 7):
                     output.append("chmod: value given which is higher then needed")
-                    return output
+                    return (1, output)
             except ValueError:
                 output.append("chmod: value other then given integer given for permissions")
-                return output
+                return (1, output)
             finally:
                 permission = int(permission)
                 bits = [(permission >> i) & 1 for i in range(7, -1, -1)]
