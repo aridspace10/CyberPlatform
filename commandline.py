@@ -99,6 +99,8 @@ class CommandLine:
                 return self.grep(args[1:], fdin)
             case "ln":
                 return self.ln(args[1:], fdin)
+            case "uniq":
+                return self.uniq(args[1:], fdin)
             case _:
                 return ["Unknown command given"]
 
@@ -621,6 +623,38 @@ class CommandLine:
             self.filesystem.current.inode = inode
         self.filesystem.current = saved_current
         return (1, [])
+    
+    def uniq(self, args: list[str], input: FileNode) -> Tuple[int, list[str]]:
+        count = False
+        repeated = False
+        printdup = False
+        skip = 0
+        unique = False
+        file = ""
+        while args:
+            arg = args.pop(0)
+            if (arg == "-c" or arg == "--count"):
+                count = True
+            elif (arg == "-d" or arg == "repeated"):
+                repeated = True
+            elif (arg == "-D"):
+                printdup = True
+            elif (arg.startswith("--skip-fields")):
+                skip = int(arg.split("=")[1])
+            elif (arg == "-f"):
+                skip = int(args.pop(0))
+            else:
+                file = arg
+        if (file != ""):
+            self.filesystem.search_withaccess(file)
+            input = self.filesystem.current
+        data = input.get_data().split("\n")
+        output = []
+        index = 1
+        while (index != len(data)):
+            if (data[index-1] != data[index]):
+                output.append(data[index-1])
+        return output
 
 cl = CommandLine()
 cl.filesystem.setup_system("filesystems/example.txt")
