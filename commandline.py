@@ -415,27 +415,65 @@ class CommandLine:
         return (0, output)
 
     def head(self, args: list[str], input: FileNode) -> Tuple[int, list[str]]:
-        num = 10
+        lines = 10
+        b = -1
+        curb = 0
+        rev = False
+        files = []
         output = []
-        while len(args) > 1:
-            arg = args[0]
-            if (arg == "--help"):
-                return (0, self.useage("head"))
-            if (arg == "-n"):
-                args = args[1:]
-                num = int(args[0])
-            args = args[1:]
-        filename = args[0]
-        content = self.filesystem.get_file(filename)
-        if (content == None or isinstance(content, str)):
-            return []
-        counter = 0
-        data = content.get_data()
-        for line in data.split("\n"):
-            output.append(line)
-            counter += 1
-            if (counter >= num):
-                break
+        while args:
+            arg = args.pop(0)
+            if (arg == "-"):
+                files.append(input)
+            elif (arg[0] == "-"):
+                if (arg == "--help"):
+                    return (0, self.useage("head"))
+                elif (arg == "-n"):
+                    lines = int(args.pop(0))
+                elif (arg.startswith("--lines=")):
+                    val = arg.split("=")[1]
+                    if (val[0] == "-"):
+                        rev = True
+                        lines = int(val[1:]) * -1
+                    else:
+                        lines = int(val[1:])
+                elif (arg == "-c"):
+                    b = int(args.pop(0))
+                elif (arg.startswith("--lines=")):
+                    val = arg.split("=")[1]
+                    if (val[0] == "-"):
+                        rev = True
+                        b = int(val[1:]) * -1
+                    else:
+                        b = int(val[1:])
+            else:
+                files.append(arg)
+        if (not len(files)):
+            files = [input]
+        saved_current = self.filesystem.current
+        for file in files:
+            if (isinstance(file, FileNode)):
+                content = file
+                ty = content.get_type()
+            else: 
+                ty = self.filesystem.search_withaccess(file)
+            if (ty == NodeType.DIRECTORY):
+                output.append(f"head: ${file} is a directory")
+                continue
+            content = self.filesystem.current
+            if (content == None or isinstance(content, str)):
+                return []
+            counter = 0
+            data = content.get_data()
+            for line in data.split("\n"):
+                output.append(line)
+                counter += 1
+                curb += len(line.encode("utf-8"))
+                if (b == -1 and counter >= lines):
+                    break
+                if (b != -1 and curb >= b):
+                    break
+            self.filesystem.current = saved_current
         return (0, output)
 
     def tail(self, args: list[str], input: FileNode) -> Tuple[int, list[str]]:
@@ -458,11 +496,10 @@ class CommandLine:
             args = args[1:]
         filename = args[0]
         result = self.filesystem.current.delete_child(filename)
+        if (result == None):
+            output.append(f"{filename} was not found")
         if (verbose):
-            if (result == None):
-                output.append("No file deleted")
-            else:
-                output.append("File sucessfully deleted")
+            output.append("File sucessfully deleted")
         return (0, output)
 
     def pwd(self, args: list[str], input: FileNode) -> Tuple[int, list[str]]:
