@@ -446,6 +446,8 @@ class CommandLine:
                         b = int(val[1:]) * -1
                     else:
                         b = int(val[1:])
+                else:
+                    output.append(f"head: Unknown argument (${arg}) given")
             else:
                 files.append(arg)
         if (not len(files)):
@@ -454,13 +456,13 @@ class CommandLine:
         for file in files:
             if (isinstance(file, FileNode)):
                 content = file
+                print (content)
                 ty = content.get_type()
             else: 
                 ty = self.filesystem.search_withaccess(file)
             if (ty == NodeType.DIRECTORY):
                 output.append(f"head: ${file} is a directory")
                 continue
-            content = self.filesystem.current
             if (content == None or isinstance(content, str)):
                 return []
             counter = 0
