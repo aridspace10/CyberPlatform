@@ -5,12 +5,6 @@ from typing import Literal, Tuple
 from inode import Inode, NodeType
 
 class CommandLine:
-    def __init__(self):
-        self.filesystem = FileSystem()
-        self.history = []
-        self.hpoint = -1
-        self.lcs = 0
-
     def get_fd(self, path: str, removing: bool = False) -> FileNode:
         lst = path.split("/")
         saved_current = self.filesystem.current
@@ -30,9 +24,10 @@ class CommandLine:
         self.filesystem.current = saved_current
         return result
     
-    def enter_command(self, raw: str) -> None:
-        self.history.append(raw)
-        self.hpoint = len(self.history)
+    def enter_command(self, raw: str, fs: FileSystem) -> None:
+        #self.history.append(raw)
+        #self.hpoint = len(self.history)
+        self.filesystem = fs
         commands = raw.split("|")
         fdin, fdout = None, None
         for idx, command in enumerate(commands):
@@ -104,11 +99,11 @@ class CommandLine:
             case _:
                 return ["Unknown command given"]
 
-    def get_past_command(self) -> None:
-        r = self.history[self.hpoint]
-        if (self.hpoint < 0):
-            self.hpoint -= 1
-            return r
+    # def get_past_command(self) -> None:
+    #     r = self.history[self.hpoint]
+    #     if (self.hpoint < 0):
+    #         self.hpoint -= 1
+    #         return r
         
     def useage(self, type: str) -> list[str]:
         output = []
