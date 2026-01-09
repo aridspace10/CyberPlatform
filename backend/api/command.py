@@ -7,13 +7,14 @@ router = APIRouter()
 
 # TEMP: single filesystem (we’ll make this per-user later)
 fs = FileSystem()
+cl = CommandLine()
 
 class CommandRequest(BaseModel):
     command: str
 
 @router.post("/command")
 def execute_command(req: CommandRequest):
-    stdout, stderr = run_command(req.command, fs)
+    stdout, stderr = cl.enter_command(req.command, fs)
     return {
         "stdout": stdout,
         "stderr": stderr

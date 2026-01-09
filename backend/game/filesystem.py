@@ -7,6 +7,7 @@ class FileSystem:
         inode = Inode(NodeType.DIRECTORY)
         self.filehead = FileNode(None, "root", inode)
         self.current: FileNode = self.filehead
+        self.lcs = 0
 
     def setup_system(self, textfile):
         with open(textfile) as f:
@@ -70,7 +71,7 @@ class FileSystem:
                 lst.pop(0)
                 continue
             if lst[0] == "..":
-                self.current = self.filehead
+                self.current = self.current.parent
                 lst.pop(0)
                 continue
 
