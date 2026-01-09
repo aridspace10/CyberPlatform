@@ -6,4 +6,4 @@ Mandatory arguments to long options are mandatory for short options too.
   -p, --parents     no error if existing, make parent directories as needed
   -v, --verbose     print a message for each created directory
       --help     display this help and exit
-      --version  output version information and exit
+      --version  output version information and exit 
