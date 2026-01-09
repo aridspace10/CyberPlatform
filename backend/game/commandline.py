@@ -104,7 +104,7 @@ class CommandLine:
     #         return r
         
     def useage(self, type: str) -> list[str]:
-        output = []
+        output = ([], [])
         with open(f"../static/help/{type}.txt") as f:
             for line in f:
                 output.append(line)
@@ -130,23 +130,23 @@ class CommandLine:
     def mv(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         verbose = False
         clobber = False
-        output = []
-        if len(args) > 2:
-            output.append("cp: expected at least two arguments")
+        output = ([], [])
+        if len(args) < 2 and args[0] != "--help":
+            output[0].append("cp: expected at least two arguments")
         files = []
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
                 if (arg[1] == "-"):
                     if (arg[2:] == "help"):
-                        return (0, self.useage("mv"))
+                        return (0, (self.useage("mv"), []))
                 else:    
                     options = arg[1:].split()
                     for option in options:
                         if (option == "v"):
                             verbose = True
                         elif (option == "h"):
-                            return (0, self.useage("mv"))
+                            return (0, (self.useage("mv"), []))
             else:
                 files.append(arg)
             args = args[1:]
@@ -157,7 +157,7 @@ class CommandLine:
             ttype = NodeType.DIRECTORY if len(target.split(".")) == 1 else NodeType.FILE
             if ftype == ttype:
                 if (verbose):
-                    output.append(f"Renamed '${self.filesystem.current.name}' -> '{target}'")
+                    output[1].append(f"Renamed '${self.filesystem.current.name}' -> '{target}'")
                 self.filesystem.current.name = target
                 self.filesystem.current = tmp
                 return (0, output)
@@ -176,7 +176,7 @@ class CommandLine:
                 self.filesystem.search(target)
                 self.filesystem.current.items.append(saved)
                 if (verbose):
-                    output.append(f"Moved '${files[0]}' to '{target}'")
+                    output[1].append(f"Moved '${files[0]}' to '{target}'")
                 self.filesystem.current = tmp
                 return (0, output)
         # multiple files were given
@@ -191,7 +191,7 @@ class CommandLine:
             self.filesystem.current = targetfnode
             self.filesystem.current.items.append(fnode)
             if verbose:
-                output.append(f"Moved '${file}' to '${target}'")
+                output[1].append(f"Moved '${file}' to '${target}'")
             self.filesystem.current = tmp
         return (0, output)
     
@@ -208,7 +208,7 @@ class CommandLine:
         recursive = False
         include = []
         exclude = []
-        output = []
+        output = ([], [])
         while len(args) and args[0][0] != "\"":
             arg = args[0]
             if (arg[0] == "-"):
@@ -302,23 +302,23 @@ class CommandLine:
                     pointer = self.filesystem.current
                     recursively_search(pointer)
                 else:
-                    output.append("Can't recursivly search directory without -r option")
+                    output[0].append("Can't recursivly search directory without -r option")
             elif (ty == NodeType.FILE):
                 search_file(self.filesystem.current)
             else:
-                output.append(f"Can't open file/directory given: {file}")
+                output[0].append(f"Can't open file/directory given: {file}")
             self.filesystem.current = saved_current
         if (countmatch):
-            return (0, [str(len(output))])
+            return (0, ([], [str(len(output[1]))]))
         else:
             return (0, output)
     
     def chmod(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         recurse = False
         verbose = False
-        output = []
-        if len(args) > 2:
-            output.append("chmod: expected at least two arguments")
+        output = ([], [])
+        if len(args) > 2 and args[0] != "--help":
+            output[1].append("chmod: expected at least two arguments")
             return (1, output)
         while len(args) > 2:
             arg = args[0]
@@ -332,12 +332,12 @@ class CommandLine:
                     elif (option == "v"):
                         verbose = True
                     else:
-                        return (1, ["chmod: Unknown output given"])
+                        return (1, ([], ["chmod: Unknown output given"]))
                 
             args = args[1:]
         permissions = args[0]
         if (len(permissions.rstrip()) != 3):
-            output.append("chmod: value given for permissions which is not of length of 3")
+            output[0].append("chmod: value given for permissions which is not of length of 3")
             return (1, output)
         ORDER = ["user", "group", "public"]
         d = {"user": {"r": False, "w": False, "x": False},
@@ -346,10 +346,10 @@ class CommandLine:
         for idx, permission in enumerate(permissions):
             try:
                 if (int(permission) > 7):
-                    output.append("chmod: value given which is higher then needed")
+                    output[0].append("chmod: value given which is higher then needed")
                     return (1, output)
             except ValueError:
-                output.append("chmod: value other then given integer given for permissions")
+                output[0].append("chmod: value other then given integer given for permissions")
                 return (1, output)
             finally:
                 permission = int(permission)
@@ -363,36 +363,36 @@ class CommandLine:
         if ("." in lst[-1].split()):
             if (error := self.filesystem.search(file)) != "":
                 self.current = saved_current
-                output.append(error)
+                output[0].append(error)
                 return (1, output)
-            output = self.filesystem.current.update_permissions(d, recurse, [])
+            temp = self.filesystem.current.update_permissions(d, recurse, [])
             if (verbose):
-                for line in output:
-                    output.append(line)
+                for line in temp:
+                    output[1].append(line)
             return (0, output)
         else:
             if (error := self.filesystem.search("/".join(lst[0:-1]))) != "":
                 self.current = saved_current
-                output.append(error)
+                output[0].append(error)
                 return (1, output)
             for idx, item in enumerate(self.filesystem.current.items):
                 if (item.name == lst[-1]):
                     self.filesystem.current.items[idx].update_permissions(d, False, [])
                     return (0, output)
-        output.append("chmod: file given can not be found")
+        output[0].append("chmod: file given can not be found")
         return (1, output)
     
     def echo(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         output = " ".join(args)
         if (output == "$?"):
             return (0, [(str(self.lcs))])
-        return (0, [(" ".join(args))])
+        return (0, ([], [(" ".join(args))]))
 
     def touch(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         return (0, [])
 
     def cat(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
-        output = []
+        output = ([], [])
         while len(args) > 1:
             arg = args[0]
             if (arg == "--help"):
@@ -413,7 +413,7 @@ class CommandLine:
         curb = 0
         rev = False
         files = []
-        output = []
+        output = ([], [])
         while args:
             arg = args.pop(0)
             if (arg == "-"):
@@ -476,7 +476,7 @@ class CommandLine:
 
     def rm(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         recurse, verbose = False, False
-        output = []
+        output = ([], [])
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
@@ -569,7 +569,7 @@ class CommandLine:
         extra: dict[str, bool | str] = {}
         oneline = False
         listdir = False
-        output = []
+        output = ([], [])
         while args:
             arg = args[0]
             if (arg[0] == "-"):
@@ -681,7 +681,7 @@ class CommandLine:
             self.filesystem.search_withaccess(file)
             input = self.filesystem.current
         data = input.get_data().split("\n")
-        output = []
+        output = ([], [])
         index = 1
         while (index != len(data)):
             if (data[index-1] != data[index]):
