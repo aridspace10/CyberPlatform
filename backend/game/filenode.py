@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Literal, Tuple
 import datetime
-from inode import Inode, NodeType
+from .inode import Inode, NodeType
 
 class FileNode:
     def __init__(self, parent: FileNode | None, name: str, inode: Inode):

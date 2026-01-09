@@ -1,6 +1,6 @@
-from filenode import FileNode
+from .filenode import FileNode
 from typing import Literal, Tuple
-from inode import Inode, NodeType
+from .inode import Inode, NodeType
 
 class FileSystem:
     def __init__(self):

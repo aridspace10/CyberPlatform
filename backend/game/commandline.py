@@ -1,8 +1,8 @@
-from filenode import FileNode
-from filesystem import FileSystem
+from .filenode import FileNode
+from .filesystem import FileSystem
 from collections import deque
 from typing import Literal, Tuple
-from inode import Inode, NodeType
+from .inode import Inode, NodeType
 
 class CommandLine:
     def get_fd(self, path: str, removing: bool = False) -> FileNode:
