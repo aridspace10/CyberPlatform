@@ -5,13 +5,13 @@ from typing import Literal, Tuple
 from .inode import Inode, NodeType
 
 class CommandLine:
-    def get_fd(self, path: str, removing: bool = False) -> FileNode:
+    def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
         lst = path.split("/")
         saved_current = self.filesystem.current
         # only go to path if a path is given
         if (len(lst) > 1 and (error := self.filesystem.search("/".join(lst[0:-1]))) != ""):
             self.filesystem.current = saved_current
-            print (error)
+            return (error)
         for idx, item in enumerate(self.filesystem.current.items):
             if item.name == lst[-1]:
                 if (removing):
@@ -43,6 +43,10 @@ class CommandLine:
                     fdout = self.get_fd(lst.pop(0))
                 else:
                     args.append(arg)
+            if isinstance(fdin, str):
+                return ([], [fdin]) # return error string
+            if isinstance(fdout, str):
+                return ([], [fdout]) # return error string
             input = fdin if fdin is not None else FileNode(None, "fdin", Inode(NodeType.FILE))
             fs.lcs, (stdout, stderr) = self.run_command(" ".join(args), input)
             # stdout given
