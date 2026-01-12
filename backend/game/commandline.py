@@ -690,3 +690,58 @@ class CommandLine:
             if (data[index-1] != data[index]):
                 output[1].append(data[index-1])
         return (0, output)
+
+    def sort(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+        if "--help" in args:
+            return (0, ([], self.useage("sort.txt")))
+        file = ""
+        igblanks = False
+        reverse = False
+        random = False
+        check = False
+        scheck = False
+        output = ""
+        while args:
+            arg = args.pop(0)
+            if (arg[0] == "-"):
+                if (arg == "-"):
+                    file = "-"
+                    continue
+                for option in arg[1:]:
+                    match (arg):
+                        case "b":
+                            igblanks = True
+                        case "r":
+                            reverse = True
+                        case "R":
+                            random = True
+                        case "o":
+                            output = args.pop(0)
+                        case "c":
+                            check = True
+                        case "C":
+                            scheck = True
+                        case _:
+                            return (2, ([f"sort: unknown option given ({arg})"], []))
+        if (file == "" or file == "-"):
+            content = input.get_data().split("\n") 
+        else:
+            saved_current = self.filesystem.current
+            self.filesystem.search_withaccess(file)
+            content = self.filesystem.current.get_data().split("\n")
+            self.filesystem.current = saved_current
+        modified = sorted(content, reverse=reverse)
+        if check or scheck:
+            for i in range(0, len(modified)):
+                if modified[i] != content[i]:
+                    if scheck:
+                        return (1, ([], []))
+                    else:
+                        return (1, ([f"sort: {file}:{i}: disorder: {content[i]}"], []))
+
+        if output:
+            saved_current = self.filesystem.current
+            self.filesystem.search_withaccess(file)
+            self.filesystem.current.set_data("\n".join(modified))
+            self.filesystem.current = saved_current
+        return (0, ([], modified))
