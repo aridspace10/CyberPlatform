@@ -700,6 +700,8 @@ class CommandLine:
         random = False
         check = False
         scheck = False
+        fold = False
+        clean = False
         output = ""
         while args:
             arg = args.pop(0)
@@ -721,6 +723,10 @@ class CommandLine:
                             check = True
                         case "C":
                             scheck = True
+                        case "f":
+                            fold = True
+                        case "i":
+                            clean = True
                         case _:
                             return (2, ([f"sort: unknown option given ({arg})"], []))
         if (file == "" or file == "-"):
@@ -730,6 +736,13 @@ class CommandLine:
             self.filesystem.search_withaccess(file)
             content = self.filesystem.current.get_data().split("\n")
             self.filesystem.current = saved_current
+        for idx, line in enumerate(content):
+            if igblanks:
+                content[idx] = line.lstrip()
+            if fold:
+                content[idx] = line.upper()
+            if clean:
+                content[idx] = ''.join(c for c in line if c.isprintable())
         modified = sorted(content, reverse=reverse)
         if check or scheck:
             for i in range(0, len(modified)):
@@ -738,7 +751,6 @@ class CommandLine:
                         return (1, ([], []))
                     else:
                         return (1, ([f"sort: {file}:{i}: disorder: {content[i]}"], []))
-
         if output:
             saved_current = self.filesystem.current
             self.filesystem.search_withaccess(file)
