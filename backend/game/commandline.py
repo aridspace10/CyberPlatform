@@ -3,6 +3,7 @@ from .filesystem import FileSystem
 from collections import deque
 from typing import Literal, Tuple
 from .inode import Inode, NodeType
+import random
 
 class CommandLine:
     def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
@@ -697,7 +698,7 @@ class CommandLine:
         file = ""
         igblanks = False
         reverse = False
-        random = False
+        randomize = False
         check = False
         scheck = False
         fold = False
@@ -716,7 +717,7 @@ class CommandLine:
                         case "r":
                             reverse = True
                         case "R":
-                            random = True
+                            randomize = True
                         case "o":
                             output = args.pop(0)
                         case "c":
@@ -751,6 +752,20 @@ class CommandLine:
                         return (1, ([], []))
                     else:
                         return (1, ([f"sort: {file}:{i}: disorder: {content[i]}"], []))
+            return (0, ([], []))
+        if randomize:
+            r = []
+            while len(modified):
+                vid = random.randrange(len(modified))
+                while vid > 0 and modified[vid-1] == modified[vid]:
+                    vid -= 1
+                element = modified.pop(vid)
+                r.append(element)
+                while vid < len(modified) and modified[vid] == element:
+                    r.append(modified.pop(vid))
+            modified = r
+            return (0, ([], []))
+
         if output:
             saved_current = self.filesystem.current
             self.filesystem.search_withaccess(file)
