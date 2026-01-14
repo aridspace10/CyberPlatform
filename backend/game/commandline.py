@@ -4,6 +4,7 @@ from collections import deque
 from typing import Literal, Tuple
 from .inode import Inode, NodeType
 import random
+import datetime
 
 class CommandLine:
     def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
@@ -26,8 +27,6 @@ class CommandLine:
         return result
     
     def enter_command(self, raw: str, fs: FileSystem) -> Tuple[list[str], list[str]]:
-        #self.history.append(raw)
-        #self.hpoint = len(self.history)
         self.filesystem = fs
         commands = raw.split("|")
         fdin, fdout = None, None
@@ -393,6 +392,37 @@ class CommandLine:
         return (0, ([], [(" ".join(args))]))
 
     def touch(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+        if "--help" in args:
+            return (0, ([], self.useage("touch")))
+        files = []
+        create = True
+        onlychangeaccess = False
+        onlychangemod = False
+        date = datetime.datetime.now()
+        while args:
+            arg = args.pop(0)
+            if (arg == "-"):
+                pass
+            elif (arg[0] == "-"):
+                if arg[1] == "-":
+                    if (arg == "--no-create"):
+                        create = False
+                    if (arg.startswith("--date=")):
+                        date = datetime.datetime.strptime(arg.split("=")[1], "%Y-%m-%d").date()
+                else:
+                    for option in arg[1:]:
+                        match option:
+                            case "c":
+                                create = False
+                            case "a":
+                                onlychangeaccess = True
+                            case "m":
+                                onlychangemod = True
+                            case "d":
+                                date = datetime.datetime.strptime(args.pop(0), "%Y-%m-%d").date()
+                                break
+            else:
+                files.append(arg)
         return (0, ([], []))
 
     def cat(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
@@ -765,7 +795,6 @@ class CommandLine:
                     r.append(modified.pop(vid))
             modified = r
             return (0, ([], []))
-
         if output:
             saved_current = self.filesystem.current
             self.filesystem.search_withaccess(file)
