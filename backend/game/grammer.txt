@@ -1,0 +1,27 @@
+Input -> Sequence
+
+Sequence -> Pipeline { ";" Pipeline }
+
+Pipeline -> AndOr { "|" AndOr }
+
+AndOr -> Command { AndOrOperator Command }
+
+AndOrOperator -> "&&" | "||"
+
+Command -> {Redirection} Atom {Redirection}
+
+Atom -> SimpleCommand | Subshell | VarDeclaration
+
+SimpleCommand -> Arg {Arg}
+
+Arg -> Identifier | VarUse
+
+VarDeclaration -> Identifier "=" Identifier
+
+VarUse -> "$" Identifier
+
+Subshell -> "(" Sequence ")"
+
+Redirection -> Redir Identifier
+
+Redir -> ">" | ">>" | "<" | "<<"
