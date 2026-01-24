@@ -1,5 +1,7 @@
 import re
 from dataclasses import dataclass
+from __future__ import annotations
+from typing import Literal
 
 @dataclass
 class Token:
@@ -19,6 +21,51 @@ TOKEN_SPEC = [
 
 master = re.compile("|".join(f"(?P<{name}>{regex})" for name, regex in TOKEN_SPEC))
 
+Identifier = str
+
+@dataclass
+class Redirection:
+    op: Literal[">", ">>", "<", "<<"]
+    target: Identifier
+
+@dataclass
+class VarUse:
+    name: Identifier
+
+@dataclass
+class VarDeclaration:
+    name: Identifier
+    value: Identifier
+
+@dataclass
+class SimpleCommand:
+    args: list[str]
+
+@dataclass
+class Pipe:
+    parts: list[AndOr]
+
+@dataclass
+class Command:
+    atom: Atom
+    pre_redirs: list[Redirection]
+    post_redirs: list[Redirection]
+
+@dataclass
+class AndOr:
+    first: Command
+    rest: list[tuple[Literal["&&", "||"], Command]]
+
+@dataclass
+class Sequence:
+    pipes: list[Pipe]
+
+@dataclass
+class Subshell:
+    sequence: Sequence
+
+Atom = SimpleCommand | Subshell | VarDeclaration
+
 def lex(text):
     tokens = []
     for match in master.finditer(text):
@@ -33,7 +80,7 @@ class Parser:
         self.tokens = tokens
         self.pos = 0
 
-    def peek(self):
+    def peek(self) -> Token | None:
         return self.tokens[self.pos] if self.pos < len(self.tokens) else None
 
     def consume(self, expected_type=None):
@@ -58,5 +105,16 @@ class Parser:
 
     def parse_command(self):
         pass
+
+    def parse_subshell(self):
+        self.consume("LPAREN")
+        node = self.parse_sequence()
+        self.consume("RPAREN")
+        return Subshell(node)
+
+    def parse_atom(self):
+        if (self.peek() and self.peek().type == "LPAREN"):
+            node = self.parse_subshell()
+
 
 print (lex("echo hello > text.txt | grep hi && pwd"))
