@@ -1,6 +1,6 @@
+from __future__ import annotations
 import re
 from dataclasses import dataclass
-from __future__ import annotations
 from typing import Literal
 
 @dataclass
@@ -10,11 +10,17 @@ class Token:
 
 TOKEN_SPEC = [
     ("AND",      r"&&"),
+    ("DOLLAR",   r"\$"),
     ("OR",       r"\|\|"),
     ("PIPE",     r"\|"),
+    ("HEREDOC",  r"<<"),
+    ("APPEND",   r">>"),
+    ("REDIR_IN", r"<"),
+    ("REDIR_OUT",r">"),
     ("SEMI",     r";"),
     ("LPAREN",   r"\("),
     ("RPAREN",   r"\)"),
+    ("EQUAL",    r"="),
     ("WORD",     r"[^\s|&;()]+"),
     ("SKIP",     r"[ \t]+"),
 ]
@@ -39,7 +45,7 @@ class VarDeclaration:
 
 @dataclass
 class SimpleCommand:
-    args: list[str]
+    args: list[str | VarUse]
 
 @dataclass
 class Pipe:
@@ -94,17 +100,61 @@ class Parser:
     def parse(self):
         return self.parse_sequence()
     
-    def parse_sequence(self):
+    def parse_sequence(self) -> Sequence:
         node = self.parse_pipeline()
+        result = [node]
+        while (self.peek() and self.peek().type == "PIPE"):
+            self.consume("PIPE")
+            result.append(self.parse_pipeline())
+        return Sequence(result)
 
-    def parse_pipeline(self):
+    def parse_pipeline(self) -> Pipe:
         node = self.parse_andor()
+        result = [node]
+        while (self.peek() and self.peek().type == "PIPE"):
+            self.consume("PIPE")
+            result.append(self.parse_andor())
+        return Pipe(result)
 
     def parse_andor(self):
-        node = self.parse_command()
+        first = self.parse_command()
+        rest = []
+        while (self.peek() and (self.peek().type == "AND" or self.peek().type == "OR")):
+            val = self.consume().value
+            rest.append((val, self.parse_command()))
+        return AndOr(first, rest)
+    
+    def parse_redirections(self) -> list[Redirection]:
+        result = []
+        while (self.peek() and (self.peek().value in ["<", ">", ">>", "<<"])):
+            val = self.consume().value
+            result.append(Redirection(val, self.consume()))
+        return result
 
-    def parse_command(self):
-        pass
+    def parse_command(self) -> Command:
+        pre = self.parse_redirections()
+        atom = self.parse_atom()
+        post = self.parse_redirections()
+        return Command(atom, pre, post)
+
+    def parse_atom(self):
+        if (self.peek() and self.peek().type == "LPAREN"):
+            return self.parse_subshell()
+        args = []
+        while (self.peek()):
+            if (self.peek().type == "DOLLAR"):
+                self.consume()
+                args.append(VarUse(self.consume("WORD")))
+            elif (self.peek().type == "WORD"):
+                args.append(self.consume())
+            else:
+                break
+        if (self.peek() and self.peek().type == "EQUAL"):
+            self.consume()
+            val = self.consume("WORD")
+            return VarDeclaration(args[0], val)
+        else:
+            return SimpleCommand(args)
 
     def parse_subshell(self):
         self.consume("LPAREN")
@@ -112,9 +162,9 @@ class Parser:
         self.consume("RPAREN")
         return Subshell(node)
 
-    def parse_atom(self):
-        if (self.peek() and self.peek().type == "LPAREN"):
-            node = self.parse_subshell()
+text = "echo hello | grep hi && pwd"
+tokens = lex(text)
+parser = Parser(tokens)
+ast = parser.parse()
 
-
-print (lex("echo hello > text.txt | grep hi && pwd"))
+print(ast)
