@@ -64,7 +64,7 @@ class AndOr:
 
 @dataclass
 class Sequence:
-    pipes: list[Pipe]
+    parts: list[Pipe]
 
 @dataclass
 class Subshell:
@@ -103,8 +103,8 @@ class Parser:
     def parse_sequence(self) -> Sequence:
         node = self.parse_pipeline()
         result = [node]
-        while (self.peek() and self.peek().type == "PIPE"):
-            self.consume("PIPE")
+        while (self.peek() and self.peek().type == "SEMI"):
+            self.consume("SEMI")
             result.append(self.parse_pipeline())
         return Sequence(result)
 
