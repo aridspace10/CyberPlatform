@@ -35,13 +35,17 @@ class CommandLine:
         parser = Parser(tokens)
         ast = parser.parse()
         if isinstance(ast, Sequence):
-            self.execute_sequence(ast.pipes)
+            self.execute_sequence(ast.parts)
 
     def execute_pipe(self, parts: list[AndOr]):
-        fdin = None
-        fdout = None
+        self.fdin = None
+        self.fdout = None
         for part in parts:
-            self.execute_andor(part)
+            self.fdin = self.fdout
+            self.fdout = None
+            status, (stderr, stdout) = self.execute_andor(part)
+        self.fdin = None
+        self.fdout = None
     
     def execute_andor(self, elem: AndOr) -> CommandReturn:
         status, (stderr, stdout) = self.execute_command(elem.first)
@@ -53,15 +57,29 @@ class CommandLine:
             else:
                 break
         return (status, (stderr, stdout))
-            
-
 
     def execute_command(self, command: Command) -> CommandReturn:
-        self.execute(command.atom)
+        redirs = command.pre_redirs + command.post_redirs
+        for redir in redirs:
+            if (redir.op == "<"):
+                self.fdin = self.get_fd(redir.target)
+            elif (redir.op == ">"):
+                self.fdout = self.get_fd(redir.target, True)
+            elif (redir.op == ">>"):
+                self.fdout = self.get_fd(redir.target)
+        status, (stdout, stderr) = self.execute_atom(command.atom)
+        if (self.fdout is not None):
+            self.fdout.append_data(stdout)
+            stdout = None
+        else:
+            inode = Inode(NodeType.FILE)
+            inode.set_data("\n".join(stdout))
+            self.fdout = FileNode(None, "stdout", inode)
+        return (status, (stdout, stderr))
 
-    def execute_atom(self, atom: Atom):
+    def execute_atom(self, atom: Atom) -> CommandReturn:
         if (isinstance(atom, SimpleCommand)):
-            self.run_command(atom.args)
+            return self.run_command(atom.args)
         elif (isinstance(atom, Subshell)):
             self.execute_sequence(atom.sequence)
         elif (isinstance(atom, VarDeclaration)):
@@ -69,7 +87,7 @@ class CommandLine:
         else:
             pass 
 
-    def execute_sequence(self, parts: list[Pipe]):
+    def execute_sequence(self, parts: list[Pipe]) -> CommandReturn:
         for part in parts:
             self.execute_pipe(part.parts)
     
