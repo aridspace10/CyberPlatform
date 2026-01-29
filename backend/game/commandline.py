@@ -5,6 +5,9 @@ from typing import Literal, Tuple
 from .inode import Inode, NodeType
 import random
 import datetime
+from .Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration
+
+CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
 class CommandLine:
     def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
@@ -25,6 +28,50 @@ class CommandLine:
         result = self.filesystem.current
         self.filesystem.current = saved_current
         return result
+    
+    def enter_command(self, raw: str, fs: FileSystem) -> Tuple[list[str], list[str]]:
+        self.filesystem = fs
+        tokens = lex(raw)
+        parser = Parser(tokens)
+        ast = parser.parse()
+        if isinstance(ast, Sequence):
+            self.execute_sequence(ast.pipes)
+
+    def execute_pipe(self, parts: list[AndOr]):
+        fdin = None
+        fdout = None
+        for part in parts:
+            self.execute_andor(part)
+    
+    def execute_andor(self, elem: AndOr) -> CommandReturn:
+        status, (stderr, stdout) = self.execute_command(elem.first)
+        for (op, cmd) in elem.rest:
+            if ((op == "&&" and not status) or (op == "||" and status)):
+                status, (tmperr, tmpout) = self.execute_command(cmd)
+                stderr.extend(tmperr)
+                stdout.extend(tmpout)
+            else:
+                break
+        return (status, (stderr, stdout))
+            
+
+
+    def execute_command(self, command: Command) -> CommandReturn:
+        self.execute(command.atom)
+
+    def execute_atom(self, atom: Atom):
+        if (isinstance(atom, SimpleCommand)):
+            self.run_command(atom.args)
+        elif (isinstance(atom, Subshell)):
+            self.execute_sequence(atom.sequence)
+        elif (isinstance(atom, VarDeclaration)):
+            pass
+        else:
+            pass 
+
+    def execute_sequence(self, parts: list[Pipe]):
+        for part in parts:
+            self.execute_pipe(part.parts)
     
     def enter_command(self, raw: str, fs: FileSystem) -> Tuple[list[str], list[str]]:
         self.filesystem = fs
@@ -65,7 +112,7 @@ class CommandLine:
         # should never get here
         return ([], [])
 
-    def run_command(self, raw: str, fdin: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def run_command(self, raw: str, fdin: FileNode) -> CommandReturn:
         args = raw.split(" ")
         match args[0]:
             case "ls":
