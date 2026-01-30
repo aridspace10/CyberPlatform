@@ -6,6 +6,7 @@ from .inode import Inode, NodeType
 import random
 import datetime
 from .Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration
+from .ShellState import ShellState
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
@@ -29,15 +30,19 @@ class CommandLine:
         self.filesystem.current = saved_current
         return result
     
-    def enter_command(self, raw: str, fs: FileSystem) -> Tuple[list[str], list[str]]:
-        self.filesystem = fs
+    def enter_command(self, raw: str, shell: ShellState) -> Tuple[list[str], list[str]]:
+        self.filesystem = shell.fs
+        self.filesystem.search(shell.cwd)
+        self.shell = shell
         tokens = lex(raw)
         parser = Parser(tokens)
         ast = parser.parse()
+        print (ast)
         if isinstance(ast, Sequence):
-            self.execute_sequence(ast.parts)
+            shell.ls, (stderr, stdout) = self.execute_sequence(ast.parts)
+        return (stderr, stdout)    
 
-    def execute_pipe(self, parts: list[AndOr]):
+    def execute_pipe(self, parts: list[AndOr]) -> CommandReturn:
         self.fdin = None
         self.fdout = None
         for part in parts:
@@ -46,6 +51,7 @@ class CommandLine:
             status, (stderr, stdout) = self.execute_andor(part)
         self.fdin = None
         self.fdout = None
+        return (status, (stderr, stdout))
     
     def execute_andor(self, elem: AndOr) -> CommandReturn:
         status, (stderr, stdout) = self.execute_command(elem.first)
@@ -69,8 +75,8 @@ class CommandLine:
                 self.fdout = self.get_fd(redir.target)
         status, (stdout, stderr) = self.execute_atom(command.atom)
         if (self.fdout is not None):
-            self.fdout.append_data(stdout)
-            stdout = None
+            self.fdout.append_data("\n".join(stdout))
+            stdout = ""
         else:
             inode = Inode(NodeType.FILE)
             inode.set_data("\n".join(stdout))
@@ -79,59 +85,24 @@ class CommandLine:
 
     def execute_atom(self, atom: Atom) -> CommandReturn:
         if (isinstance(atom, SimpleCommand)):
-            return self.run_command(atom.args)
+            fdin = self.fdin or FileNode(None, "stdin", Inode(NodeType.FILE))
+            return self.run_command(atom.args, fdin)
         elif (isinstance(atom, Subshell)):
-            self.execute_sequence(atom.sequence)
+            return self.execute_sequence(atom.sequence)
         elif (isinstance(atom, VarDeclaration)):
-            pass
-        else:
-            pass 
+            self.shell.env[atom.name] = atom.value
+            return (0, ([], []))
 
     def execute_sequence(self, parts: list[Pipe]) -> CommandReturn:
-        for part in parts:
-            self.execute_pipe(part.parts)
-    
-    def enter_command(self, raw: str, fs: FileSystem) -> Tuple[list[str], list[str]]:
-        self.filesystem = fs
-        commands = raw.split("|")
-        fdin, fdout = None, None
-        for idx, command in enumerate(commands):
-            lst = command.rstrip().lstrip().split(" ")
-            args = []
-            while lst:
-                arg = lst.pop(0)
-                if (arg == "<"):
-                    fdin = self.get_fd(lst.pop(0))
-                elif (arg == ">"):
-                    fdout = self.get_fd(lst.pop(0), True)
-                elif (arg == ">>"):
-                    fdout = self.get_fd(lst.pop(0))
-                else:
-                    args.append(arg)
-            if isinstance(fdin, str):
-                return ([], [fdin]) # return error string
-            if isinstance(fdout, str):
-                return ([], [fdout]) # return error string
-            input = fdin if fdin is not None else FileNode(None, "fdin", Inode(NodeType.FILE))
-            fs.lcs, (stdout, stderr) = self.run_command(" ".join(args), input)
-            # stdout given
-            if fdout is not None:
-                fdout.append_data("\n".join(stdout))
-            # last command
-            elif idx + 1 == len(commands):
-                return (stdout, stderr)
-            # more commands to go
-            else:
-                inode = Inode(NodeType.FILE)
-                inode.set_data("\n".join(stdout))
-                fdout = FileNode(None, "stdout", inode)
-            fdin = fdout
-            fdout = None
-        # should never get here
-        return ([], [])
+        last_status = 0
+        stdout, stderr = [], []
 
-    def run_command(self, raw: str, fdin: FileNode) -> CommandReturn:
-        args = raw.split(" ")
+        for part in parts:
+            last_status, (stdout, stderr) = self.execute_pipe(part.parts)
+
+        return last_status, (stdout, stderr)
+ 
+    def run_command(self, args: list[str], fdin: FileNode) -> CommandReturn:
         match args[0]:
             case "ls":
                 return self.ls(args[1:], fdin)
@@ -719,6 +690,8 @@ class CommandLine:
         return (1, ([], []))
     
     def cd(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+        if (not args):
+            return (1, (["cd: must give argument"], []))
         arg = args[0]
         if (error := self.filesystem.search(arg)):
             return (1, ([error], []))
