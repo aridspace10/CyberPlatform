@@ -146,7 +146,7 @@ class Parser:
                 self.consume()
                 args.append(VarUse(self.consume("WORD")))
             elif (self.peek().type == "WORD"):
-                args.append(self.consume())
+                args.append(self.consume().value)
             else:
                 break
         if (self.peek() and self.peek().type == "EQUAL"):
@@ -162,9 +162,9 @@ class Parser:
         self.consume("RPAREN")
         return Subshell(node)
 
-text = "echo hello | grep hi && pwd"
-tokens = lex(text)
-parser = Parser(tokens)
-ast = parser.parse()
+# text = "echo hello | grep hi && pwd"
+# tokens = lex(text)
+# parser = Parser(tokens)
+# ast = parser.parse()
 
-print(ast)
+# print(ast)

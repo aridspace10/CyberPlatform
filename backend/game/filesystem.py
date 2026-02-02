@@ -74,7 +74,6 @@ class FileSystem:
                 self.current = self.current.parent
                 lst.pop(0)
                 continue
-
             if self.current.search(lst[0]) in [None, "file"]:
                 if (creating):
                     inode = Inode(NodeType.DIRECTORY)
