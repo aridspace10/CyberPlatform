@@ -5,7 +5,7 @@ from typing import Literal, Tuple
 from .inode import Inode, NodeType
 import random
 import datetime
-from .Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration
+from .Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
 from .ShellState import ShellState
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
@@ -40,11 +40,14 @@ class CommandLine:
         print (ast)
         if isinstance(ast, Sequence):
             shell.ls, (stderr, stdout) = self.execute_sequence(ast.parts)
-        return (stderr, stdout)    
+            return (stderr, stdout)
+        else:
+            return ([], ["Admin Error: Code AAA112"])
 
     def execute_pipe(self, parts: list[AndOr]) -> CommandReturn:
         self.fdin = None
         self.fdout = None
+        status, stderr, stdout = 0, [], []
         for part in parts:
             self.fdin = self.fdout
             self.fdout = None
@@ -69,26 +72,43 @@ class CommandLine:
         for redir in redirs:
             if (redir.op == "<"):
                 self.fdin = self.get_fd(redir.target)
+                if (isinstance(self.fdin, str)):
+                    return (1, ([self.fdin], []))
             elif (redir.op == ">"):
                 self.fdout = self.get_fd(redir.target, True)
+                if (isinstance(self.fdout, str)):
+                    return (1, ([self.fdout], []))
             elif (redir.op == ">>"):
                 self.fdout = self.get_fd(redir.target)
-        status, (stdout, stderr) = self.execute_atom(command.atom)
-        if (self.fdout is not None):
+                if (isinstance(self.fdout, str)):
+                    return (1, ([self.fdout], []))
+        status, (stderr, stdout) = self.execute_atom(command.atom)
+        if (isinstance(self.fdout, FileNode)):
             self.fdout.append_data("\n".join(stdout))
-            stdout = ""
+            stdout = []
         else:
             inode = Inode(NodeType.FILE)
             inode.set_data("\n".join(stdout))
             self.fdout = FileNode(None, "stdout", inode)
-        return (status, (stdout, stderr))
+        return (status, (stderr, stdout))
 
     def execute_atom(self, atom: Atom) -> CommandReturn:
         if (isinstance(atom, SimpleCommand)):
-            fdin = self.fdin or FileNode(None, "stdin", Inode(NodeType.FILE))
-            return self.run_command(atom.args, fdin)
+            if self.fdin is None:
+                fdin = FileNode(None, "stdin", Inode(NodeType.FILE))
+            elif isinstance(self.fdin, str):
+                return (1, ([], ["Admin Error: AAA113"]))
+            else:
+                fdin = self.fdin
+            args = []
+            for arg in atom.args:
+                if (isinstance(arg, VarUse)):
+                    args.append(str(self.shell.env[arg.name]))
+                else:
+                    args.append(arg)
+            return self.run_command(args, fdin)
         elif (isinstance(atom, Subshell)):
-            return self.execute_sequence(atom.sequence)
+            return self.execute_sequence(atom.sequence.parts)
         elif (isinstance(atom, VarDeclaration)):
             self.shell.env[atom.name] = atom.value
             return (0, ([], []))
