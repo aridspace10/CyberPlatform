@@ -77,7 +77,7 @@ def lex(text):
     for match in master.finditer(text):
         kind = match.lastgroup
         value = match.group()
-        if kind != "SKIP":
+        if kind != "SKIP" and kind is not None:
             tokens.append(Token(kind, value))
     return tokens
 
@@ -91,7 +91,7 @@ class Parser:
 
     def consume(self, expected_type=None):
         tok = self.peek()
-        if expected_type and tok.type != expected_type:
+        if expected_type and tok is not None and tok.type != expected_type:
             raise SyntaxError(f"Expected {expected_type}, got {tok.type}")
         self.pos += 1
         return tok
@@ -103,7 +103,7 @@ class Parser:
     def parse_sequence(self) -> Sequence:
         node = self.parse_pipeline()
         result = [node]
-        while (self.peek() and self.peek().type == "SEMI"):
+        while ((p := self.peek()) and p.type == "SEMI"):
             self.consume("SEMI")
             result.append(self.parse_pipeline())
         return Sequence(result)
@@ -111,7 +111,7 @@ class Parser:
     def parse_pipeline(self) -> Pipe:
         node = self.parse_andor()
         result = [node]
-        while (self.peek() and self.peek().type == "PIPE"):
+        while ((p := self.peek()) and p.type == "PIPE"):
             self.consume("PIPE")
             result.append(self.parse_andor())
         return Pipe(result)
@@ -119,14 +119,16 @@ class Parser:
     def parse_andor(self):
         first = self.parse_command()
         rest = []
-        while (self.peek() and (self.peek().type == "AND" or self.peek().type == "OR")):
-            val = self.consume().value
-            rest.append((val, self.parse_command()))
+        while ((p := self.peek()) and (p.type == "AND" or p.type == "OR")):
+            tmp = self.consume()
+            if tmp is None:
+                raise Exception()
+            rest.append((tmp.value, self.parse_command()))
         return AndOr(first, rest)
     
     def parse_redirections(self) -> list[Redirection]:
         result = []
-        while (self.peek() and (self.peek().value in ["<", ">", ">>", "<<"])):
+        while ((p := self.peek()) and (p.value in ["<", ">", ">>", "<<"])):
             val = self.consume().value
             result.append(Redirection(val, self.consume()))
         return result
@@ -138,21 +140,29 @@ class Parser:
         return Command(atom, pre, post)
 
     def parse_atom(self):
-        if (self.peek() and self.peek().type == "LPAREN"):
+        if ((p := self.peek()) and p.type == "LPAREN"):
             return self.parse_subshell()
         args = []
-        while (self.peek()):
-            if (self.peek().type == "DOLLAR"):
+        while ((p := self.peek())):
+            if (p.type == "DOLLAR"):
                 self.consume()
-                args.append(VarUse(self.consume("WORD")))
-            elif (self.peek().type == "WORD"):
-                args.append(self.consume().value)
+                tmp = self.consume("WORD")
+                if tmp is None:
+                    raise Exception()
+                args.append(VarUse(tmp.value))
+            elif (p.type == "WORD"):
+                tmp = self.consume()
+                if tmp is None:
+                    raise Exception()
+                args.append(tmp.value)
             else:
                 break
-        if (self.peek() and self.peek().type == "EQUAL"):
+        if ((p := self.peek()) and p.type == "EQUAL"):
             self.consume()
             val = self.consume("WORD")
-            return VarDeclaration(args[0], val)
+            if val is None:
+                raise Exception()
+            return VarDeclaration(args[0], val.value)
         else:
             return SimpleCommand(args)
 
