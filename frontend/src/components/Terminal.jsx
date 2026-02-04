@@ -1,34 +1,119 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import "./Terminal.css";
 
-function Terminal() {
-  const [command, setCommand] = useState("");
-  const [output, setOutput] = useState("");
+export default function Terminal() {
 
-  const runCommand = async () => {
-    const res = await fetch("http://127.0.0.1:8000/command", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command })
-    });
+  const wsRef = useRef(null);
 
-    const data = await res.json();
-    setOutput(prev => prev + "\n" + data.stdout);
-    setCommand("");
-  };
+  const [log, setLog] = useState([]);
+  const [input, setInput] = useState("");
+  const [username, setUsername] = useState("");
+
+  const sessionId = "test123";
+
+  // ----------------------
+  // Ask username once
+  // ----------------------
+  useEffect(() => {
+    const name = prompt("Enter username");
+    setUsername(name || "anonymous");
+  }, []);
+
+  // ----------------------
+  // Connect socket AFTER username set
+  // ----------------------
+  useEffect(() => {
+
+    if (!username) return;
+    if (wsRef.current) return;
+
+    const socket = new WebSocket(
+      `ws://localhost:8000/ws/${sessionId}`
+    );
+
+    socket.onopen = () => {
+      socket.send(JSON.stringify({
+        type: "join",
+        username: username
+      }));
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === "chat") {
+        addLine(`${data.user}: ${data.message}`);
+      }
+
+      if (data.type === "system") {
+        addLine(`[SYSTEM] ${data.message}`);
+      }
+
+      if (data.type === "command_output") {
+        data.stdout.forEach(line => addLine(line));
+        data.stderr.forEach(line => addLine(line));
+      }
+    };
+
+    wsRef.current = socket;
+
+    return () => {
+      socket.close();
+      wsRef.current = null;
+    };
+
+  }, [username]);
+
+  // ----------------------
+  // Helpers
+  // ----------------------
+  function addLine(text) {
+    setLog(prev => [...prev, text]);
+  }
+
+  function handleEnter(e) {
+    if (e.key === "Enter") {
+
+      if (!wsRef.current || wsRef.current.readyState !== 1) {
+        addLine("[SYSTEM] Not connected");
+        return;
+      }
+
+      if (input.startsWith("/chat ")) {
+        wsRef.current.send(JSON.stringify({
+          type: "chat",
+          message: input.substring(6)
+        }));
+      }
+      else {
+        wsRef.current.send(JSON.stringify({
+          type: "command",
+          input: input
+        }));
+      }
+
+      addLine("> " + input);
+      setInput("");
+    }
+  }
 
   return (
-    <div>
-      <pre>{output}</pre>
+    <div className="terminal">
+
+      <div className="output">
+        {log.map((line, i) => (
+          <div key={i}>{line}</div>
+        ))}
+      </div>
 
       <input
-        value={command}
-        onChange={e => setCommand(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && runCommand()}
+        className="prompt"
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={handleEnter}
+        autoFocus
       />
 
-      <button onClick={runCommand}>Run</button>
     </div>
   );
 }
-
-export default Terminal;
