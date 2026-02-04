@@ -611,7 +611,7 @@ class CommandLine:
     def mkdir(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         permissions = {"r": True, "w": True, "x": True}
         verbose, parent = False, False
-        if (len(args) <= 1) and args[0] != "--help":
+        if (len(args) < 1) and args[0] != "--help":
             return (0, (["mkdir: at least one argument should be given"], []))
         name = ""
         while len(args) > 0:
@@ -651,8 +651,8 @@ class CommandLine:
         if (err):
             return (1, ([err], []))
         if (verbose):
-            return (0, ([], [f"mkdir: sucessfully created ${args[0]}"]))
-        return (1, (["mkdir: Unknown error occured"], []))
+            return (0, ([], [f"mkdir: sucessfully created {name}"]))
+        return (1, ([], []))
 
     def ls(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         deep, detail = False, 0
