@@ -16,6 +16,8 @@ class Player:
 class GameSession:
     def __init__(self, session_id: str):
         self.session_id = session_id
+        self.state = "waiting"
+        self.name = "Test"
         self.players: Dict[WebSocket, Player] = {}
         self.cmd = CommandLine()
 
@@ -48,6 +50,5 @@ class SessionManager:
         if session_id not in self.sessions:
             self.sessions[session_id] = GameSession(session_id)
         return self.sessions[session_id]
-
 
 session_manager = SessionManager()

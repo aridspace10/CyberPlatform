@@ -9,7 +9,8 @@ def list_sessions():
         "sessions": [
             {
                 "id": sid,
-                "players": len(session.players)
+                "players": len(session.players),
+                "state": session.state
             }
             for sid, session in session_manager.sessions.items()
         ]
