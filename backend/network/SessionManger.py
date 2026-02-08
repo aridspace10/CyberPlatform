@@ -21,6 +21,9 @@ class GameSession:
         self.players: Dict[WebSocket, Player] = {}
         self.cmd = CommandLine()
 
+    def set_state(self, new_state: str):
+        self.state = new_state
+
     async def connect(self, websocket: WebSocket, username: str):
         self.players[websocket] = Player(websocket, username)
 
@@ -50,5 +53,13 @@ class SessionManager:
         if session_id not in self.sessions:
             self.sessions[session_id] = GameSession(session_id)
         return self.sessions[session_id]
+    
+    def set_session_state(self, session_id: str, new_state: str) -> bool:
+        session = self.get_session(session_id)
+        if not session:
+            return False
+
+        session.set_state(new_state)
+        return True
 
 session_manager = SessionManager()
