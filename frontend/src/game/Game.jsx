@@ -1,23 +1,42 @@
 import { useScroll } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
+import Gamescreen from "./Gamescreen";
+import WaitingScreen from "./WaitingScreen";
 
 export default function Game() {
+    const location = useLocation();
     const { sessionId } = location.state || {};
+    console.log(sessionId)
     const [sessionData, setSessionData] = useState(null);
     const [username, setUsername] = useState("");
-    const location = useLocation();
     const wsRef = useRef(null);
     const hasPrompted = useRef(false);
     const [log, setLog] = useState([]);
+    const [state, setState] = useState("")
+
+    function addLine(text) {
+        setLog(prev => [...prev, text]);
+    }
 
     useEffect(() => {
-            if (hasPrompted.current) return;
-            hasPrompted.current = true;
-    
-            const name = prompt("Enter username");
-            setUsername(name || "anonymous");
-        }, []);
+        if (hasPrompted.current) return;
+        hasPrompted.current = true;
+
+        const name = prompt("Enter username");
+        setUsername(name || "anonymous");
+        fetch("http://localhost:8000/api/sessions")
+          .then(res => res.json())
+          .then(data => {
+            data.sessions.forEach(element => {
+                console.log(element)
+                if (element.id == sessionId) {
+                    setState(element.state)
+                    console.log(element.state)
+                }
+            });
+          });
+    }, []);
 
     useEffect(() => {
         if (!username) return;
@@ -58,10 +77,9 @@ export default function Game() {
         };
     }, [username]);
 
-    useEffect(() => {
-        fetch("http://localhost:8000/api/sessions")
-          .then(res => res.json())
-          .then(data => setSessionData(data));
-      }, []);
-    
+    if (state == 'waiting') {
+        return (<WaitingScreen />)
+    } else {
+        return (<Gamescreen wsRef={wsRef} log={log} />)
+    }
 }
