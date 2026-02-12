@@ -22,6 +22,19 @@ def list_sessions():
         ]
     }
 
+@router.get("/session/{id}")
+def get_session(id: str):
+    session = session_manager.sessions.get(id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {
+        "id": id,
+        "players": list(session.players.keys()),
+        "state": session.state
+    }
+
 
 @router.post("/sessions/{session_id}/state")
 def update_session_state(session_id: str, body: StateUpdate):
