@@ -21,6 +21,15 @@ class GameSession:
         self.players: Dict[WebSocket, Player] = {}
         self.cmd = CommandLine()
 
+    def lobby_state(self) -> dict:
+        return {
+            "type": "lobby_update",
+            "players": [p.username for p in self.players.values()],
+            "state": self.state,
+            "session": self.session_id,
+            "name": self.name
+        }
+
     def set_state(self, new_state: str):
         self.state = new_state
 
@@ -32,10 +41,19 @@ class GameSession:
             "message": f"{username} joined session"
         })
 
-    def disconnect(self, websocket: WebSocket):
+        await self.broadcast(self.lobby_state())
+
+    async def disconnect(self, websocket: WebSocket):
         player = self.players.get(websocket)
         if player:
             del self.players[websocket]
+
+            await self.broadcast({
+                "type": "system",
+                "message": f"{player.username} left session"
+            })
+
+            await self.broadcast(self.lobby_state())
 
     async def broadcast(self, message: dict):
         for player in self.players.values():
