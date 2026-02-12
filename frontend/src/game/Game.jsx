@@ -7,8 +7,8 @@ import WaitingScreen from "./WaitingScreen";
 export default function Game() {
     const location = useLocation();
     const { sessionId } = location.state || {};
-    console.log(sessionId)
     const [sessionData, setSessionData] = useState(null);
+    const [players, setPlayers] = useState([]);
     const [username, setUsername] = useState("");
     const wsRef = useRef(null);
     const hasPrompted = useRef(false);
@@ -25,17 +25,6 @@ export default function Game() {
 
         const name = prompt("Enter username");
         setUsername(name || "anonymous");
-        fetch("http://localhost:8000/api/sessions")
-          .then(res => res.json())
-          .then(data => {
-            data.sessions.forEach(element => {
-                console.log(element)
-                if (element.id == sessionId) {
-                    setState(element.state)
-                    console.log(element.state)
-                }
-            });
-          });
     }, []);
 
     useEffect(() => {
@@ -43,7 +32,7 @@ export default function Game() {
         if (wsRef.current) return;
 
         const socket = new WebSocket(
-        `ws://localhost:8000/ws/${sessionId}`
+            `ws://localhost:8000/ws/${sessionId}`
         );
 
         socket.onopen = () => {
@@ -60,6 +49,12 @@ export default function Game() {
                 addLine(`${data.user}: ${data.message}`);
             }
 
+            if (data.type === "lobby_update") {
+                setPlayers(data.players);
+                setState(data.state);
+                return;
+            }
+
             if (data.type === "system") {
                 addLine(`[SYSTEM] ${data.message}`);
             }
@@ -70,7 +65,6 @@ export default function Game() {
             }
         };
         wsRef.current = socket;
-
         return () => {
             socket.close();
             wsRef.current = null;
@@ -78,8 +72,12 @@ export default function Game() {
     }, [username]);
 
     if (state == 'waiting') {
-        return (<WaitingScreen />)
-    } else {
+        return (<WaitingScreen players={players} />)
+    } else if (state == 'running') {
         return (<Gamescreen wsRef={wsRef} log={log} />)
+    } else {
+        return (
+            <h1> Loading... </h1>
+        )
     }
 }
