@@ -1,12 +1,14 @@
 import SessionList from "./components/SessionsList"
 import "./Homepage.css"
 import { Link, useNavigate } from 'react-router-dom';
+import { useRef } from "react";
 
 export default function Homepage() {
     const navigate = useNavigate();
-    let nextid = 123
+    const nextId = useRef(123);
     const handleSessionCreation = () => {
-        navigate(`/game`, {state: {sessionId: nextid++}});
+        const id = nextId.current++;
+        navigate(`/game`, {state: {sessionId: id}});
     }
 
     return (

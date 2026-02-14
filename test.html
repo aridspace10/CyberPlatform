@@ -1,0 +1,23 @@
+<script>
+const ws = new WebSocket("ws://localhost:8000/ws/test123");
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    type: "join",
+    username: prompt("Username?")
+  }));
+};
+
+ws.onmessage = (event) => {
+  console.log(event.data);
+};
+
+function send() {
+  const text = document.getElementById("msg").value;
+
+  ws.send(JSON.stringify({
+    type: "chat",
+    message: text
+  }));
+}
+</script>
