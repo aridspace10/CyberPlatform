@@ -445,6 +445,8 @@ class CommandLine:
         output = " ".join(args)
         if (output == "$?"):
             return (0, ([], [(str(self.filesystem.lcs))]))
+        elif (output == "*"):
+            return (0, ([], self.filesystem.list_files("")))
         return (0, ([], [(" ".join(args))]))
 
     def touch(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
