@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import Gamescreen from "./Gamescreen";
 import WaitingScreen from "./WaitingScreen";
+import Versus from "./Versus";
 
 export default function Game() {
     const location = useLocation();
@@ -17,6 +18,15 @@ export default function Game() {
 
     function addLine(text) {
         setLog(prev => [...prev, text]);
+    }
+
+    const onGameStart = async () => {
+        console.log("hehe")
+        await fetch(`http://localhost:8000/api/sessions/${sessionId}/state`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ state: "starting" })
+        });
     }
 
     useEffect(() => {
@@ -72,9 +82,11 @@ export default function Game() {
     }, [username]);
 
     if (state == 'waiting') {
-        return (<WaitingScreen players={players} />)
+        return (<WaitingScreen players={players} onGameStart={onGameStart} />)
     } else if (state == 'running') {
         return (<Gamescreen wsRef={wsRef} log={log} />)
+    } else if (state == 'starting') {
+        return (<Versus players={players} />)
     } else {
         return (
             <h1> Loading... </h1>

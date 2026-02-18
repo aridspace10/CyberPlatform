@@ -1,13 +1,14 @@
 import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import "./Versus.css"
 
 export default function Versus({ players }) {
-  const [matchStarting, setMatchStarting] = useState(false);
 
   return (
     <div className="arena">
       <motion.div
         className="player-card"
-        animate={matchStarting ? "centerLeft" : "start"}
+        animate={"centerLeft"}
         variants={{
           start: { x: -200 },
           centerLeft: { x: -60 }
@@ -18,7 +19,6 @@ export default function Versus({ players }) {
       </motion.div>
 
       <AnimatePresence>
-        {matchStarting && (
           <motion.h1
             className="vs"
             initial={{ scale: 0, opacity: 0 }}
@@ -28,12 +28,11 @@ export default function Versus({ players }) {
           >
             VS
           </motion.h1>
-        )}
       </AnimatePresence>
 
       <motion.div
         className="player-card"
-        animate={matchStarting ? "centerRight" : "start"}
+        animate={"start"}
         variants={{
           start: { x: 200 },
           centerRight: { x: 60 }
@@ -42,14 +41,6 @@ export default function Versus({ players }) {
       >
         {players[1]}
       </motion.div>
-
-      {/* Dev trigger */}
-      <button
-        style={{ position: "absolute", bottom: 40 }}
-        onClick={() => setMatchStarting(true)}
-      >
-        Start Match
-      </button>
     </div>
   );
 }
