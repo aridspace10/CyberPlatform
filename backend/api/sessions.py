@@ -37,8 +37,8 @@ def get_session(id: str):
 
 
 @router.post("/sessions/{session_id}/state")
-def update_session_state(session_id: str, body: StateUpdate):
-    success = session_manager.set_session_state(session_id, body.state)
+async def update_session_state(session_id: str, body: StateUpdate):
+    success = await session_manager.set_session_state(session_id, body.state)
     if not success:
         raise HTTPException(status_code=400, detail="Invalid session or state")
 
