@@ -12,7 +12,6 @@ class Player:
         self.shell = ShellState()
         self.shell.fs = FileSystem()
 
-
 class GameSession:
     def __init__(self, session_id: str):
         self.session_id = session_id
@@ -62,6 +61,33 @@ class GameSession:
 
     async def send_to(self, websocket: WebSocket, message: dict):
         await websocket.send_json(message)
+
+    async def handle_message(self, websocket: WebSocket, data: dict):
+        player = self.players.get(websocket)
+        if not player:
+            return
+
+        msg_type = data.get("type")
+
+        if msg_type == "command":
+            await self._handle_command(player, data.get("command", ""))
+
+        elif msg_type == "chat":
+            await self.broadcast({
+                "type": "chat",
+                "user": player.username,
+                "message": data.get("message", "")
+            })
+    
+    async def _handle_command(self, player: Player, command: str):
+        stdout, stderr = self.cmd.enter_command(command, player.shell)
+
+        await player.websocket.send_json({
+            "type": "command_result",
+            "stdout": stdout,
+            "stderr": stderr,
+            "cwd": player.shell.cwd  # nice UX addition
+        })
 
 
 class SessionManager:
