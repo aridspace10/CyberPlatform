@@ -128,9 +128,11 @@ class Parser:
     
     def parse_redirections(self) -> list[Redirection]:
         result = []
-        while ((p := self.peek()) and (p.value in ["<", ">", ">>", "<<"])):
-            val = self.consume().value
-            result.append(Redirection(val, self.consume()))
+        while ((p := self.peek()) and (p.value == ">" or p.value == ">>" or p.value == "<<" or p.value == "<")):
+            self.consume()
+            target = self.consume()
+            if (p is not None and target is not None):
+                result.append(Redirection(p.value, target.value))
         return result
 
     def parse_command(self) -> Command:
