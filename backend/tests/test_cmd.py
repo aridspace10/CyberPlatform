@@ -12,9 +12,25 @@ def fs_empty():
     return fs
 
 @pytest.fixture
-def shell(fs_empty):
+def shell_empty(fs_empty):
     s = ShellState()
     s.fs = fs_empty
+    s.cwd = "/"
+    return s
+
+@pytest.fixture
+def fs_fouritems():
+    fs = FileSystem()
+    fs.add("f1.txt")
+    fs.add("f2.txt")
+    fs.add("f3.txt")
+    fs.add("f4.txt")
+    return fs
+
+@pytest.fixture
+def shell_fouritems(fs_fouritems):
+    s = ShellState()
+    s.fs = fs_fouritems
     s.cwd = "/"
     return s
 
@@ -22,22 +38,22 @@ def shell(fs_empty):
 def cl():
     return CommandLine()
 
-def test_echo_basic(cl, shell):
+def test_echo_basic(cl, shell_empty):
     # echo should return stdout containing the args joined
-    stderr, stdout = cl.enter_command('echo hello world', shell)
+    stderr, stdout = cl.enter_command('echo hello world', shell_empty)
     assert stderr == []
     assert stdout == ['hello world']
 
-def test_cat_nonexistent_file(cl, shell):
+def test_cat_nonexistent_file(cl, shell_empty):
     # reading missing file returns error
-    stderr, stdout = cl.enter_command('cat missing.txt', shell)
+    stderr, stdout = cl.enter_command('cat missing.txt', shell_empty)
     # cat sets stderr in stdout list per your implementation
     assert len(stdout) == 1
     assert "does not exist" in stdout[0]
 
-def test_redirection_writes_file(cl, shell, fs_empty):
+def test_redirection_writes_file(cl, shell_empty, fs_empty):
     # use > redirect to create a file and write
-    cl.enter_command('echo hi > out.txt', shell)
+    cl.enter_command('echo hi > out.txt', shell_empty)
     # search filesystem for the written file and check contents
     # depending on your FS API; example:
     fs_empty.search('out.txt')   # moves current pointer to file
