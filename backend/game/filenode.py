@@ -88,11 +88,13 @@ class FileNode:
                 return item
         return None
 
-    def delete_child(self, name: str) -> FileNode | None:
+    def delete_child(self, name: str, recurse: bool = False) -> FileNode | str:
         for idx, item in enumerate(self.items):
             if (item.name == name):
+                if (item.get_type() == NodeType.DIRECTORY and recurse == False):
+                    return "dir"
                 return self.items.pop(idx)
-        return None
+        return ""
                 
     def len(self) -> int:
         return len(self.items)
