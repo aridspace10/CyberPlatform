@@ -65,32 +65,30 @@ class FileSystem:
                 return error
         return self.current.list_content("", deep, detail, extras)
 
-    """ Searches for a filenode """
     def search(self, path: str, creating: bool = False) -> str:
         if (path == "/"):
             return ""
         lst = path.split("/")
         while len(lst) > 0 and lst != ['']:
-            if lst[0] == '':
-                continue
+            cur = lst.pop(0)
             # if we are staying still
-            if lst[0] == ".":
-                lst.pop(0)
+            if cur == '' or ".":
                 continue
-            if lst[0] == "..":
+            # if we going back
+            if cur == "..":
                 if (self.current.parent is not None):
                     self.current = self.current.parent
-                    lst.pop(0)
                     continue
-            if self.current.search(lst[0]) in [None, "file"]:
-                if (creating):
-                    inode = Inode(NodeType.DIRECTORY)
-                    self.current.add_child(lst[0], inode)
-                else:
-                    return f"No directory named {lst[0]}"
-            node = self.current.access(lst[0])
+
+            if self.current.get_type() == NodeType.FILE:
+                return f"{self.current.name} is not a directory"
+            
+            if self.current.access(cur) is None and creating:
+                inode = Inode(NodeType.DIRECTORY)
+                self.current.add_child(cur, inode)
+            node = self.current.access(cur)
             if node is None:
-                return f"No directory named {lst[0]}"
+                return f"No directory named {cur}"
             if node.inode.type == NodeType.SYMLINK:
                 target = node.inode.data
                 # Resolve target relative to symlink's parent
@@ -101,7 +99,6 @@ class FileSystem:
                 node = self.current
                 self.current = saved
             self.current = node
-            lst.pop(0)
         return ""
     
     def search_withaccess(self, path: str, creating: bool = False) -> NodeType | None: 
