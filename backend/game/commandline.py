@@ -32,7 +32,9 @@ class CommandLine:
     
     def enter_command(self, raw: str, shell: ShellState) -> Tuple[list[str], list[str]]:
         self.filesystem = shell.fs
-        self.filesystem.search(shell.cwd)
+        if (self.filesystem.cwd != shell.cwd):
+            self.filesystem.search(shell.cwd)
+            self.filesystem.cwd = shell.cwd
         self.shell = shell
         tokens = lex(raw)
         parser = Parser(tokens)
@@ -710,7 +712,7 @@ class CommandLine:
             else:
                 target = arg
             args = args[1:]
-        lines = self.filesystem.list_files(self.shell.cwd, -1 if deep else 0, detail, extra)
+        lines = self.filesystem.list_files(target, -1 if deep else 0, detail, extra)
         for line in lines: 
             output[1].append(" ".join(line))
         return (0, output)
@@ -724,6 +726,8 @@ class CommandLine:
         arg = args[0]
         if (error := self.filesystem.search(arg)):
             return (1, ([error], []))
+        self.shell.cwd += "/" + arg
+        self.filesystem.cwd += "/" + arg
         return (0, ([],[]))
     
     def ln(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
