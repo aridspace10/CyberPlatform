@@ -379,8 +379,9 @@ class CommandLine:
         recurse = False
         verbose = False
         output = ([], [])
-        if len(args) > 2 and args[0] != "--help":
-            output[1].append("chmod: expected at least two arguments")
+        print (args)
+        if len(args) < 2 and args[0] != "--help":
+            output[0].append("chmod: expected at least two arguments")
             return (1, output)
         while len(args) > 2:
             arg = args[0]
@@ -413,12 +414,11 @@ class CommandLine:
             except ValueError:
                 output[0].append("chmod: value other then given integer given for permissions")
                 return (1, output)
-            finally:
-                permission = int(permission)
-                bits = [(permission >> i) & 1 for i in range(7, -1, -1)]
-                d[ORDER[idx]]["x"] = bool(bits[-1])
-                d[ORDER[idx]]["w"] = bool(bits[-2])
-                d[ORDER[idx]]["r"] = bool(bits[-3])
+            permission = int(permission)
+            bits = [(permission >> i) & 1 for i in range(7, -1, -1)]
+            d[ORDER[idx]]["x"] = bool(bits[-1])
+            d[ORDER[idx]]["w"] = bool(bits[-2])
+            d[ORDER[idx]]["r"] = bool(bits[-3])
         file = args[1]
         saved_current = self.filesystem.current
         lst = file.split("/")
@@ -517,12 +517,13 @@ class CommandLine:
                 elif (arg == "-n"):
                     lines = int(args.pop(0))
                 elif (arg.startswith("--lines=")):
+                    print (f"arg - {arg}")
                     val = arg.split("=")[1]
                     if (val[0] == "-"):
                         rev = True
                         lines = int(val[1:]) * -1
                     else:
-                        lines = int(val[1:])
+                        lines = int(val)
                 elif (arg == "-c"):
                     b = int(args.pop(0))
                 elif (arg.startswith("--lines=")):
@@ -664,6 +665,7 @@ class CommandLine:
         extra: dict[str, bool | str] = {}
         oneline = False
         listdir = False
+        target = ""
         output = ([], [])
         while args:
             arg = args[0]
@@ -705,6 +707,8 @@ class CommandLine:
                             extra["sortby"] = "ext"
                         case _:
                             return (2, (["ls: unknown directory given"], []))
+            else:
+                target = arg
             args = args[1:]
         lines = self.filesystem.list_files(self.shell.cwd, -1 if deep else 0, detail, extra)
         for line in lines: 
