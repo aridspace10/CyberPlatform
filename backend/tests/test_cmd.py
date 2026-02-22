@@ -1,4 +1,6 @@
 import pytest
+import datetime
+import random
 from game.commandline import CommandLine
 from game.ShellState import ShellState
 from game.filesystem import FileSystem
@@ -31,7 +33,9 @@ def fs_fouritems():
 def fs_basic():
     fs = FileSystem()
     fs.add_file("f1.txt")
+    fs.current.items[0].set_data("ERROR no\nINFO hey\nERROR no2")
     fs.add_file("f2.txt")
+    fs.current.items[1].set_data('\n'.join([str(i) for i in range(25)]))
     fs.add_directory("d1")
     fs.add_file("d1/f3.txt")
     fs.add_file("d1/f4.txt")
@@ -110,13 +114,7 @@ def test_cd_empty(cl, shell_empty: ShellState):
     assert stderr == ["cd: must give argument"]
     assert stdout == []
 
-def test_cat_nonexistent_file(cl, shell_empty):
-    # reading missing file returns error
-    stderr, stdout = cl.enter_command('cat missing.txt', shell_empty)
-    # cat sets stderr in stdout list per your implementation
-    assert len(stdout) == 1
-    assert "does not exist" in stdout[0]
-
+########### REDIRECTION ##########
 def test_redirection_writes_file(cl, shell_empty, fs_empty):
     # use > redirect to create a file and write
     cl.enter_command('echo hi > out.txt', shell_empty)
@@ -125,3 +123,102 @@ def test_redirection_writes_file(cl, shell_empty, fs_empty):
     fs_empty.search('out.txt')   # moves current pointer to file
     fnode = fs_empty.current
     assert fnode.get_data().strip() == 'hi'
+
+########### RM #################
+def test_rm_basic(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('rm f2.txt', shell_fouritems)
+    assert stderr == []
+    assert stdout == []
+    assert len(shell_fouritems.fs.current.items) == 3
+
+########### RM #################
+def test_rm_dir(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('rm d1', shell_basic)
+    assert len(shell_basic.fs.current.items) == 3
+    assert stderr == ["rm: cannot remove 'd1': Is a directory"]
+    assert stdout == []
+    stderr, stdout = cl.enter_command('rm -r d1', shell_basic)
+    assert len(shell_basic.fs.current.items) == 2
+    assert stderr == []
+    assert stdout == []
+
+######### CAT ##############
+def test_cat_nonexistent_file(cl, shell_empty):
+    # reading missing file returns error
+    stderr, stdout = cl.enter_command('cat missing.txt', shell_empty)
+    # cat sets stderr in stdout list per your implementation
+    assert len(stdout) == 1
+    assert "does not exist" in stdout[0]
+
+def test_cat_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == ["ERROR no", "INFO hey", "ERROR no2"]
+
+######## HEAD ##############
+def test_head_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('head f2.txt', shell_basic)
+    assert stderr == []
+    for i, line in enumerate(stdout):
+        assert line == str(i)
+
+def test_head_count(cl, shell_basic: ShellState):
+    r = random.randint(1,20)
+    stderr, stdout = cl.enter_command(f'head -n {r} f2.txt', shell_basic)
+    assert stderr == []
+    for i in range(r):
+        assert stdout[i] == str(i)
+    stderr, stdout = cl.enter_command(f'head --lines={r} f2.txt', shell_basic)
+    assert stderr == []
+    for i in range(r):
+        assert stdout[i] == str(i)
+    stderr, stdout = cl.enter_command(f'head --lines=-{r} f2.txt', shell_basic)
+    assert stderr == []
+    for i in range(r, 0):
+        assert stdout[-i] == str(i)
+
+######## GREP ##############
+def test_grep_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('grep \"ERROR\" f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == ["ERROR no", "ERROR no2"]
+
+def test_grep_count(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('grep -c \"ERROR\" f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == ["2"]
+
+####### CHMOD #############
+def test_chmod_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('chmod 000 f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    fn = shell_basic.fs.get_file("f1.txt")
+    assert isinstance(fn,FileNode)
+    assert shell_basic.fs.current.get_permission_str(fn) == "----------"
+    stderr, stdout = cl.enter_command('chmod 777 f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    fn = shell_basic.fs.get_file("f1.txt")
+    assert isinstance(fn,FileNode)
+    assert shell_basic.fs.current.get_permission_str(fn) == "-rwxrwxrwx"
+    stderr, stdout = cl.enter_command('chmod 000 d1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    fn = shell_basic.fs.get_file("f1.txt")
+    assert isinstance(fn,FileNode)
+    assert shell_basic.fs.current.get_permission_str(fn) == "d---------"
+
+def test_chmod_errors(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('chmod 888 f1.txt', shell_basic)
+    assert stderr == ["chmod: value given which is higher then needed"]
+    assert stdout == []
+    stderr, stdout = cl.enter_command('chmod f1.txt', shell_basic)
+    assert stderr == ["chmod: expected at least two arguments"]
+    assert stdout == []
+    stderr, stdout = cl.enter_command('chmod 21 f1.txt', shell_basic)
+    assert stderr == ["chmod: value given for permissions which is not of length of 3"]
+    assert stdout == []
+    stderr, stdout = cl.enter_command('chmod 6a5 f1.txt', shell_basic)
+    assert stderr == ["chmod: value other then given integer given for permissions"]
+    assert stdout == []
