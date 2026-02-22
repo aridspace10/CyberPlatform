@@ -26,6 +26,12 @@ class GameSession:
 
         self.cmd = CommandLine()
 
+    def get_player(self, websocket: WebSocket) -> Player | None:
+        username = self.connections.get(websocket)
+        if not username:
+            return None
+        return self.players.get(username)
+
     def lobby_state(self) -> dict:
         return {
             "type": "lobby_update",
