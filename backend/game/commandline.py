@@ -37,12 +37,11 @@ class CommandLine:
         tokens = lex(raw)
         parser = Parser(tokens)
         ast = parser.parse()
-        print (ast)
         if isinstance(ast, Sequence):
             shell.ls, (stderr, stdout) = self.execute_sequence(ast.parts)
             return (stderr, stdout)
         else:
-            return ([], ["Admin Error: Code AAA112"])
+            return ([], ["Admin Error: Code AAA112"]) 
 
     def execute_pipe(self, parts: list[AndOr]) -> CommandReturn:
         self.fdin = None
@@ -258,7 +257,7 @@ class CommandLine:
         return (0, output)
     
     def grep(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
-        case_sentive = False
+        case_insentive = False
         invert = False
         linenum = False
         filename = False
@@ -268,16 +267,26 @@ class CommandLine:
         showmatched = False
         quiet = False
         recursive = False
+        pattern = ""
+        files = []
         include = []
         exclude = []
         output = ([], [])
-        while len(args) and args[0][0] != "\"":
-            arg = args[0]
-            if (arg[0] == "-"):
-                for option in args[1:]:
+        while args:
+            arg = args.pop(0)
+            if (arg.startswith("--include=")):
+                lst = arg.split("=")
+                include.append(lst[1])
+            elif (arg.startswith("--exclude-dir=")):
+                lst = arg.split("=")
+                exclude.append(lst[1])
+            elif (arg == "--help"):
+                return (0, ([], self.useage("grep")))
+            elif (arg[0] == "-"):
+                for option in arg[1:]:
                     match (option):
                         case "i":
-                            case_sentive = True
+                            case_insentive = True
                         case "v":
                             invert = True
                         case "n":
@@ -296,42 +305,36 @@ class CommandLine:
                             quiet = True
                         case "r":
                             recursive = True
-            if (arg.startswith("--include=")):
-                lst = arg[0].split("=")
-                include.append(lst[1])
-            elif (arg.startswith("--exclude-dir=")):
-                lst = arg[0].split("=")
-                exclude.append(lst[1])
-            elif (arg == "--help"):
-                return (0, ([], self.useage("grep")))
+                        case _:
+                            return (1, (["grep: unknown argument given"], []))
             else:
-                return (1, (["grep: unknown argument given"], []))
-            args = args[1:]
-        if (not len(args)):
+                pattern = arg
+                files = args
+                break
+        if (not pattern):
             return (1, (["grep: pattern not given"], []))
-        pattern = args.pop(0).replace("\"", '').replace("\"", '')
-        if (not case_sentive):
-            pattern = pattern.lower()
-        if (len(args)):
-            files = args
-        else:
+        if (not len(files)):
             files = ["-"]
         saved_current = self.filesystem.current
-        
         if (matchwhole):
-            match_cond_func = lambda line: len([w for w in line if pattern == w])
+            match_cond_func = lambda line, pat: any(pat == w for w in line.split())
         elif (matchline):
-            match_cond_func = lambda line: line == pattern
+            match_cond_func = lambda line, pat: line == pat
         else:
             # if the pattern exists in the line, there will be an element in the string comp
-            match_cond_func = lambda line: len([w for w in line.split() if pattern in w])
+            match_cond_func = lambda line, pat: pat in line
 
         def search_file(item: FileNode) -> None:
             lst = item.get_data().split("\n")
             for idx, line in enumerate(lst):
-                if (not case_sentive):
-                    line = line.lower()
-                if ((l := match_cond_func(line)) and not invert) or (l == 0 and invert):
+                if case_insentive:
+                    line_cmp = line.lower()
+                    pattern_cmp = pattern.lower()
+                else:
+                    line_cmp = line
+                    pattern_cmp = pattern
+                matched = match_cond_func(line_cmp, pattern_cmp)
+                if matched ^ invert:
                     if (filename):
                         tmp = item.name
                     elif (showmatched):
@@ -339,7 +342,7 @@ class CommandLine:
                     else:
                         tmp = line
                     if (linenum):
-                        tmp = f"${idx}: ${tmp}"
+                        tmp = f"{idx+1}:{tmp}"
                     output[1].append(tmp)
                     if (filename and not linenum):
                         return
@@ -445,8 +448,6 @@ class CommandLine:
         output = " ".join(args)
         if (output == "$?"):
             return (0, ([], [(str(self.filesystem.lcs))]))
-        elif (output == "*"):
-            return (0, ([], self.filesystem.list_files("")))
         return (0, ([], [(" ".join(args))]))
 
     def touch(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
@@ -582,10 +583,12 @@ class CommandLine:
                         verbose = True
             args = args[1:]
         filename = args[0]
-        result = self.filesystem.current.delete_child(filename)
-        if (result == None):
+        result = self.filesystem.current.delete_child(filename, recurse)
+        if (result == ""):
             output[0].append(f"{filename} was not found")
-        if (verbose):
+        elif (result == "dir"):
+            output[0].append(f"rm: cannot remove '{filename}': Is a directory")
+        elif (verbose):
             output[1].append("File sucessfully deleted")
         return (0, output)
 
@@ -613,7 +616,7 @@ class CommandLine:
     def mkdir(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         permissions = {"r": True, "w": True, "x": True}
         verbose, parent = False, False
-        if (len(args) < 1) and args[0] != "--help":
+        if not len(args):
             return (0, (["mkdir: at least one argument should be given"], []))
         name = ""
         while len(args) > 0:
@@ -703,7 +706,7 @@ class CommandLine:
                         case _:
                             return (2, (["ls: unknown directory given"], []))
             args = args[1:]
-        lines = self.filesystem.list_files("", -1 if deep else 0, detail, extra)
+        lines = self.filesystem.list_files(self.shell.cwd, -1 if deep else 0, detail, extra)
         for line in lines: 
             output[1].append(" ".join(line))
         return (0, output)
