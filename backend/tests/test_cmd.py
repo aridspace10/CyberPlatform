@@ -117,12 +117,18 @@ def test_cd_empty(cl, shell_empty: ShellState):
 ########### REDIRECTION ##########
 def test_redirection_writes_file(cl, shell_empty, fs_empty):
     # use > redirect to create a file and write
-    cl.enter_command('echo hi > out.txt', shell_empty)
+    cl.enter_command('echo hi > f1.txt', shell_empty)
     # search filesystem for the written file and check contents
     # depending on your FS API; example:
-    fs_empty.search('out.txt')   # moves current pointer to file
+    fs_empty.search('f1.txt')   # moves current pointer to file
     fnode = fs_empty.current
     assert fnode.get_data().strip() == 'hi'
+
+def test_redirection_rewrites_file(cl, shell_basic: ShellState, fs_basic: FileSystem):
+    cl.enter_command('echo hi >> f1.txt', shell_basic)
+    fs_basic.search('f1.txt')
+    fnode = fs_basic.current
+    assert fnode.get_data().strip() == "ERROR no\nINFO hey\nERROR no2\nhi"
 
 ########### RM #################
 def test_rm_basic(cl, shell_fouritems: ShellState):
@@ -131,7 +137,6 @@ def test_rm_basic(cl, shell_fouritems: ShellState):
     assert stdout == []
     assert len(shell_fouritems.fs.current.items) == 3
 
-########### RM #################
 def test_rm_dir(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('rm d1', shell_basic)
     assert len(shell_basic.fs.current.items) == 3
@@ -202,12 +207,14 @@ def test_chmod_basic(cl, shell_basic: ShellState):
     fn = shell_basic.fs.get_file("f1.txt")
     assert isinstance(fn,FileNode)
     assert shell_basic.fs.current.get_permission_str(fn) == "-rwxrwxrwx"
-    stderr, stdout = cl.enter_command('chmod 000 d1.txt', shell_basic)
+    stderr, stdout = cl.enter_command('chmod -R 000 d1.txt', shell_basic)
     assert stderr == []
     assert stdout == []
-    fn = shell_basic.fs.get_file("f1.txt")
+    fn = shell_basic.fs.get_file("d1")
     assert isinstance(fn,FileNode)
     assert shell_basic.fs.current.get_permission_str(fn) == "d---------"
+    assert isinstance(fn.get_permission_str(fn.items[0]), FileNode)
+    assert fn.get_permission_str(fn.items[0]) == "----------"
 
 def test_chmod_errors(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('chmod 888 f1.txt', shell_basic)
@@ -222,3 +229,9 @@ def test_chmod_errors(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('chmod 6a5 f1.txt', shell_basic)
     assert stderr == ["chmod: value other then given integer given for permissions"]
     assert stdout == []
+
+######## AND OR ################
+def test_andor(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('cd d1 && ls', shell_basic)
+    assert stderr == []
+    assert stdout == ["f3.txt", "f4.txt"]

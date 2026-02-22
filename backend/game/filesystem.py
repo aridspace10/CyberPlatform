@@ -8,6 +8,7 @@ class FileSystem:
         self.filehead = FileNode(None, "root", inode)
         self.current: FileNode = self.filehead
         self.lcs = 0
+        self.cwd = "/"
 
     def setup_system(self, textfile):
         with open(textfile) as f:
@@ -58,22 +59,29 @@ class FileSystem:
                 output[row][col] = output[row][col] + " " * (biggest - len(output[row][col]))
         return output
 
-    def list_files(self, path: str, deep: int = 0, detail: int = 0, extras: dict[str, bool | str] = {}):
+    def list_files(self, path: str, deep: int = 0, detail: int = 0, extras: dict[str, bool | str] = {}) -> list[list[str]] | str:
         if (path != ""):
             if (error := self.search(path)) != "":
                 return error
         return self.current.list_content("", deep, detail, extras)
 
+    """ Searches for a filenode """
     def search(self, path: str, creating: bool = False) -> str:
+        if (path == "/"):
+            return ""
         lst = path.split("/")
         while len(lst) > 0 and lst != ['']:
+            if lst[0] == '':
+                continue
+            # if we are staying still
             if lst[0] == ".":
                 lst.pop(0)
                 continue
             if lst[0] == "..":
-                self.current = self.current.parent
-                lst.pop(0)
-                continue
+                if (self.current.parent is not None):
+                    self.current = self.current.parent
+                    lst.pop(0)
+                    continue
             if self.current.search(lst[0]) in [None, "file"]:
                 if (creating):
                     inode = Inode(NodeType.DIRECTORY)
@@ -119,6 +127,7 @@ class FileSystem:
             return error
         inode = Inode(NodeType.DIRECTORY)
         self.current = self.current.add_child(lst[-1], inode)
+        self.current = saved_current
         return ""
 
     def add_file(self, path: str):
@@ -129,6 +138,7 @@ class FileSystem:
             return error
         inode = Inode(NodeType.FILE)
         self.current = self.current.add_child(lst[-1], inode)
+        self.current = saved_current
         return ""
 
 """
