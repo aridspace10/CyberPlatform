@@ -158,6 +158,8 @@ class CommandLine:
                 return self.ln(args[1:], fdin)
             case "uniq":
                 return self.uniq(args[1:], fdin)
+            case "sort":    
+                return self.sort(args[1:], fdin)
             case _:
                 return (1, (["Unknown command given"], []))
 
@@ -195,22 +197,20 @@ class CommandLine:
         verbose = False
         clobber = False
         output = ([], [])
+        if ("--help" in args):
+            return (0, ([], self.useage("mv")))
         if len(args) < 2 and args[0] != "--help":
             output[0].append("cp: expected at least two arguments")
         files = []
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
-                if (arg[1] == "-"):
-                    if (arg[2:] == "help"):
+                options = arg[1:].split()
+                for option in options:
+                    if (option == "v"):
+                        verbose = True
+                    elif (option == "h"):
                         return (0, (self.useage("mv"), []))
-                else:    
-                    options = arg[1:].split()
-                    for option in options:
-                        if (option == "v"):
-                            verbose = True
-                        elif (option == "h"):
-                            return (0, (self.useage("mv"), []))
             else:
                 files.append(arg)
             args = args[1:]
@@ -382,7 +382,8 @@ class CommandLine:
         recurse = False
         verbose = False
         output = ([], [])
-        print (args)
+        if (len(args) == 1 and args[0] == "--help"):
+            return (0, ([], self.useage("chmod")))
         if len(args) < 2 and args[0] != "--help":
             output[0].append("chmod: expected at least two arguments")
             return (1, output)
@@ -424,17 +425,19 @@ class CommandLine:
             d[ORDER[idx]]["r"] = bool(bits[-3])
         file = args[1]
         saved_current = self.filesystem.current
-        lst = file.split("/")
-        if (error := self.filesystem.search("/".join(lst[0:-1]))) != "":
-            self.current = saved_current
+        if (error := self.filesystem.search(file)) != "":
+            self.filesystem.current = saved_current
             output[0].append(error)
             return (1, output)
-        self.filesystem.current.update_permissions(d, recurse, [])
-        for idx, item in enumerate(self.filesystem.current.items):
-            if (item.name == lst[-1]):
-                self.filesystem.current.items[idx].update_permissions(d, False, [])
-                return (0, output)
-        output[0].append("chmod: file given can not be found")
+        temp = self.filesystem.current.update_permissions(d, recurse, [])
+        if verbose:
+            output[1].extend(temp)
+        if (recurse):
+            for idx, item in enumerate(self.filesystem.current.items):
+                temp = self.filesystem.current.items[idx].update_permissions(d, True, [])
+                if verbose:
+                    output[1].extend(temp)
+        self.filesystem.current = saved_current
         return (1, output)
     
     def echo(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
@@ -479,6 +482,8 @@ class CommandLine:
 
     def cat(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         output = ([], [])
+        if len(args) == 1 and args[0] == "--help":
+            return (0, ([], self.useage("cat")))
         while len(args) > 1:
             arg = args[0]
             if (arg == "--help"):
@@ -664,7 +669,7 @@ class CommandLine:
             arg = args[0]
             if (arg[0] == "-"):
                 if (arg == "--help"):
-                    return (0, (self.useage("ls"), []))
+                    return (0, ([], self.useage("ls")))
                 options = arg[1:]
                 for option in options:
                     match option:
@@ -728,11 +733,11 @@ class CommandLine:
     
     def ln(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         linkty = "hard"
+        if (len(args) == 1 and args[0] == "--help"):
+            return (0, ([], self.useage("ln")))
         while len(args) > 2:
             arg = args.pop(0)
             if (arg[0] == "-"):
-                if (arg == "--help"):
-                    return (0, ([], self.useage("ln")))
                 options = arg[1:]
                 for option in options:
                     match option:
@@ -791,7 +796,7 @@ class CommandLine:
 
     def sort(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if "--help" in args:
-            return (0, ([], self.useage("sort.txt")))
+            return (0, ([], self.useage("sort")))
         file = ""
         igblanks = False
         reverse = False
