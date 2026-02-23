@@ -8,7 +8,7 @@ class FileSystem:
         self.filehead = FileNode(None, "root", inode)
         self.current: FileNode = self.filehead
         self.lcs = 0
-        self.cwd = "/"
+        self.cwd = ""
 
     def setup_system(self, textfile):
         with open(textfile) as f:
@@ -72,7 +72,7 @@ class FileSystem:
         while len(lst) > 0 and lst != ['']:
             cur = lst.pop(0)
             # if we are staying still
-            if cur == '' or ".":
+            if cur == '' or cur == ".":
                 continue
             # if we going back
             if cur == "..":
