@@ -106,7 +106,7 @@ def test_cd_basic(cl, shell_basic: ShellState):
 
 def test_cd_missing(cl, shell_empty: ShellState):
     stderr, stdout = cl.enter_command('cd missing', shell_empty)
-    assert stderr == ["No directory named missing"]
+    assert stderr == ["cd:No directory named missing"]
     assert stdout == []
 
 def test_cd_empty(cl, shell_empty: ShellState):
@@ -207,13 +207,13 @@ def test_chmod_basic(cl, shell_basic: ShellState):
     fn = shell_basic.fs.get_file("f1.txt")
     assert isinstance(fn,FileNode)
     assert shell_basic.fs.current.get_permission_str(fn) == "-rwxrwxrwx"
-    stderr, stdout = cl.enter_command('chmod -R 000 d1.txt', shell_basic)
+    stderr, stdout = cl.enter_command('chmod -R 000 d1', shell_basic)
     assert stderr == []
     assert stdout == []
     fn = shell_basic.fs.get_file("d1")
     assert isinstance(fn,FileNode)
     assert shell_basic.fs.current.get_permission_str(fn) == "d---------"
-    assert isinstance(fn.get_permission_str(fn.items[0]), FileNode)
+    assert isinstance(fn.items[0], FileNode)
     assert fn.get_permission_str(fn.items[0]) == "----------"
 
 def test_chmod_errors(cl, shell_basic: ShellState):

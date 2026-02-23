@@ -26,13 +26,15 @@ class FileNode:
     def get_permission_str(self, item: FileNode):
         permission = "d" if item.get_type() == NodeType.DIRECTORY else "-"
         for i in item.inode.permissions.values():
+            print (i)
             for key, value in i.items():
                 permission += key if value else "-"
+        print (permission)
         return permission
     
     def update_permissions(self, updated: dict, recurse: bool, verbose: list[str]) -> list[str]:
         self.ctime = datetime.datetime.now()
-        self.permissions = updated
+        self.inode.permissions = updated
 
         verbose.append(f"Updated permissions of ${self.name} with ${self.get_permission_str(self)}")
         if (recurse):

@@ -425,25 +425,15 @@ class CommandLine:
         file = args[1]
         saved_current = self.filesystem.current
         lst = file.split("/")
-        if ("." in lst[-1].split()):
-            if (error := self.filesystem.search(file)) != "":
-                self.current = saved_current
-                output[0].append(error)
-                return (1, output)
-            temp = self.filesystem.current.update_permissions(d, recurse, [])
-            if (verbose):
-                for line in temp:
-                    output[1].append(line)
-            return (0, output)
-        else:
-            if (error := self.filesystem.search("/".join(lst[0:-1]))) != "":
-                self.current = saved_current
-                output[0].append(error)
-                return (1, output)
-            for idx, item in enumerate(self.filesystem.current.items):
-                if (item.name == lst[-1]):
-                    self.filesystem.current.items[idx].update_permissions(d, False, [])
-                    return (0, output)
+        if (error := self.filesystem.search("/".join(lst[0:-1]))) != "":
+            self.current = saved_current
+            output[0].append(error)
+            return (1, output)
+        self.filesystem.current.update_permissions(d, recurse, [])
+        for idx, item in enumerate(self.filesystem.current.items):
+            if (item.name == lst[-1]):
+                self.filesystem.current.items[idx].update_permissions(d, False, [])
+                return (0, output)
         output[0].append("chmod: file given can not be found")
         return (1, output)
     
