@@ -59,6 +59,7 @@ class CommandLine:
     
     def execute_andor(self, elem: AndOr) -> CommandReturn:
         status, (stderr, stdout) = self.execute_command(elem.first)
+        print (status)
         for (op, cmd) in elem.rest:
             if ((op == "&&" and not status) or (op == "||" and status)):
                 status, (tmperr, tmpout) = self.execute_command(cmd)
@@ -84,13 +85,13 @@ class CommandLine:
                 if (isinstance(self.fdout, str)):
                     return (1, ([self.fdout], []))
         status, (stderr, stdout) = self.execute_atom(command.atom)
-        if (isinstance(self.fdout, FileNode)):
-            self.fdout.append_data("\n".join(stdout))
-            stdout = []
+        if command.pre_redirs or command.post_redirs:
+            if isinstance(self.fdout, FileNode):
+                self.fdout.append_data("\n".join(stdout))
+                stdout = []
         else:
-            inode = Inode(NodeType.FILE)
-            inode.set_data("\n".join(stdout))
-            self.fdout = FileNode(None, "stdout", inode)
+            # No redirection → leave stdout alone
+            self.fdout = None
         return (status, (stderr, stdout))
 
     def execute_atom(self, atom: Atom) -> CommandReturn:
@@ -712,9 +713,12 @@ class CommandLine:
             else:
                 target = arg
             args = args[1:]
+        saved_current = self.filesystem.current
         lines = self.filesystem.list_files(target, -1 if deep else 0, detail, extra)
+        self.filesystem.current = saved_current
         for line in lines: 
             output[1].append(" ".join(line))
+        print (output)
         return (0, output)
     
     def find(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
@@ -725,9 +729,11 @@ class CommandLine:
             return (1, (["cd: must give argument"], []))
         arg = args[0]
         if (error := self.filesystem.search(arg)):
-            return (1, ([error], []))
+            return (1, (["cd:" + error], []))
+        print ("aaaa")
         self.shell.cwd += "/" + arg
         self.filesystem.cwd += "/" + arg
+        print (self.filesystem.cwd)
         return (0, ([],[]))
     
     def ln(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
