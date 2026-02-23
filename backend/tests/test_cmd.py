@@ -59,6 +59,15 @@ def shell_fouritems(fs_fouritems):
 def cl():
     return CommandLine()
 
+######## HELPS #################
+def test_cmd_helps(cl, shell_empty):
+    cmds = ['mkdir', 'cat', 'chmod', 'grep', 'head', 'ln', 'ls', 'mv', 'sort', 'touch']
+    for cmd in cmds:
+        stderr, stdout = cl.enter_command(f'{cmd} --help', shell_empty)
+        with open(f"../static/help/{cmd}.txt") as f:
+            assert stderr == []
+            assert stdout == f.readlines()
+
 ######### ECHO #################
 def test_echo_basic(cl, shell_empty):
     # echo should return stdout containing the args joined
