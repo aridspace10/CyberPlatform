@@ -199,29 +199,27 @@ class CommandLine:
         output = ([], [])
         if ("--help" in args):
             return (0, ([], self.useage("mv")))
-        if len(args) < 2 and args[0] != "--help":
+        if len(args) < 2:
             output[0].append("cp: expected at least two arguments")
         files = []
-        while len(args) > 1:
-            arg = args[0]
-            if (arg[0] == "-"):
-                options = arg[1:].split()
-                for option in options:
-                    if (option == "v"):
-                        verbose = True
-                    elif (option == "h"):
-                        return (0, (self.useage("mv"), []))
-            else:
-                files.append(arg)
-            args = args[1:]
-        target = args[0]
+        print (args)
+        while len(args) and len(args[0]) and args[0][0] == "-":
+            arg = args.pop(0)
+            for option in arg[1:]:
+                print (option)
+                if (option == "v"):
+                    verbose = True
+        files = args[:-1]
+        target = args[-1]
         tmp = self.filesystem.current
         if (len(files) == 1):
             ftype = self.filesystem.search_withaccess(files[0])
+            if ftype == None:
+                return (0, ([f"mv: could not find file {files[0]}"], []))
             ttype = NodeType.DIRECTORY if len(target.split(".")) == 1 else NodeType.FILE
             if ftype == ttype:
                 if (verbose):
-                    output[1].append(f"Renamed '${self.filesystem.current.name}' -> '{target}'")
+                    output[1].append(f"Renamed {self.filesystem.current.name} -> {target}")
                 self.filesystem.current.name = target
                 self.filesystem.current = tmp
                 return (0, output)
@@ -236,26 +234,29 @@ class CommandLine:
                         self.filesystem.current.items.pop(idx)
                         break
                 if (saved == None):
-                    return (2, ([], []))
+                    return (2, ([f"mv: could not find file {target}"], []))
                 self.filesystem.search(target)
                 self.filesystem.current.items.append(saved)
                 if (verbose):
-                    output[1].append(f"Moved '${files[0]}' to '{target}'")
+                    output[1].append(f"Moved {files[0]} to {target}")
                 self.filesystem.current = tmp
                 return (0, output)
         # multiple files were given
-        self.filesystem.search_withaccess(target)
+        self.filesystem.search(target)
         targetfnode = self.filesystem.current
         self.filesystem.current = tmp
         for file in files:
-            ftype = self.filesystem.search_withaccess(file)
-            if (ftype == None):
-                continue
+            ftype = self.filesystem.search(file)
+            print (f"ftype {ftype}")
+            if (ftype != ""):
+                output[0].append(f"mv: could not find file {file}")
             fnode = self.filesystem.current
+            if (fnode.parent is None): continue
+            fnode.parent.items = [item for item in fnode.parent.items if item.name != fnode.name]
             self.filesystem.current = targetfnode
             self.filesystem.current.items.append(fnode)
             if verbose:
-                output[1].append(f"Moved '${file}' to '${target}'")
+                output[1].append(f"Moved {file} to {target}")
             self.filesystem.current = tmp
         return (0, output)
     
