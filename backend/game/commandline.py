@@ -59,7 +59,6 @@ class CommandLine:
     
     def execute_andor(self, elem: AndOr) -> CommandReturn:
         status, (stderr, stdout) = self.execute_command(elem.first)
-        print (status)
         for (op, cmd) in elem.rest:
             if ((op == "&&" and not status) or (op == "||" and status)):
                 status, (tmperr, tmpout) = self.execute_command(cmd)
@@ -202,11 +201,9 @@ class CommandLine:
         if len(args) < 2:
             output[0].append("cp: expected at least two arguments")
         files = []
-        print (args)
         while len(args) and len(args[0]) and args[0][0] == "-":
             arg = args.pop(0)
             for option in arg[1:]:
-                print (option)
                 if (option == "v"):
                     verbose = True
         files = args[:-1]
@@ -247,7 +244,6 @@ class CommandLine:
         self.filesystem.current = tmp
         for file in files:
             ftype = self.filesystem.search(file)
-            print (f"ftype {ftype}")
             if (ftype != ""):
                 output[0].append(f"mv: could not find file {file}")
             fnode = self.filesystem.current
@@ -516,7 +512,6 @@ class CommandLine:
                 elif (arg == "-n"):
                     lines = int(args.pop(0))
                 elif (arg.startswith("--lines=")):
-                    print (f"arg - {arg}")
                     val = arg.split("=")[1]
                     if (val[0] == "-"):
                         rev = True
@@ -705,7 +700,7 @@ class CommandLine:
                         case "X":
                             extra["sortby"] = "ext"
                         case _:
-                            return (2, (["ls: unknown directory given"], []))
+                            return (2, (["ls: unknown argument given"], []))
             else:
                 target = arg
             args = args[1:]
@@ -714,7 +709,6 @@ class CommandLine:
         self.filesystem.current = saved_current
         for line in lines: 
             output[1].append(" ".join(line))
-        print (output)
         return (0, output)
     
     def find(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
@@ -726,10 +720,8 @@ class CommandLine:
         arg = args[0]
         if (error := self.filesystem.search(arg)):
             return (1, (["cd:" + error], []))
-        print ("aaaa")
         self.shell.cwd += "/" + arg
         self.filesystem.cwd += "/" + arg
-        print (self.filesystem.cwd)
         return (0, ([],[]))
     
     def ln(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:

@@ -68,6 +68,12 @@ def test_cmd_helps(cl, shell_empty):
             assert stderr == []
             assert stdout == f.readlines()
 
+####### Unknown #############
+def test_cmd_unknown(cl, shell_empty):
+    stderr, stdout = cl.enter_command("test abcd", shell_empty)
+    assert stderr == ["Unknown command given"]
+    assert stdout == []
+
 ######### ECHO #################
 def test_echo_basic(cl, shell_empty):
     # echo should return stdout containing the args joined
@@ -106,6 +112,16 @@ def test_ls_basic(cl, shell_fouritems):
     stderr, stdout = cl.enter_command('ls', shell_fouritems)
     assert stderr == []
     assert stdout == ['f1.txt','f2.txt','f3.txt','f4.txt']
+
+def test_ls_reverse(cl, shell_fouritems):
+    stderr, stdout = cl.enter_command('ls -r', shell_fouritems)
+    assert stderr == []
+    assert stdout == ['f4.txt','f3.txt','f2.txt','f1.txt']
+
+def test_ls_deep(cl, shell_basic):
+    stderr, stdout = cl.enter_command('ls -R', shell_basic)
+    assert stderr == []
+    assert stdout == ['f1.txt', 'f2.txt', 'd1', '/d1/f3.txt', '/d1/f4.txt']
 
 ####### CD ####################
 def test_cd_basic(cl, shell_basic: ShellState):
@@ -193,12 +209,12 @@ def test_head_count(cl, shell_basic: ShellState):
 
 ######## GREP ##############
 def test_grep_basic(cl, shell_basic: ShellState):
-    stderr, stdout = cl.enter_command('grep \"ERROR\" f1.txt', shell_basic)
+    stderr, stdout = cl.enter_command('grep ERROR f1.txt', shell_basic)
     assert stderr == []
     assert stdout == ["ERROR no", "ERROR no2"]
 
 def test_grep_count(cl, shell_basic: ShellState):
-    stderr, stdout = cl.enter_command('grep -c \"ERROR\" f1.txt', shell_basic)
+    stderr, stdout = cl.enter_command('grep -c ERROR f1.txt', shell_basic)
     assert stderr == []
     assert stdout == ["2"]
 
@@ -244,3 +260,70 @@ def test_andor(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('cd d1 && ls', shell_basic)
     assert stderr == []
     assert stdout == ["f3.txt", "f4.txt"]
+
+######### MV ##################
+def test_mv_rename(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('mv f1.txt', shell_basic)
+    assert stderr == ["cp: expected at least two arguments"]
+    assert stdout == []
+    # rename
+    stderr, stdout = cl.enter_command('mv f1.txt abc.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    assert isinstance(shell_basic.fs.get_file("abc.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
+
+    stderr, stdout = cl.enter_command('mv -v abc.txt f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == ["Renamed abc.txt -> f1.txt"]
+    assert isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("abc.txt"), FileNode)
+
+    stderr, stdout = cl.enter_command('mv abc.txt f4.txt', shell_basic)
+    assert stderr == ["mv: could not find file abc.txt"]
+    assert stdout == []
+    assert not isinstance(shell_basic.fs.get_file("f4.txt"), FileNode)
+
+def test_vm_move_norename(cl, shell_basic: ShellState):
+    #move to directory
+    stderr, stdout = cl.enter_command('mv f1.txt d1', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    assert isinstance(shell_basic.fs.get_file("d1/f1.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
+
+    stderr, stdout = cl.enter_command('mv -v f2.txt d1', shell_basic)
+    assert stderr == []
+    assert stdout == ["Moved f2.txt to d1"]
+    assert isinstance(shell_basic.fs.get_file("d1/f2.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("f2.txt"), FileNode)
+
+    stderr, stdout = cl.enter_command('mv f3.txt d1', shell_basic)
+    assert stderr == ["mv: could not find file f3.txt"]
+    assert stdout == []
+
+def test_vm_move_multiple(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('mv f1.txt f2.txt d1', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    assert isinstance(shell_basic.fs.get_file("d1/f1.txt"), FileNode)
+    assert isinstance(shell_basic.fs.get_file("d1/f2.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("f2.txt"), FileNode)
+
+    stderr, stdout = cl.enter_command('mv f5.txt f6.txt d1', shell_basic)
+    assert stderr == ["mv: could not find file f5.txt", "mv: could not find file f6.txt"]
+    assert stdout == []
+    assert not isinstance(shell_basic.fs.get_file("d1/f5.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("d1/f6.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("f5.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("f6.txt"), FileNode)
+
+def test_vm_move_multiple2(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('mv -v f1.txt f2.txt d1', shell_basic)
+    assert stderr == []
+    assert stdout == ["Moved f1.txt to d1", "Moved f2.txt to d1"]
+    assert isinstance(shell_basic.fs.get_file("d1/f1.txt"), FileNode)
+    assert isinstance(shell_basic.fs.get_file("d1/f2.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
+    assert not isinstance(shell_basic.fs.get_file("f2.txt"), FileNode)

@@ -33,8 +33,9 @@ class FileSystem:
         if (error := self.search("/".join(lst[0:-1]))) != "":
             self.current = saved_current
             return error
+        tmp = self.current
         self.current = saved_current
-        return self.current.access(lst[-1])
+        return tmp.access(lst[-1])
 
     def tree(self, path: str = "."):
         if (error := self.search(path)) != "":
