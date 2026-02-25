@@ -448,8 +448,8 @@ class CommandLine:
             return (0, ([], self.useage("touch")))
         files = []
         create = True
-        onlychangeaccess = False
-        onlychangemod = False
+        changeaccess = True
+        changemod = True
         date = datetime.datetime.now()
         while args:
             arg = args.pop(0)
@@ -460,21 +460,42 @@ class CommandLine:
                     if (arg == "--no-create"):
                         create = False
                     if (arg.startswith("--date=")):
-                        date = datetime.datetime.strptime(arg.split("=")[1], "%Y-%m-%d").date()
+                        date = datetime.datetime.strptime(arg.split("=")[1], "%Y-%m-%d")
                 else:
                     for option in arg[1:]:
                         match option:
                             case "c":
                                 create = False
                             case "a":
-                                onlychangeaccess = True
+                                changeaccess = True
+                                changemod = False
                             case "m":
-                                onlychangemod = True
+                                changeaccess = False
+                                changemod = True
                             case "d":
-                                date = datetime.datetime.strptime(args.pop(0), "%Y-%m-%d").date()
+                                date = datetime.datetime.strptime(args.pop(0), "%Y-%m-%d")
                                 break
+                            case "t":
+                                date = datetime.datetime.strptime(args.pop(0), "%Y%m%d%H%M")
+                                break
+                            case _:
+                                return (1, (["touch: unknown argument given"], []))
             else:
                 files.append(arg)
+        for file in files:
+            sc = self.filesystem.current
+            ty = self.filesystem.search(file)
+            if (ty != "" and not create): 
+                #file not found and can create
+                self.filesystem.current = sc
+                self.filesystem.add_file(file)
+                self.filesystem.search(file)
+            fn = self.filesystem.current
+            self.filesystem.current = sc
+            if (changeaccess):
+                fn.inode.atime = date
+            if (changemod):
+                fn.inode.mtime = date
         return (0, ([], []))
 
     def cat(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
