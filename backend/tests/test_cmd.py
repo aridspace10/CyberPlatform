@@ -207,6 +207,40 @@ def test_head_count(cl, shell_basic: ShellState):
     for i in range(r, 0):
         assert stdout[-i] == str(i)
 
+######### TOUCH ############
+def test_touch_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('touch --no-create f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    assert isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
+
+    stderr, stdout = cl.enter_command('touch f3.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+
+    stderr, stdout = cl.enter_command('touch -c f4.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    assert not isinstance(shell_basic.fs.get_file("f4.txt"), FileNode)
+
+    stderr, stdout = cl.enter_command('touch -x', shell_basic)
+    assert stderr == ["touch: unknown argument given"]
+    assert stdout == []
+
+    stderr, stdout = cl.enter_command('touch -a --date=2025-01-01 f2.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    fn = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    assert fn.inode.atime != fn.inode.mtime
+
+    stderr, stdout = cl.enter_command('touch -m --date=2025-02-01 f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    fn = shell_basic.fs.get_file("f1.txt")
+    assert isinstance(fn, FileNode)
+    assert fn.inode.atime != fn.inode.mtime
+
 ######## GREP ##############
 def test_grep_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('grep ERROR f1.txt', shell_basic)
