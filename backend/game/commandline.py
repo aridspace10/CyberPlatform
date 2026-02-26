@@ -466,6 +466,7 @@ class CommandLine:
                         match option:
                             case "c":
                                 create = False
+                                break
                             case "a":
                                 changeaccess = True
                                 changemod = False
@@ -485,8 +486,9 @@ class CommandLine:
         for file in files:
             sc = self.filesystem.current
             ty = self.filesystem.search(file)
-            if (ty != "" and not create): 
-                #file not found and can create
+            if (ty != ""): 
+                if (not create):
+                    continue
                 self.filesystem.current = sc
                 self.filesystem.add_file(file)
                 self.filesystem.search(file)
