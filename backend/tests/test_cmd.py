@@ -418,3 +418,15 @@ def test_semicolon_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('cd d1; ls', shell_basic)
     assert stderr == []
     assert stdout == ["f3.txt", "f4.txt"]
+
+########## VAR #####################
+def test_var_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('X=5', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    assert shell_basic.env["X"] == "5"
+
+    stderr, stdout = cl.enter_command('echo $X', shell_basic)
+    assert stderr == []
+    assert stdout == ["5"]
+
