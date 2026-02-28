@@ -5,6 +5,7 @@ from game.commandline import CommandLine
 from game.ShellState import ShellState
 from game.filesystem import FileSystem
 from game.filenode import FileNode, Inode, NodeType
+from wonderwords import RandomWord
 
 # Basic helpers to create a filesystem with one file
 @pytest.fixture
@@ -430,3 +431,47 @@ def test_var_basic(cl, shell_basic: ShellState):
     assert stderr == []
     assert stdout == ["5"]
 
+######## SORT ######################
+def setup_names(s: ShellState, name: str) -> list[str]:
+    amount = random.randint(0, 25)
+    names = []
+    r = RandomWord()
+    for _ in range(0, amount):
+        names.append(r.word())
+    s.fs.search(name)
+    s.fs.current.set_data('\n'.join(names))
+    s.fs.current = s.fs.filehead
+    names.sort()
+    return names
+
+def test_sort_basic(cl, shell_basic: ShellState):
+    names = setup_names(shell_basic, "f2.txt")
+    stderr, stdout = cl.enter_command('sort f2.txt', shell_basic)
+    assert stderr == []
+    for i in range(0, len(names)):
+        assert stdout[i] == names[i]
+    stderr, stdout = cl.enter_command('sort -o s1.txt f2.txt', shell_basic)
+    shell_basic.fs.search("s1.txt")
+    data = shell_basic.fs.current.get_data().split("\n")
+    shell_basic.fs.current = shell_basic.fs.filehead
+    assert stderr == []
+    assert stdout == []
+    for i in range(0, len(names)):
+        assert data[i] == names[i]
+
+def test_sort_random(cl, shell_basic: ShellState):
+    names = setup_names(shell_basic, "f2.txt")
+    name = random.choice(names)
+    names.append(name)
+    fn = shell_basic.fs.get_file("f2.txt")
+    print (shell_basic.fs.current)
+    assert isinstance(fn, FileNode)
+    fn.append_data(name)
+    stderr, stdout = cl.enter_command('sort -R f2.txt', shell_basic)
+    assert stderr == []
+    print (f"f: {stdout}")
+    for i in range(0, len(names)-1):
+        if (stdout[i] == name):
+            assert stdout[i+1] == name
+            return
+    assert False
