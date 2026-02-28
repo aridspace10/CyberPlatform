@@ -108,8 +108,25 @@ class CommandLine:
                 else:
                     args.append(arg)
             return self.run_command(args, fdin)
-        elif (isinstance(atom, Subshell)):
-            return self.execute_sequence(atom.sequence.parts)
+        elif isinstance(atom, Subshell):
+            # save state
+            saved_cwd = self.shell.cwd
+            saved_env = self.shell.env.copy()
+            saved_fs_current = self.filesystem.current
+            saved_fs_cwd = self.filesystem.cwd
+            saved_fdin = self.fdin
+            saved_fdout = self.fdout
+            #execute
+            status, (stderr, stdout) = self.execute_sequence(atom.sequence.parts)
+            #restore state
+            self.shell.cwd = saved_cwd
+            self.shell.env = saved_env
+            self.filesystem.current = saved_fs_current
+            self.filesystem.cwd = saved_fs_cwd
+            self.fdin = saved_fdin
+            self.fdout = saved_fdout
+
+            return (status, (stderr, stdout))
         elif (isinstance(atom, VarDeclaration)):
             self.shell.env[atom.name] = atom.value
             return (0, ([], []))
@@ -764,10 +781,12 @@ class CommandLine:
         target = args[0]
         destination = args[1]
         saved_current = self.filesystem.current
-        self.filesystem.search_withaccess(target)
+        if (err := self.filesystem.search(target)) != "":
+            return (1, ([err], []))
         target_inode = self.filesystem.current.inode
         self.filesystem.current = saved_current
-        self.filesystem.add(destination)
+        self.filesystem.add_file(destination)
+        self.filesystem.search(destination)
         if (linkty == "hard"):
             self.filesystem.current.inode = target_inode
             self.filesystem.current.inode.link_count += 1
