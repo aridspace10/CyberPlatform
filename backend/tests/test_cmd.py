@@ -385,3 +385,17 @@ def test_vm_move_multiple2(cl, shell_basic: ShellState):
     assert isinstance(shell_basic.fs.get_file("d1/f2.txt"), FileNode)
     assert not isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
     assert not isinstance(shell_basic.fs.get_file("f2.txt"), FileNode)
+
+########## SUBSHELL #################
+def test_subshell_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('(cd d1 && ls)', shell_basic)
+    assert stderr == []
+    assert stdout == ["f3.txt", "f4.txt"]
+    stderr, stdout = cl.enter_command('ls', shell_basic)
+    assert stderr == []
+    assert stdout == ["f1.txt", "f2.txt", "d1"]
+
+def test_semicolon_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('cd d1; ls', shell_basic)
+    assert stderr == []
+    assert stdout == ["f3.txt", "f4.txt"]
