@@ -72,6 +72,9 @@ class CommandLine:
 
     def execute_command(self, command: Command) -> CommandReturn:
         redirs = command.pre_redirs + command.post_redirs
+        for assign in command.assignments:
+            self.shell.env[assign.name] = assign.value
+
         for redir in redirs:
             if (redir.op == "<"):
                 self.fdin = self.get_fd(redir.target)
@@ -110,7 +113,7 @@ class CommandLine:
                 else:
                     args.append(arg)
             return self.run_command(args, fdin)
-        elif isinstance(atom, Subshell):
+        else:
             # save state
             saved_cwd = self.shell.cwd
             saved_env = self.shell.env.copy()
@@ -127,11 +130,7 @@ class CommandLine:
             self.filesystem.cwd = saved_fs_cwd
             self.fdin = saved_fdin
             self.fdout = saved_fdout
-
             return (status, (stderr, stdout))
-        elif (isinstance(atom, VarDeclaration)):
-            self.shell.env[atom.name] = atom.value
-            return (0, ([], []))
 
     def execute_sequence(self, parts: list[Pipe]) -> CommandReturn:
         last_status = 0
@@ -143,6 +142,8 @@ class CommandLine:
         return last_status, (stdout, stderr)
  
     def run_command(self, args: list[str], fdin: FileNode) -> CommandReturn:
+        if (not (len(args))):
+            return (0, ([], []))
         match args[0]:
             case "ls":
                 return self.ls(args[1:], fdin)
