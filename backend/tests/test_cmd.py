@@ -102,6 +102,12 @@ def test_mkdir_verbose(cl, shell_empty: ShellState):
     assert len(shell_empty.fs.current.items) == 1
     assert shell_empty.fs.current.items[0].name == "a"
 
+def test_mkdir_error(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command('mkdir a/b', shell_empty)
+    assert stderr == ['No directory named a']
+    assert stdout == []
+    assert len(shell_empty.fs.current.items) == 0
+
 ######### LS ###################
 def test_ls_empty(cl, shell_empty):
     stderr, stdout = cl.enter_command('ls', shell_empty)
@@ -240,6 +246,19 @@ def test_touch_basic(cl, shell_basic: ShellState):
     fn = shell_basic.fs.get_file("f1.txt")
     assert isinstance(fn, FileNode)
     assert fn.inode.atime != fn.inode.mtime
+
+def test_touch_error(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('touch', shell_basic)
+    assert stderr == ["touch: must give atleast one argument"]
+    assert stdout == []
+
+    stderr, stdout = cl.enter_command('touch a/f1.txt', shell_basic)
+    assert stderr == ["No directory named a"]
+    assert stdout == []
+
+    stderr, stdout = cl.enter_command('touch -a', shell_basic)
+    assert stderr == ["touch: no file given"]
+    assert stdout == []
 
 ######## GREP ##############
 def test_grep_basic(cl, shell_basic: ShellState):
