@@ -21,11 +21,12 @@ TOKEN_SPEC = [
     ("LPAREN",   r"\("),
     ("RPAREN",   r"\)"),
     ("EQUAL",    r"="),
-    ("WORD",     r"[^\s|&;()]+"),
+    ("WORD", r"[^\s|&;()<>$]+"),
     ("SKIP",     r"[ \t]+"),
 ]
 
 master = re.compile("|".join(f"(?P<{name}>{regex})" for name, regex in TOKEN_SPEC))
+_assign_re = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)=(.*)$')
 
 Identifier = str
 
@@ -56,6 +57,7 @@ class Command:
     atom: Atom
     pre_redirs: list[Redirection]
     post_redirs: list[Redirection]
+    assignments: list[VarDeclaration]
 
 @dataclass
 class AndOr:
@@ -136,10 +138,31 @@ class Parser:
         return result
 
     def parse_command(self) -> Command:
-        pre = self.parse_redirections()
+        pre_redirs = self.parse_redirections()
+
+        # --- assignment prefix parsing ---
+        assignments = []
+        while ((p := self.peek()) and p.type == "WORD"):
+            m = _assign_re.match(p.value)
+            if not m:
+                break
+            self.consume()  # consume the WORD
+            assignments.append(VarDeclaration(m.group(1), m.group(2)))
+
+        # If we saw assignments but no command follows,
+        # this is a declaration-only command.
+        if ((p := self.peek()) is None or p.type not in ("WORD", "LPAREN")):
+            if not assignments:
+                raise SyntaxError("expected command")
+            # treat as declaration statement
+            # wrap them into a SimpleCommand-like no-op
+            atom = SimpleCommand([])
+            post_redirs = self.parse_redirections()
+            return Command(atom, pre_redirs, post_redirs, assignments)
+
         atom = self.parse_atom()
-        post = self.parse_redirections()
-        return Command(atom, pre, post)
+        post_redirs = self.parse_redirections()
+        return Command(atom, pre_redirs, post_redirs, assignments)
 
     def parse_atom(self):
         if ((p := self.peek()) and p.type == "LPAREN"):
@@ -159,12 +182,8 @@ class Parser:
                 args.append(tmp.value)
             else:
                 break
-        if ((p := self.peek()) and p.type == "EQUAL"):
-            self.consume()
-            val = self.consume("WORD")
-            if val is None:
-                raise Exception()
-            return VarDeclaration(args[0], val.value)
+        if not args:
+            raise SyntaxError("expected command name")
         else:
             return SimpleCommand(args)
 
