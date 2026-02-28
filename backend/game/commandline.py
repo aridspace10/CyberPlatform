@@ -37,8 +37,10 @@ class CommandLine:
             self.filesystem.cwd = shell.cwd
         self.shell = shell
         tokens = lex(raw)
+        print (tokens)
         parser = Parser(tokens)
         ast = parser.parse()
+        print (ast)
         if isinstance(ast, Sequence):
             shell.ls, (stderr, stdout) = self.execute_sequence(ast.parts)
             return (stderr, stdout)
@@ -463,11 +465,14 @@ class CommandLine:
     def touch(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if "--help" in args:
             return (0, ([], self.useage("touch")))
+        if (not len(args)):
+            return (1, (["touch: must give atleast one argument"], []))
         files = []
         create = True
         changeaccess = True
         changemod = True
         date = datetime.datetime.now()
+        output = ([], [])
         while args:
             arg = args.pop(0)
             if (arg == "-"):
@@ -500,9 +505,14 @@ class CommandLine:
                                 return (1, (["touch: unknown argument given"], []))
             else:
                 files.append(arg)
+        if (not len(files)):
+            return (1, (["touch: no file given"], []))
         for file in files:
             sc = self.filesystem.current
             ty = self.filesystem.search(file)
+            if (ty.startswith("No directory named") and len(file.split("/")) > 1):
+                output[0].append(ty)
+                continue
             if (ty != ""): 
                 if (not create):
                     continue
@@ -515,7 +525,7 @@ class CommandLine:
                 fn.inode.atime = date
             if (changemod):
                 fn.inode.mtime = date
-        return (0, ([], []))
+        return (0, output)
 
     def cat(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         output = ([], [])
