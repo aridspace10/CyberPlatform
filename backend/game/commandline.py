@@ -37,10 +37,8 @@ class CommandLine:
             self.filesystem.cwd = shell.cwd
         self.shell = shell
         tokens = lex(raw)
-        print (tokens)
         parser = Parser(tokens)
         ast = parser.parse()
-        print (ast)
         if isinstance(ast, Sequence):
             shell.ls, (stderr, stdout) = self.execute_sequence(ast.parts)
             return (stderr, stdout)
@@ -859,7 +857,7 @@ class CommandLine:
                     file = "-"
                     continue
                 for option in arg[1:]:
-                    match (arg):
+                    match (option):
                         case "b":
                             igblanks = True
                         case "r":
@@ -878,11 +876,13 @@ class CommandLine:
                             clean = True
                         case _:
                             return (2, ([f"sort: unknown option given ({arg})"], []))
+            else:
+                file = arg
         if (file == "" or file == "-"):
             content = input.get_data().split("\n") 
         else:
             saved_current = self.filesystem.current
-            self.filesystem.search_withaccess(file)
+            self.filesystem.search(file)
             content = self.filesystem.current.get_data().split("\n")
             self.filesystem.current = saved_current
         for idx, line in enumerate(content):
@@ -912,10 +912,12 @@ class CommandLine:
                 while vid < len(modified) and modified[vid] == element:
                     r.append(modified.pop(vid))
             modified = r
-            return (0, ([], []))
         if output:
             saved_current = self.filesystem.current
-            self.filesystem.search_withaccess(file)
+            if (self.filesystem.search(output) != ""):
+                self.filesystem.add_file(output)
+                self.filesystem.search(output)
             self.filesystem.current.set_data("\n".join(modified))
             self.filesystem.current = saved_current
+            return (0, ([], []))
         return (0, ([], modified))
