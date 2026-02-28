@@ -295,6 +295,30 @@ def test_andor(cl, shell_basic: ShellState):
     assert stderr == []
     assert stdout == ["f3.txt", "f4.txt"]
 
+######## LN ###################
+def test_ln_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('ln f1.txt s1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    f1, f2 = shell_basic.fs.get_file("f1.txt"), shell_basic.fs.get_file("s1.txt")
+    assert isinstance(f1, FileNode)
+    assert isinstance(f2, FileNode)
+    assert f1.get_data() == f2.get_data()
+    stderr, stdout = cl.enter_command('echo "Example" >> f1.txt', shell_basic)
+    f1, f2 = shell_basic.fs.get_file("f1.txt"), shell_basic.fs.get_file("s1.txt")
+    assert isinstance(f1, FileNode)
+    assert isinstance(f2, FileNode)
+    assert stderr == []
+    assert stdout == []
+    assert f1.get_data() == f2.get_data()
+    stderr, stdout = cl.enter_command('echo "Example2" >> s1.txt', shell_basic)
+    f1, f2 = shell_basic.fs.get_file("f1.txt"), shell_basic.fs.get_file("s1.txt")
+    assert isinstance(f1, FileNode)
+    assert isinstance(f2, FileNode)
+    assert stderr == []
+    assert stdout == []
+    assert f1.get_data() == f2.get_data()
+
 ######### MV ##################
 def test_mv_rename(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('mv f1.txt', shell_basic)
