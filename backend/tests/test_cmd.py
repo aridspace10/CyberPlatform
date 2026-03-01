@@ -433,7 +433,7 @@ def test_var_basic(cl, shell_basic: ShellState):
 
 ######## SORT ######################
 def setup_names(s: ShellState, name: str) -> list[str]:
-    amount = random.randint(0, 25)
+    amount = random.randint(5, 25)
     names = []
     r = RandomWord()
     for _ in range(0, amount):
@@ -450,6 +450,36 @@ def test_sort_basic(cl, shell_basic: ShellState):
     assert stderr == []
     for i in range(0, len(names)):
         assert stdout[i] == names[i]
+
+def test_sort_random(cl, shell_basic: ShellState):
+    names = setup_names(shell_basic, "f2.txt")
+    name = random.choice(names)
+    names.append(name)
+    fn = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    fn.append_data(name)
+    stderr, stdout = cl.enter_command('sort -R f2.txt', shell_basic)
+    assert stderr == []
+    for i in range(0, len(names)-1):
+        if (stdout[i] == name):
+            assert stdout[i+1] == name
+            return
+    assert False
+
+def test_sort_dups(cl, shell_basic: ShellState):
+    names = setup_names(shell_basic, "f2.txt")
+    name = random.choice(names)
+    fn = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    fn.append_data(name)
+    stderr, stdout = cl.enter_command('sort -u f2.txt', shell_basic)
+    assert stderr == []
+    assert len(stdout) == len(names)
+    for i in range(0, len(names)):
+        assert stdout[i] == names[i]
+
+def test_sort_sorted(cl, shell_basic: ShellState):
+    names = setup_names(shell_basic, "f2.txt")
     stderr, stdout = cl.enter_command('sort -o s1.txt f2.txt', shell_basic)
     shell_basic.fs.search("s1.txt")
     data = shell_basic.fs.current.get_data().split("\n")
@@ -458,20 +488,17 @@ def test_sort_basic(cl, shell_basic: ShellState):
     assert stdout == []
     for i in range(0, len(names)):
         assert data[i] == names[i]
-
-def test_sort_random(cl, shell_basic: ShellState):
-    names = setup_names(shell_basic, "f2.txt")
-    name = random.choice(names)
-    names.append(name)
-    fn = shell_basic.fs.get_file("f2.txt")
-    print (shell_basic.fs.current)
-    assert isinstance(fn, FileNode)
-    fn.append_data(name)
-    stderr, stdout = cl.enter_command('sort -R f2.txt', shell_basic)
+    stderr, stdout = cl.enter_command('sort -C s1.txt', shell_basic)
     assert stderr == []
-    print (f"f: {stdout}")
-    for i in range(0, len(names)-1):
-        if (stdout[i] == name):
-            assert stdout[i+1] == name
-            return
-    assert False
+    assert stdout == []
+    assert shell_basic.ls == 0
+    stderr, stdout = cl.enter_command('sort -C f2.txt', shell_basic)
+    assert stderr == []
+    assert stdout == []
+    assert shell_basic.ls == 1
+    stderr, stdout = cl.enter_command('sort -c f2.txt', shell_basic)
+    assert len(stderr)
+    assert stderr[0].startswith("sort:")
+    assert stdout == []
+    assert shell_basic.ls == 1
+    
