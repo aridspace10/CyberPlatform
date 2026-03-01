@@ -46,13 +46,27 @@ class CommandLine:
             return ([], ["Admin Error: Code AAA112"]) 
 
     def execute_pipe(self, parts: list[AndOr]) -> CommandReturn:
-        self.fdin = None
-        self.fdout = None
-        status, stderr, stdout = 0, [], []
+        status = 0
+        stderr, stdout = [], []
+
+        prev_pipe = None  # holds virtual pipe between commands
+
         for part in parts:
-            self.fdin = self.fdout
+            # feed previous pipe into next command
+            self.fdin = prev_pipe
             self.fdout = None
+
             status, (stderr, stdout) = self.execute_andor(part)
+
+            # create a new pipe from stdout for next command
+            if stdout:
+                pipe_inode = Inode(NodeType.FILE)
+                pipe_node = FileNode(None, "pipe", pipe_inode)
+                pipe_node.set_data("\n".join(stdout))
+                prev_pipe = pipe_node
+            else:
+                prev_pipe = None
+
         self.fdin = None
         self.fdout = None
         return (status, (stderr, stdout))
@@ -100,6 +114,7 @@ class CommandLine:
         if (isinstance(atom, SimpleCommand)):
             if self.fdin is None:
                 fdin = FileNode(None, "stdin", Inode(NodeType.FILE))
+                fdin.set_data("")
             elif isinstance(self.fdin, str):
                 return (1, ([], ["Admin Error: AAA113"]))
             else:
@@ -368,6 +383,7 @@ class CommandLine:
         for file in files:
             if (file == "-"):
                 ty = input.inode.type
+                print (f"data: {input.inode.data}")
                 self.filesystem.current = input
             else:
                 ty = self.filesystem.search_withaccess(file)
@@ -849,6 +865,7 @@ class CommandLine:
         scheck = False
         fold = False
         clean = False
+        remove_dups = False
         output = ""
         while args:
             arg = args.pop(0)
@@ -874,6 +891,8 @@ class CommandLine:
                             fold = True
                         case "i":
                             clean = True
+                        case "u":
+                            remove_dups = True
                         case _:
                             return (2, ([f"sort: unknown option given ({arg})"], []))
             else:
@@ -901,6 +920,8 @@ class CommandLine:
                     else:
                         return (1, ([f"sort: {file}:{i}: disorder: {content[i]}"], []))
             return (0, ([], []))
+        if remove_dups:
+            modified = list(dict.fromkeys(modified))
         if randomize:
             r = []
             while len(modified):
