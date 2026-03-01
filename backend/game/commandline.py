@@ -847,12 +847,8 @@ class CommandLine:
             self.filesystem.search_withaccess(file)
             input = self.filesystem.current
         data = input.get_data().split("\n")
-        output = ([], [])
-        index = 1
-        while (index != len(data)):
-            if (data[index-1] != data[index]):
-                output[1].append(data[index-1])
-        return (0, output)
+        output = list(dict.fromkeys(data))
+        return (0, ([], output))
 
     def sort(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if "--help" in args:

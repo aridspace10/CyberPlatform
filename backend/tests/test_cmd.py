@@ -508,14 +508,14 @@ def test_pipes_lsgrep(cl, shell_basic: ShellState):
     assert stderr == []
     assert stdout == ["f1.txt", "f2.txt"]
 
-# def test_pipes_sortuniq(cl, shell_basic: ShellState):
-#     names = setup_names(shell_basic, "f2.txt")
-#     name = random.choice(names)
-#     fn = shell_basic.fs.get_file("f2.txt")
-#     assert isinstance(fn, FileNode)
-#     fn.append_data(name)
-#     stderr, stdout = cl.enter_command('sort file.txt | uniq', shell_basic)
-#     assert stderr == []
-#     assert len(stdout) == len(names)
-#     for i in range(0, len(names)):
-#         assert stdout[i] == names[i]
+def test_pipes_sortuniq(cl, shell_basic: ShellState):
+    names = setup_names(shell_basic, "f2.txt")
+    name = random.choice(names)
+    fn = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    fn.append_data(name)
+    stderr, stdout = cl.enter_command('sort f2.txt | uniq', shell_basic)
+    assert stderr == []
+    assert len(stdout) == len(names)
+    for i in range(0, len(names)):
+        assert stdout[i] == names[i]
