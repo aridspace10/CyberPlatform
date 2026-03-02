@@ -39,27 +39,6 @@ class FileSystem:
         self.current = saved_current
         return tmp.access(lst[-1])
 
-    def tree(self, path: str = "."):
-        if (error := self.search(path)) != "":
-            return error
-        lx = self.current.depth * 4
-        nodes = self.current.preorder_traversal([], 0)
-        print (nodes)
-        output = [[' ' for _ in range(lx)] for _ in range(len(nodes))]
-        idx = 0
-        for node in nodes:
-            output[idx][node[0]] = node[1]
-            if (len(node[1]) > 2):
-                idx += 1
-        for col in range(0, lx):
-            biggest = 0
-            for row in range(len(nodes)):
-                if (new := len(output[row][col])) > biggest:
-                    biggest = new
-            for row in range(len(nodes)):
-                output[row][col] = output[row][col] + " " * (biggest - len(output[row][col]))
-        return output
-
     def list_files(self, path: str, deep: int = 0, detail: int = 0, extras: dict[str, bool | str] = {}) -> list[list[str]] | str:
         if (path != ""):
             if (error := self.search(path)) != "":
