@@ -51,13 +51,11 @@ class FileSystem:
             output[idx][node[0]] = node[1]
             if (len(node[1]) > 2):
                 idx += 1
-        print (output)
         for col in range(0, lx):
             biggest = 0
             for row in range(len(nodes)):
                 if (new := len(output[row][col])) > biggest:
                     biggest = new
-            print (biggest)
             for row in range(len(nodes)):
                 output[row][col] = output[row][col] + " " * (biggest - len(output[row][col]))
         return output
@@ -122,13 +120,13 @@ class FileSystem:
     def add_directory(self, path: str, creating: bool = False, permissions: dict = {}) -> str:
         saved_current = self.current
         lst = path.split("/")
-        if (error := self.search("/".join(lst[0:-1]), creating)) != "":
-            self.current = saved_current
-            return error
-        inode = Inode(NodeType.DIRECTORY)
-        self.current = self.current.add_child(lst[-1], inode)
+        error = ""
+        if (error := self.search("/".join(lst[0:-1]), creating)) == "":
+            inode = Inode(NodeType.DIRECTORY)
+            with self._lock:
+                error = self.current.add_child(lst[-1], inode)
         self.current = saved_current
-        return ""
+        return error
 
     def add_file(self, path: str):
         saved_current = self.current
