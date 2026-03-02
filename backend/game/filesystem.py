@@ -1,9 +1,11 @@
 from .filenode import FileNode
 from typing import Literal, Tuple
 from .inode import Inode, NodeType
+import threading
 
 class FileSystem:
     def __init__(self):
+        self._lock = threading.RLock()
         inode = Inode(NodeType.DIRECTORY)
         self.filehead = FileNode(None, "root", inode)
         self.current: FileNode = self.filehead
