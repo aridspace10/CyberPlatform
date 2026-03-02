@@ -67,14 +67,17 @@ class FileNode:
             content.append((move, self.name))
         return content
 
-    def add_child(self, name: str, inode: Inode) -> FileNode:
+    def add_child(self, name: str, inode: Inode) -> str:
+        for f in self.items:
+            if f.name == name:
+                return f"File Already exists with name - {name}"
         file = FileNode(self, name, inode)
         if (not len(self.items)):
             self.depth = 1
             if (self.parent is not None):
                 self.parent.accumualate_depth()
         self.items.append(file)
-        return file
+        return ""
     
     def search(self, name: str) -> NodeType | None:
         for item in self.items:
