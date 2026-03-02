@@ -21,6 +21,7 @@ class GameSession:
         self.players: Dict[str, Player] = {}
         self.connections: Dict[WebSocket, str] = {}
         self.cmd = CommandLine()
+        self.game_manger = GameManger()
 
     def get_player(self, websocket: WebSocket) -> Player | None:
         username = self.connections.get(websocket)
