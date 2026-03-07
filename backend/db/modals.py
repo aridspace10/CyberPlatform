@@ -1,5 +1,4 @@
 from sqlalchemy import Column, DateTime, Integer, String, JSON, ForeignKey
-from .modals import Base
 from sqlalchemy.orm import DeclarativeBase
 import datetime
 
@@ -29,8 +28,8 @@ class Game(Base):
 
 class scenario_to_game(Base):
     __tablename__ = "scenariosToGame"
-    scenarioID = Column(Integer, ForeignKey("scenarios.id"))
-    gameID = Column(Integer, ForeignKey("game.id"))
+    scenarioID = Column(Integer, ForeignKey("scenarios.id"), primary_key=True)
+    gameID = Column(Integer, ForeignKey("game.id"), primary_key=True)
     config = Column(JSON)
 
 class SessionModel(Base):
@@ -45,6 +44,6 @@ class SessionModel(Base):
 
 class User(Base):
     __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True)
+    email = Column(String)
