@@ -1,5 +1,6 @@
-from sqlalchemy import Column, DateTime, Integer, String, JSON
+from sqlalchemy import Column, DateTime, Integer, String, JSON, ForeignKey
 from .modals import Base
+from sqlalchemy.orm import DeclarativeBase
 import datetime
 
 class Base(DeclarativeBase):
@@ -26,10 +27,10 @@ class Game(Base):
     title = Column(String)
     date = Column(String)
 
-class ScenarioToGame(Base):
+class scenario_to_game(Base):
     __tablename__ = "scenariosToGame"
-    scenarioID = Column(Integer, foreign_key=True)
-    gameID = Column(Integer, game_key=True)
+    scenarioID = Column(Integer, ForeignKey("scenarios.id"))
+    gameID = Column(Integer, ForeignKey("game.id"))
     config = Column(JSON)
 
 class SessionModel(Base):
@@ -41,3 +42,9 @@ class SessionModel(Base):
 
     # Entire serialized game state
     data = Column(JSON)
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True)
