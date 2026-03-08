@@ -10,6 +10,14 @@ class FileNode:
         self.depth = 0
         self.items: list[FileNode] = []
         self.inode: Inode = inode
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "depth": self.depth,
+            "inode": self.inode.to_dict(),
+            "items": [item.to_dict() for item in self.items]
+        }
     
     def __str__(self):
         return f"name: {self.name}, items: {self.items}, size: {self.inode.size}"

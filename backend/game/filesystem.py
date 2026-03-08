@@ -9,6 +9,12 @@ class FileSystem:
         self.current: FileNode = self.filehead
         self.lcs = 0
         self.cwd = ""
+    
+    def to_dict(self) -> dict:
+        return {
+            "lcs": self.lcs,
+            "nodes": self.filehead.to_dict()
+        }
 
     def setup_system(self, textfile):
         with open(textfile) as f:

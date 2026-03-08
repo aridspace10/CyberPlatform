@@ -31,6 +31,18 @@ class Inode:
         self.ctime = now
         self.atime = now
         self.mtime = now
+    
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "data": self.data,
+            "permissions": self.permissions,
+            "btimes": self.btime,
+            "ctimes": self.ctime,
+            "atimes": self.atime,
+            "mtimes": self.mtime,
+        }
 
     @property
     def size(self):
