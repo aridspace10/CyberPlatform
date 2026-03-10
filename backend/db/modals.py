@@ -5,42 +5,23 @@ import datetime
 class Base(DeclarativeBase):
     pass
 
-class Environment(Base):
-    __tablename__ = "environments"
-
-    id = Column(Integer, primary_key=True)
+class Scenario(Base):
+    __tablename__ = "Scenario"
     name = Column(String)
-    created_at = Column(DateTime)
-    snapshot = Column(JSON)
-
-class ScenarioInfo(Base):
-    __tablename__ = "scenarios"
-
-    id = Column(Integer, primary_key=True)
-    title = Column(String)
     description = Column(String)
-
-class Game(Base):
-    __tablename__ = "game"
-    id = Column(Integer, primary_key=True)
-    title = Column(String)
-    date = Column(String)
-
-class scenario_to_game(Base):
-    __tablename__ = "scenariosToGame"
-    scenarioID = Column(Integer, ForeignKey("scenarios.id"), primary_key=True)
-    gameID = Column(Integer, ForeignKey("game.id"), primary_key=True)
     config = Column(JSON)
 
-class SessionModel(Base):
-    __tablename__ = "sessions"
-
-    session_id = Column(String, primary_key=True, index=True)
+class Session(Base):
+    __tablename__ = "SessionID"
+    id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
-    state = Column(String)
+    creatorID = Column(Integer, ForeignKey("users.id"))
 
-    # Entire serialized game state
-    data = Column(JSON)
+class scenario_to_session(Base):
+    __tablename__ = "scenariosToGame"
+    scenarioID = Column(Integer, ForeignKey("scenarios.id"), primary_key=True)
+    sessionID = Column(Integer, ForeignKey("game.id"), primary_key=True)
+    config = Column(JSON)
 
 class User(Base):
     __tablename__ = "users"
