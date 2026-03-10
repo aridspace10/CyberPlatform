@@ -14,10 +14,22 @@ class FileNode:
     def to_dict(self) -> dict:
         return {
             "name": self.name,
-            "depth": self.depth,
             "inode": self.inode.to_dict(),
             "items": [item.to_dict() for item in self.items]
         }
+
+    def from_dict(self, fn: dict, depth: int, parent: FileNode | None) -> None:
+        try:
+            self.name = fn["name"]
+            self.depth = depth
+            self.inode.from_dict(fn["inode"])
+            for item in fn["items"]:
+                inode = Inode(item["type"])
+                f = FileNode(parent, item["name"], inode)
+                f.from_dict(item, depth + 1, self)
+                self.items.append(f)
+        except:
+            raise Exception("Syncronization Error")
     
     def __str__(self):
         return f"name: {self.name}, items: {self.items}, size: {self.inode.size}"
