@@ -28,7 +28,7 @@ Segment = str | VarUse
 @dataclass
 class VarDeclaration:
     name: Identifier
-    value: Identifier
+    value: Word
 
 @dataclass
 class SimpleCommand:
@@ -197,9 +197,24 @@ class Parser:
 
         # --- assignment prefix parsing ---
         assignments = []
-        while ((p := self.peek()) and p.type == "WORD"):
-            self.consume()  # consume the WORD
-            assignments.append(VarDeclaration(m.group(1), m.group(2)))
+        while True:
+            p = self.peek()
+
+            if p is None or p.type != "WORD":
+                break
+
+            # check if next token is =
+            if self.pos + 1 >= len(self.tokens) or self.tokens[self.pos + 1].type != "EQUAL":
+                break
+
+            name = self.consume("WORD").value
+            self.consume("EQUAL")
+
+            value_word = self.parse_word()
+            if value_word is None:
+                raise SyntaxError("expected value after assignment")
+
+            assignments.append(VarDeclaration(name, value_word))
 
         # If we saw assignments but no command follows,
         # this is a declaration-only command.
@@ -263,9 +278,9 @@ class Parser:
         self.consume("RPAREN")
         return Subshell(node)
 
-# text = "echo hello | grep hi && pwd"
-# tokens = lex(text)
-# parser = Parser(tokens)
-# ast = parser.parse()
+text = "echo hello | grep hi && pwd"
+tokens = lex(text)
+parser = Parser(tokens)
+ast = parser.parse()
 
-# print(ast)
+print(ast)
