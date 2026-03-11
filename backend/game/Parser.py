@@ -216,6 +216,30 @@ class Parser:
         post_redirs = self.parse_redirections()
         return Command(atom, pre_redirs, post_redirs, assignments)
 
+    def parse_word(self):
+        parts = []
+
+        while True:
+            p = self.peek()
+            if p is None:
+                break
+
+            if p.type == "WORD":
+                parts.append(self.consume().value)
+
+            elif p.type == "DOLLAR":
+                self.consume()
+                name = self.consume("WORD")
+                parts.append(VarUse(name.value))
+
+            else:
+                break
+
+        if not parts:
+            return None
+
+        return Word(parts)
+
     def parse_atom(self):
         if ((p := self.peek()) and p.type == "LPAREN"):
             return self.parse_subshell()
