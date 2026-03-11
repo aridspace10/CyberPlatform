@@ -22,6 +22,7 @@ class CommandLine:
             if item.name == lst[-1]:
                 if (removing):
                     item.set_data("")
+                self.filesystem.current = saved_current
                 return item
         inode = Inode(NodeType.FILE)
         self.filesystem.current.add_child(lst[-1], inode)  
@@ -255,7 +256,7 @@ class CommandLine:
                 return (0, output)
             elif (ftype == NodeType.FILE and ttype == NodeType.DIRECTORY):
                 if (self.filesystem.current.parent == None): # literally impossible to be true
-                    return (2, ([], []))
+                    return (2, ([], [])) # pragma: no cover
                 self.filesystem.current = self.filesystem.current.parent
                 saved = None
                 for idx, item in enumerate(self.filesystem.current.items):
