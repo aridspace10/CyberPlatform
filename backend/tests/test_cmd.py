@@ -147,20 +147,30 @@ def test_cd_empty(cl, shell_empty: ShellState):
     assert stdout == []
 
 ########### REDIRECTION ##########
-def test_redirection_writes_file(cl, shell_empty, fs_empty):
-    # use > redirect to create a file and write
-    cl.enter_command('echo hi > f1.txt', shell_empty)
-    # search filesystem for the written file and check contents
-    # depending on your FS API; example:
-    fs_empty.search('f1.txt')   # moves current pointer to file
-    fnode = fs_empty.current
-    assert fnode.get_data().strip() == 'hi'
+def test_redirection_writes_file(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('echo hi > d1/f3.txt', shell_basic)
+    assert stdout == []
+    assert stderr == []
+    stderr, stdout = cl.enter_command('cat d1/f3.txt', shell_basic)
+    assert stdout == ['hi']
+    assert stderr == []  
+
+def test_redirection_path_error(cl, shell_basic: ShellState, fs_basic):
+    stderr, stdout = cl.enter_command('echo hi > not/f3.txt', shell_basic)
+    assert stderr == ['No directory named not']
+    assert stdout == []
 
 def test_redirection_rewrites_file(cl, shell_basic: ShellState, fs_basic: FileSystem):
     cl.enter_command('echo hi >> f1.txt', shell_basic)
     fs_basic.search('f1.txt')
     fnode = fs_basic.current
     assert fnode.get_data().strip() == "ERROR no\nINFO hey\nERROR no2\nhi"
+
+def test_redirection_writes_newfile(cl, shell_basic: ShellState, fs_basic: FileSystem):
+    cl.enter_command('echo hi >> f3.txt', shell_basic)
+    fs_basic.search('f3.txt')
+    fnode = fs_basic.current
+    assert fnode.get_data().strip() == "hi"
 
 ########### RM #################
 def test_rm_basic(cl, shell_fouritems: ShellState):
@@ -272,6 +282,20 @@ def test_grep_count(cl, shell_basic: ShellState):
     assert stderr == []
     assert stdout == ["2"]
 
+def test_grep_error(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('grep -c', shell_basic)
+    assert stderr == ["grep: pattern not given"]
+    assert stdout == []
+
+    stderr, stdout = cl.enter_command('grep -a', shell_basic)
+    assert stderr == ["grep: unknown argument given"]
+    assert stdout == []
+
+def test_grep_matchline(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('grep -x \"ERROR no\" f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == ["ERROR no"]
+
 ####### CHMOD #############
 def test_chmod_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('chmod 000 f1.txt', shell_basic)
@@ -314,6 +338,12 @@ def test_andor(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('cd d1 && ls', shell_basic)
     assert stderr == []
     assert stdout == ["f3.txt", "f4.txt"]
+
+def test_and_failure(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('cd d3 && ls', shell_basic)
+    assert stderr == ['cd:No directory named d3']
+    assert stdout == []
+
 
 ######## LN ###################
 def test_ln_basic(cl, shell_basic: ShellState):
