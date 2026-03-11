@@ -8,26 +8,6 @@ class Token:
     type: str
     value: str
 
-TOKEN_SPEC = [
-    ("AND",      r"&&"),
-    ("DOLLAR",   r"\$"),
-    ("OR",       r"\|\|"),
-    ("PIPE",     r"\|"),
-    ("HEREDOC",  r"<<"),
-    ("APPEND",   r">>"),
-    ("REDIR_IN", r"<"),
-    ("REDIR_OUT",r">"),
-    ("SEMI",     r";"),
-    ("LPAREN",   r"\("),
-    ("RPAREN",   r"\)"),
-    ("EQUAL",    r"="),
-    ("WORD", r"[^\s|&;()<>$]+"),
-    ("SKIP",     r"[ \t]+"),
-]
-
-master = re.compile("|".join(f"(?P<{name}>{regex})" for name, regex in TOKEN_SPEC))
-_assign_re = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)=(.*)$')
-
 Identifier = str
 
 @dataclass
@@ -40,13 +20,19 @@ class VarUse:
     name: Identifier
 
 @dataclass
+class Word:
+    parts: list["Segment"]
+
+Segment = str | VarUse
+
+@dataclass
 class VarDeclaration:
     name: Identifier
     value: Identifier
 
 @dataclass
 class SimpleCommand:
-    args: list[str | VarUse]
+    args: list[Word]
 
 @dataclass
 class Pipe:
@@ -74,13 +60,82 @@ class Subshell:
 
 Atom = SimpleCommand | Subshell | VarDeclaration
 
-def lex(text):
+OPERATORS = {
+    "&&": "AND",
+    "||": "OR",
+    "|": "PIPE",
+    "<<": "HEREDOC",
+    ">>": "APPEND",
+    "<": "REDIR_IN",
+    ">": "REDIR_OUT",
+    ";": "SEMI",
+    "(": "LPAREN",
+    ")": "RPAREN",
+    "=": "EQUAL",
+    "$": "DOLLAR",
+}
+
+def lex(text: str) -> list[Token]:
     tokens = []
-    for match in master.finditer(text):
-        kind = match.lastgroup
-        value = match.group()
-        if kind != "SKIP" and kind is not None:
-            tokens.append(Token(kind, value))
+    i = 0
+    n = len(text)
+
+    while i < n:
+        c = text[i]
+
+        # skip whitespace
+        if c.isspace():
+            i += 1
+            continue
+
+        # check 2-char operators
+        if i + 1 < n:
+            two = text[i:i+2]
+            if two in OPERATORS:
+                tokens.append(Token(OPERATORS[two], two))
+                i += 2
+                continue
+
+        # check 1-char operators
+        if c in OPERATORS:
+            tokens.append(Token(OPERATORS[c], c))
+            i += 1
+            continue
+
+        # quoted strings
+        if c == '"' or c == "'":
+            quote = c
+            i += 1
+            start = i
+            buf = ""
+
+            while i < n:
+                if text[i] == quote:
+                    break
+                if quote == '"' and text[i] == "\\" and i + 1 < n:
+                    i += 1
+                    buf += text[i]
+                else:
+                    buf += text[i]
+                i += 1
+
+            if i >= n:
+                raise SyntaxError("Unterminated quote")
+
+            tokens.append(Token("WORD", buf))
+            i += 1
+            continue
+
+        # normal word
+        start = i
+        while (
+            i < n
+            and not text[i].isspace()
+            and text[i] not in "|&;()<>$\"'"
+        ):
+            i += 1
+
+        tokens.append(Token("WORD", text[start:i]))
     return tokens
 
 class Parser:
@@ -143,9 +198,6 @@ class Parser:
         # --- assignment prefix parsing ---
         assignments = []
         while ((p := self.peek()) and p.type == "WORD"):
-            m = _assign_re.match(p.value)
-            if not m:
-                break
             self.consume()  # consume the WORD
             assignments.append(VarDeclaration(m.group(1), m.group(2)))
 
