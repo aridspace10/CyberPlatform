@@ -48,4 +48,9 @@ class Inode:
     
     def append_data(self, data: str) -> None:
         self.mtime = datetime.datetime.now()
-        self.data += "\n" + data
+        if (data == ""):
+            self.data = ""
+        elif (self.data == ""):
+            self.data = data
+        else:
+            self.data += "\n" + data
