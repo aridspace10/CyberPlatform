@@ -6,7 +6,8 @@ class Base(DeclarativeBase):
     pass
 
 class Scenario(Base):
-    __tablename__ = "Scenario"
+    __tablename__ = "scenario"
+    id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     description = Column(String)
     config = Column(JSON)
@@ -17,9 +18,15 @@ class Session(Base):
     name = Column(String)
     creatorID = Column(Integer, ForeignKey("users.id"))
 
+class Session_Shell(Base):
+    __tablename__ = "Session_Shell"
+    SessionID = Column(Integer, ForeignKey("scenario.id"), primary_key=True)
+    UserID = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    shell = Column(JSON)
+
 class scenario_to_session(Base):
     __tablename__ = "scenariosToGame"
-    scenarioID = Column(Integer, ForeignKey("scenarios.id"), primary_key=True)
+    scenarioID = Column(Integer, ForeignKey("scenario.id"), primary_key=True)
     sessionID = Column(Integer, ForeignKey("game.id"), primary_key=True)
     config = Column(JSON)
 
