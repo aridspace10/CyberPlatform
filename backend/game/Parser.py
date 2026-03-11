@@ -243,25 +243,19 @@ class Parser:
     def parse_atom(self):
         if ((p := self.peek()) and p.type == "LPAREN"):
             return self.parse_subshell()
+
         args = []
-        while ((p := self.peek())):
-            if (p.type == "DOLLAR"):
-                self.consume()
-                tmp = self.consume("WORD")
-                if tmp is None:
-                    raise Exception()
-                args.append(VarUse(tmp.value))
-            elif (p.type == "WORD"):
-                tmp = self.consume()
-                if tmp is None:
-                    raise Exception()
-                args.append(tmp.value)
-            else:
+
+        while True:
+            word = self.parse_word()
+            if word is None:
                 break
+            args.append(word)
+
         if not args:
             raise SyntaxError("expected command name")
-        else:
-            return SimpleCommand(args)
+
+        return SimpleCommand(args)
 
     def parse_subshell(self):
         self.consume("LPAREN")
