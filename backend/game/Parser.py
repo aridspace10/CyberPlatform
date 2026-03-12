@@ -191,38 +191,50 @@ class Parser:
             if (p is not None and target is not None):
                 result.append(Redirection(p.value, target.value))
         return result
+    
+    def split_assignment(self, word: str):
+        if "=" not in word:
+            return None
+
+        name, value = word.split("=", 1)
+
+        if not name:
+            return None
+
+        if not (name[0].isalpha() or name[0] == "_"):
+            return None
+
+        if not all(c.isalnum() or c == "_" for c in name):
+            return None
+        return name, value
 
     def parse_command(self) -> Command:
         pre_redirs = self.parse_redirections()
 
-        # --- assignment prefix parsing ---
         assignments = []
+        assignments = []
+
         while True:
             p = self.peek()
 
             if p is None or p.type != "WORD":
                 break
 
-            # check if next token is =
-            if self.pos + 1 >= len(self.tokens) or self.tokens[self.pos + 1].type != "EQUAL":
+            res = self.split_assignment(p.value)
+
+            if not res:
                 break
 
-            name = self.consume("WORD").value
-            self.consume("EQUAL")
+            name, value = res
+            self.consume()
 
-            value_word = self.parse_word()
-            if value_word is None:
-                raise SyntaxError("expected value after assignment")
+            assignments.append(
+                VarDeclaration(name, Word([value]))
+            )
 
-            assignments.append(VarDeclaration(name, value_word))
-
-        # If we saw assignments but no command follows,
-        # this is a declaration-only command.
         if ((p := self.peek()) is None or p.type not in ("WORD", "LPAREN")):
             if not assignments:
                 raise SyntaxError("expected command")
-            # treat as declaration statement
-            # wrap them into a SimpleCommand-like no-op
             atom = SimpleCommand([])
             post_redirs = self.parse_redirections()
             return Command(atom, pre_redirs, post_redirs, assignments)
@@ -232,27 +244,43 @@ class Parser:
         return Command(atom, pre_redirs, post_redirs, assignments)
 
     def parse_word(self):
-        parts = []
+        p = self.peek()
 
+        if p is None:
+            return None
+
+        parts = []
+        if p.type == "WORD":
+            parts.append(self.consume().value)
+
+        elif p.type == "DOLLAR":
+            self.consume()
+            name = self.consume("WORD")
+            parts.append(VarUse(name.value))
+
+        else:
+            return None
+
+        # allow adjacent variable expansions
         while True:
             p = self.peek()
+
             if p is None:
                 break
 
-            if p.type == "WORD":
-                parts.append(self.consume().value)
-
-            elif p.type == "DOLLAR":
+            if p.type == "DOLLAR":
                 self.consume()
                 name = self.consume("WORD")
                 parts.append(VarUse(name.value))
 
+            elif p.type == "WORD":
+                # only join if previous was variable (file_$USER.txt case)
+                if isinstance(parts[-1], VarUse):
+                    parts.append(self.consume().value)
+                else:
+                    break
             else:
                 break
-
-        if not parts:
-            return None
-
         return Word(parts)
 
     def parse_atom(self):
@@ -278,9 +306,9 @@ class Parser:
         self.consume("RPAREN")
         return Subshell(node)
 
-text = "echo hello | grep hi && pwd"
+text = "X=5"
 tokens = lex(text)
 parser = Parser(tokens)
 ast = parser.parse()
-
+print (tokens)
 print(ast)
