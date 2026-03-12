@@ -86,7 +86,7 @@ class CommandLine:
     def execute_command(self, command: Command) -> CommandReturn:
         redirs = command.pre_redirs + command.post_redirs
         for assign in command.assignments:
-            self.shell.env[assign.name] = assign.value
+            self.shell.env[assign.name] = assign.value.parts[0]
 
         for redir in redirs:
             if (redir.op == "<"):
@@ -122,10 +122,15 @@ class CommandLine:
                 fdin = self.fdin
             args = []
             for arg in atom.args:
-                if (isinstance(arg, VarUse)):
-                    args.append(str(self.shell.env[arg.name]))
-                else:
-                    args.append(arg)
+                word = ""
+                for part in arg.parts:
+                    if isinstance(part, str):
+                        word += part
+                    else:
+                        if part.name not in self.shell.env:
+                            return (1, ([f'Var Used which is unassigned: {part.name}'], []))
+                        word += self.shell.env[part.name]
+                args.append(word)
             return self.run_command(args, fdin)
         else:
             # save state
@@ -156,6 +161,7 @@ class CommandLine:
         return last_status, (stdout, stderr)
  
     def run_command(self, args: list[str], fdin: FileNode) -> CommandReturn:
+        print (args)
         if (not (len(args))):
             return (0, ([], []))
         match args[0]:
