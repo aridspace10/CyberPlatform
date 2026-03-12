@@ -245,43 +245,18 @@ class Parser:
 
     def parse_word(self):
         p = self.peek()
-
         if p is None:
             return None
 
-        parts = []
         if p.type == "WORD":
-            parts.append(self.consume().value)
+            return Word([self.consume().value])
 
-        elif p.type == "DOLLAR":
+        if p.type == "DOLLAR":
             self.consume()
             name = self.consume("WORD")
-            parts.append(VarUse(name.value))
+            return Word([VarUse(name.value)])
 
-        else:
-            return None
-
-        # allow adjacent variable expansions
-        while True:
-            p = self.peek()
-
-            if p is None:
-                break
-
-            if p.type == "DOLLAR":
-                self.consume()
-                name = self.consume("WORD")
-                parts.append(VarUse(name.value))
-
-            elif p.type == "WORD":
-                # only join if previous was variable (file_$USER.txt case)
-                if isinstance(parts[-1], VarUse):
-                    parts.append(self.consume().value)
-                else:
-                    break
-            else:
-                break
-        return Word(parts)
+        return None
 
     def parse_atom(self):
         if ((p := self.peek()) and p.type == "LPAREN"):
@@ -306,7 +281,7 @@ class Parser:
         self.consume("RPAREN")
         return Subshell(node)
 
-text = "X=5"
+text = "echo $x"
 tokens = lex(text)
 parser = Parser(tokens)
 ast = parser.parse()
