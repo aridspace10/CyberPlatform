@@ -124,6 +124,7 @@ class FileSystem:
             self.current = saved_current
             return error
         inode = Inode(NodeType.DIRECTORY)
+        inode.permissions = permissions
         self.current = self.current.add_child(lst[-1], inode)
         self.current = saved_current
         return ""
