@@ -665,7 +665,9 @@ class CommandLine:
         return (0, ([], [direct]))
         
     def mkdir(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
-        permissions = {"r": True, "w": True, "x": True}
+        perms = {"user": {"r": True, "w": True, "x": True},
+            "group": {"r": True, "w": False, "x": True},
+            "public": {"r": True, "w": False, "x": True}}
         verbose, parent = False, False
         if not len(args):
             return (0, (["mkdir: at least one argument should be given"], []))
@@ -676,16 +678,9 @@ class CommandLine:
                 if (arg == "-m" or arg == "--mode"):
                     arg = args.pop(0)
                     if (arg.startswith("a=")):
-                        permissions = {"r": False, "w": False, "x": False}
-                        while arg:
-                            match arg[0]:
-                                case "r":
-                                    permissions["r"] = True
-                                case "w":
-                                    permissions["w"] = True
-                                case "x":
-                                    permissions["x"] = True
-                            arg = arg[1:]
+                        perms = determine_perms_fromstr(arg[2:])
+                        if isinstance(perms, str):
+                            return (1, ([perms], []))
                     else:
                         return (1, (["mkdir: option given to -m or --mode is not correct"], []))
                 elif (arg == "-v" or arg == "--verbose"):
@@ -702,7 +697,7 @@ class CommandLine:
             return (1, (["mkdir: no name given for new directory"], []))
         
         saved_current = self.filesystem.current
-        err = self.filesystem.add_directory(name, parent, permissions)
+        err = self.filesystem.add_directory(name, parent, perms)
         self.filesystem.current = saved_current
         if (err):
             return (1, ([err], []))
