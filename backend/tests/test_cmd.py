@@ -6,6 +6,7 @@ from game.ShellState import ShellState
 from game.filesystem import FileSystem
 from game.filenode import FileNode, Inode, NodeType
 from wonderwords import RandomWord
+from ..game.helpers import determine_perms_fromstr
 
 # Basic helpers to create a filesystem with one file
 @pytest.fixture
@@ -24,8 +25,14 @@ def shell_empty(fs_empty):
 @pytest.fixture
 def fs_fouritems():
     fs = FileSystem()
-    fs.add_file("f1.txt")
-    fs.add_file("f2.txt")
+    inode = Inode(NodeType.FILE)
+    inode.set_data("ERROR 1\nERROR 2\nINFO 1")
+    fn = FileNode(None, "f1.txt", inode)
+    fs.add_file("f1.txt", fn)
+    inode = Inode(NodeType.FILE)
+    inode.set_data("ERROR 3\nERROR 4\nINFO 2")
+    fn = FileNode(None, "f2.txt", inode)
+    fs.add_file("f2.txt", fn)
     fs.add_file("f3.txt")
     fs.add_file("f4.txt")
     return fs
@@ -34,12 +41,15 @@ def fs_fouritems():
 def fs_basic():
     fs = FileSystem()
     fs.add_file("f1.txt")
-    fs.current.items[0].set_data("ERROR no\nINFO hey\nERROR no2")
+    fs.current.items[0].set_data("ERROR no\nINFO hey\nERROR no2\nerror 1")
     fs.add_file("f2.txt")
     fs.current.items[1].set_data('\n'.join([str(i) for i in range(25)]))
     fs.add_directory("d1")
     fs.add_file("d1/f3.txt")
-    fs.add_file("d1/f4.txt")
+    inode = Inode(NodeType.FILE)
+    inode.set_data("ERROR 1\nERROR 2\nINFO 1")
+    fn = FileNode(None, "f4.txt", inode)
+    fs.add_file("d1/f4.txt", fn)
     return fs
 
 @pytest.fixture
@@ -109,6 +119,44 @@ def test_mkdir_error(cl, shell_empty: ShellState):
     assert stdout == []
     assert len(shell_empty.fs.current.items) == 0
 
+    stderr, stdout = cl.enter_command('mkdir -p', shell_empty)
+    assert stderr == ["mkdir: no name given for new directory"]
+    assert stdout == []
+    assert len(shell_empty.fs.current.items) == 0
+
+def test_mkdir_permissions(cl, shell_empty: ShellState):
+    perm_str = ''.join([str(random.randint(1,7)) for _ in range(0,3)])
+    perm = determine_perms_fromstr(perm_str)
+    stderr, stdout = cl.enter_command(f'mkdir -m a={perm_str} a', shell_empty)
+    assert stderr == []
+    assert stdout == []
+    assert len(shell_empty.fs.current.items) == 1
+    fn = shell_empty.fs.current.items[0]
+    assert fn.name == "a"
+    assert perm == fn.inode.permissions
+
+    stderr, stdout = cl.enter_command(f'mkdir -m a=00 a', shell_empty)
+    assert stderr == ['chmod: value given for permissions which is not of length of 3']
+    assert stdout == []
+
+    stderr, stdout = cl.enter_command(f'mkdir -m randomstuff a', shell_empty)
+    assert stderr == ["mkdir: option given to -m or --mode is not correct"]
+    assert stdout == []
+
+def test_mkdir_parents(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command('mkdir -p a/b/c', shell_empty)
+    assert stderr == []
+    assert stdout == []
+    assert len(shell_empty.fs.current.items) == 1
+    fn = shell_empty.fs.current.items[0]
+    assert fn.name == "a"
+    assert len(fn.items) == 1
+    fn2 = fn.items[0]
+    assert fn2.name == "b"
+    assert len(fn2.items) == 1
+    fn3 = fn2.items[0]
+    assert fn3.name == "c"
+
 ######### LS ###################
 def test_ls_empty(cl, shell_empty):
     stderr, stdout = cl.enter_command('ls', shell_empty)
@@ -160,11 +208,15 @@ def test_redirection_path_error(cl, shell_basic: ShellState, fs_basic):
     assert stderr == ['No directory named not']
     assert stdout == []
 
+    stderr, stdout = cl.enter_command('echo hi >> not/f3.txt', shell_basic)
+    assert stderr == ['No directory named not']
+    assert stdout == []
+
 def test_redirection_rewrites_file(cl, shell_basic: ShellState, fs_basic: FileSystem):
     cl.enter_command('echo hi >> f1.txt', shell_basic)
     fs_basic.search('f1.txt')
     fnode = fs_basic.current
-    assert fnode.get_data().strip() == "ERROR no\nINFO hey\nERROR no2\nhi"
+    assert fnode.get_data().strip() == "ERROR no\nINFO hey\nERROR no2\nerror 1\nhi"
 
 def test_redirection_writes_newfile(cl, shell_basic: ShellState, fs_basic: FileSystem):
     cl.enter_command('echo hi >> f3.txt', shell_basic)
@@ -200,7 +252,7 @@ def test_cat_nonexistent_file(cl, shell_empty):
 def test_cat_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('cat f1.txt', shell_basic)
     assert stderr == []
-    assert stdout == ["ERROR no", "INFO hey", "ERROR no2"]
+    assert stdout == ["ERROR no", "INFO hey", "ERROR no2", "error 1"]
 
 ######## HEAD ##############
 def test_head_basic(cl, shell_basic: ShellState):
@@ -291,10 +343,34 @@ def test_grep_error(cl, shell_basic: ShellState):
     assert stderr == ["grep: unknown argument given"]
     assert stdout == []
 
+    stderr, stdout = cl.enter_command('grep text notexist.txt', shell_basic)
+    assert stderr == ["grep: notexist.txt can not be found"]
+    assert stdout == []
+
 def test_grep_matchline(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('grep -x \"ERROR no\" f1.txt', shell_basic)
     assert stderr == []
     assert stdout == ["ERROR no"]
+
+def test_grep_matchwhole(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('grep -i ERROR f1.txt', shell_basic)
+    assert stderr == []
+    assert stdout == ["ERROR no", "ERROR no2", "error 1"]
+
+def test_grep_dir(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('grep -r ERROR .', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["ERROR 1", "ERROR 2", "ERROR 3", "ERROR 4"]
+
+def test_grep_dir2(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('grep -r ERROR .', shell_basic)
+    assert stderr == []
+    assert stdout == ['ERROR no', 'ERROR no2', 'ERROR 1', 'ERROR 2']
+
+def test_grep_dir3(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('grep ERROR .', shell_basic)
+    assert stderr == ["Can't recursivly search directory without -r option"]
+    assert stdout == []
 
 ####### CHMOD #############
 def test_chmod_basic(cl, shell_basic: ShellState):
@@ -460,6 +536,11 @@ def test_var_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('echo $X', shell_basic)
     assert stderr == []
     assert stdout == ["5"]
+
+def test_var_error(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('echo $X', shell_basic)
+    assert stderr == ["Var Used which is unassigned: X"]
+    assert stdout == []
 
 ######## SORT ######################
 def setup_names(s: ShellState, name: str) -> list[str]:
