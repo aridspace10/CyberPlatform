@@ -384,17 +384,23 @@ class CommandLine:
                         tmp = line
                     if (linenum):
                         tmp = f"{idx+1}:{tmp}"
+                    print (tmp)
                     output[1].append(tmp)
                     if (filename and not linenum):
                         return
 
         for file in files:
+            saved_current = self.filesystem.current
             if (file == "-"):
                 ty = input.inode.type
                 print (f"data: {input.inode.data}")
                 self.filesystem.current = input
             else:
-                ty = self.filesystem.search_withaccess(file)
+                err = self.filesystem.search(file)
+                if err:
+                    output[0].append(f"grep: {file} can not be found")
+                    continue
+                ty = self.filesystem.current.get_type()
             if (ty == NodeType.DIRECTORY):
                 if (recursive):
                     def recursively_search(pointer: FileNode):
