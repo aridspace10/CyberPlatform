@@ -129,14 +129,17 @@ class FileSystem:
         self.current = saved_current
         return ""
 
-    def add_file(self, path: str):
+    def add_file(self, path: str, fn: FileNode | None = None):
         saved_current = self.current
         lst = path.split("/")
         if (error := self.search("/".join(lst[0:-1]))) != "":
             self.current = saved_current
             return error
-        inode = Inode(NodeType.FILE)
-        self.current = self.current.add_child(lst[-1], inode)
+        if fn is None:
+            inode = Inode(NodeType.FILE)
+            self.current = self.current.add_child(lst[-1], inode)
+        else:
+            self.current = self.current.add_child(fn.name, fn.inode)
         self.current = saved_current
         return ""
 
