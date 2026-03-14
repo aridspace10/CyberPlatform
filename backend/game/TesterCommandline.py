@@ -9,5 +9,5 @@ f.add_directory("d2")
 f.add_directory("d2/f3.txt")
 s.fs = f
 cmd = CommandLine()
-print (cmd.enter_command('echo h1 > d2/f3.txt', s))
-print (cmd.enter_command("cat d2/f3.txt", s))
+print (cmd.enter_command('X=5', s))
+print (cmd.enter_command("echo $X", s))
