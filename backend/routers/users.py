@@ -36,6 +36,9 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 def get_users(db: Session = Depends(get_db)):
     return db.query(User).all()
 
+@router.get("/{user_id}")
+def get_user(user_id: int, db: Session = Depends(get_db)):
+    return db.query(User).filter(User.id == user_id).first()
 
 # UPDATE USER
 @router.put("/{user_id}")
