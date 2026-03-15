@@ -12,19 +12,19 @@ class Scenario(Base):
     description = Column(String)
     config = Column(JSON)
 
-class Session(Base):
-    __tablename__ = "SessionID"
+class GameSession(Base):
+    __tablename__ = "Session"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     creatorID = Column(Integer, ForeignKey("users.id"))
 
-class Session_Shell(Base):
+class SessionShell(Base):
     __tablename__ = "Session_Shell"
     SessionID = Column(Integer, ForeignKey("scenario.id"), primary_key=True)
     UserID = Column(Integer, ForeignKey("users.id"), primary_key=True)
     shell = Column(JSON)
 
-class scenario_to_session(Base):
+class ScenarioToSession(Base):
     __tablename__ = "scenariosToGame"
     scenarioID = Column(Integer, ForeignKey("scenario.id"), primary_key=True)
     sessionID = Column(Integer, ForeignKey("game.id"), primary_key=True)
