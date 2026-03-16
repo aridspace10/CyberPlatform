@@ -2,8 +2,22 @@ from fastapi import FastAPI
 from network.WebsocketServer import router as websocket_router
 from api.sessions import router as sessions_router
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from db.session import engine, Base
+from routers import users
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+
+    # startup
+    Base.metadata.create_all(bind=engine)
+
+    yield
+
+    # shutdown
+    pass
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,6 +29,7 @@ app.add_middleware(
 
 app.include_router(websocket_router)
 app.include_router(sessions_router)
+app.include_router(users.router)
 
 @app.get("/")
 def root():

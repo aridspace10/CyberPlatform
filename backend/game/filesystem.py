@@ -9,6 +9,22 @@ class FileSystem:
         self.current: FileNode = self.filehead
         self.lcs = 0
         self.cwd = ""
+    
+    def to_dict(self) -> dict:
+        return {
+            "lcs": self.lcs,
+            "nodes": self.filehead.to_dict()
+        }
+
+    def from_dict(self, fs: dict) -> None:
+        # Clear fs
+        self.__init__()
+        # restore fs
+        try:
+            self.lcs = fs["lcs"]
+            self.filehead.from_dict(fs["nodes"], 0, None)
+        except:
+            raise Exception("Syncronization failure")
 
     def setup_system(self, textfile):
         with open(textfile) as f:
