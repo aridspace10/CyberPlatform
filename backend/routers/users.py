@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from db.session import SessionLocal
 from db.modals import User
 from pydantic import BaseModel
+from db.authentication import create_access_token
+from db.authentication import verify_password
 
 class UserCreate(BaseModel):
     username: str
@@ -10,14 +12,12 @@ class UserCreate(BaseModel):
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
 
 # CREATE USER
 @router.post("/")
@@ -53,6 +53,16 @@ def update_user(user_id: int, username: str, email: str, db: Session = Depends(g
 
     return user
 
+@router.post("/login")
+def login(data: LoginRequest, db: Session = Depends(get_db)):
+    user = get_user_by_username(db, data.username)
+
+    if not user or not verify_password(data.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_access_token({"sub": user.id})
+
+    return {"access_token": token}
 
 # DELETE USER
 @router.delete("/{user_id}")
