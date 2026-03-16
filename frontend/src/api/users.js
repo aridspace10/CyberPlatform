@@ -30,3 +30,13 @@ export async function deleteUser(id) {
     method: "DELETE"
   });
 }
+
+export async function loginUser(username, password) {
+    const res = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+    });
+
+    return await res.json();
+}
