@@ -3,18 +3,20 @@ import { useAuth } from "../../auth/useAuth";
 import './LoginPage.css';
 
 export default function Signup() {
-  const { login } = useAuth();
+  const { signup } = useAuth();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [cpassword, setCPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleSignup = async () => {
     setError("");
     setLoading(true);
     try {
-      await login(username, password);
+      await signup(email, username, password, cpassword);
     } catch (err) {
       setError("ACCESS DENIED — INVALID CREDENTIALS");
     } finally {
@@ -23,7 +25,7 @@ export default function Signup() {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") handleLogin();
+    if (e.key === "Enter") handleSignup();
   };
 
   return (
@@ -87,7 +89,7 @@ export default function Signup() {
                 type="text"
                 placeholder="username"
                 value={username}
-                onChange={e => setUsername(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 onKeyDown={handleKeyDown}
                 autoComplete="username"
                 spellCheck={false}
@@ -122,7 +124,7 @@ export default function Signup() {
                 type="password"
                 placeholder="••••••••"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={e => setCPassword(e.target.value)}
                 onKeyDown={handleKeyDown}
                 autoComplete="current-password"
               />
