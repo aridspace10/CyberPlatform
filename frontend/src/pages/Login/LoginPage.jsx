@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useAuth } from "../../auth/useAuth";
+import { Link, useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
 export default function Login() {
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -15,6 +17,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(username, password);
+      navigate("/")
     } catch (err) {
       setError("ACCESS DENIED — INVALID CREDENTIALS");
     } finally {
@@ -94,6 +97,11 @@ export default function Login() {
               <div className="input-line" />
             </div>
           </div>
+          
+          {/* Signup */}
+          <button className="already-btn" onClick={() => {navigate("/signup")}} disabled={loading}>
+            <span>{"DON'T HAVE AN ACCOUNT?"}</span>
+          </button>
 
           {/* Submit */}
           <button onClick={handleLogin} disabled={loading}>
@@ -115,4 +123,4 @@ export default function Login() {
       </div>
     </div>
   );
-}
+} 
