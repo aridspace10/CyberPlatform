@@ -1,4 +1,18 @@
 import { createContext, useEffect, useState } from "react";
+import { createUser } from "../api/users";
+import validator from 'validator';
+import passwordValidator from 'password-validator';
+
+const schema = new passwordValidator();
+schema
+  .min(8)
+  .max(100)
+  .uppercase()
+  .lowercase()
+  .digits(1)
+  .symbols(1)
+  .not().spaces()
+  .not().oneOf(['Password1', 'Password!']);
 
 export const AuthContext = createContext();
 
@@ -31,6 +45,25 @@ export function AuthProvider({ children }) {
         logout();
       });
   }, []);
+  const signup = async (email, username, password, cpassword) => {
+    if (!validator.isEmail(email)) {
+        return "Email given is not valid"
+    }
+
+    if (username.length < 4) {
+        return "Username must be at least 4 characters"
+    }
+
+    if (schema.validate(password)) {
+        return "Password Invalid"
+    }
+
+    if (password !== cpassword) {
+        return "Password and Confirm Password are not the same"
+    }
+    const data = await createUser(email, username, password);
+  }
+
 
   const login = async (username, password) => {
     const res = await fetch(`${API}/auth/login`, {
