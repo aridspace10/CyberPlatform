@@ -7,6 +7,7 @@ import UserManager from "./components/UserManager";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import { AuthProvider } from "./auth/AuthContext";
 import Login from "./pages/Login/LoginPage";
+import Signup from "./pages/Login/SignupPage";
 
 export default function App() {
     return (
@@ -17,6 +18,7 @@ export default function App() {
                     <Route path="/" element={<Homepage />} />
                     <Route path="/profile" element={<ProtectedRoute></ProtectedRoute>} />
                     <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
                     {/* Dev pathways */}
                     <Route path="/terminal" element={<Terminal />} />
                     <Route path="/game" element={<Game />} />
