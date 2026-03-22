@@ -11,6 +11,7 @@ from db.authentication import get_current_user
 class UserCreate(BaseModel):
     username: str
     email: str
+    password: str
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -35,7 +36,7 @@ def get_me(user_id=Depends(get_current_user), db: Session = Depends(get_db)):
 # CREATE USER
 @router.post("/")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    new_user = User(username=user.username, email=user.email)
+    new_user = User(username=user.username, email=user.email, password=user.password)
 
     db.add(new_user)
     db.commit()
