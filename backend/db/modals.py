@@ -13,7 +13,7 @@ class Scenario(Base):
     config = Column(JSON)
 
 class GameSession(Base):
-    __tablename__ = "Session"
+    __tablename__ = "session"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     creatorID = Column(Integer, ForeignKey("users.id"))
@@ -27,7 +27,7 @@ class SessionShell(Base):
 class ScenarioToSession(Base):
     __tablename__ = "scenariosToGame"
     scenarioID = Column(Integer, ForeignKey("scenario.id"), primary_key=True)
-    sessionID = Column(Integer, ForeignKey("game.id"), primary_key=True)
+    sessionID = Column(Integer, ForeignKey("session.id"), primary_key=True)
     config = Column(JSON)
 
 class User(Base):
@@ -35,3 +35,4 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True)
     email = Column(String)
+    password = Column(String)
