@@ -19,8 +19,9 @@ export default function Signup() {
     setLoading(true);
     try {
         console.log(password)
-        const data = await signup(email, username, password, cpassword);
+        const data = await signup(username, email, password, cpassword);
         console.log(data)
+        navigate("/")
     } catch (err) {
       setError("ACCESS DENIED — INVALID CREDENTIALS");
     } finally {
