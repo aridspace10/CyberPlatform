@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from db.session import SessionLocal
-from db.modals import GameSession, ScenarioToSession
+from db.modals import GameSession, ScenarioToSession, SessionShell
 from pydantic import BaseModel
 from typing import Dict, Any
 
@@ -10,6 +10,11 @@ class SessionCreate(BaseModel):
     name: str
     scenarioID: str
     config: Dict[str, Any]
+
+class SessionJoin(BaseModel):
+    userID: int
+    sessionID: int
+    shell: Dict[str, Any]
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -32,6 +37,10 @@ def create_session(ses_data: SessionCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(ss)
     return (ses, ss)
+
+@router.post("/sessions/{session_id}")
+def join_session(ses_data: SessionJoin, db: Session = Depends(get_db)):
+    ses = SessionShell()
 
 # GET USERS
 @router.get("/")
