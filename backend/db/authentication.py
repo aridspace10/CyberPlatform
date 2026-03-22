@@ -21,7 +21,7 @@ ALGORITHM = "HS256"
 def create_access_token(data: dict):
     payload = data.copy()
     payload["exp"] = datetime.utcnow() + timedelta(hours=12)
-
+    payload["sub"] = str(payload["sub"])
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_token(token: str):
@@ -42,6 +42,7 @@ security = HTTPBearer()
 def get_current_user(token = Depends(security)):
     try:
         payload = decode_token(token.credentials)
-        return payload["sub"]
-    except:
+        return int(payload["sub"])  # <-- convert back to int for DB query
+    except Exception as e:
+        print(f"Token error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
