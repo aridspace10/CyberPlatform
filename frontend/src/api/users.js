@@ -5,11 +5,11 @@ export async function getUsers() {
   return await res.json();
 }
 
-export async function createUser(username, email) {
+export async function createUser(username, email, password) {
   const res = await fetch(API + "/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, email })
+    body: JSON.stringify({ username, email, password })
   });
 
   return await res.json();
