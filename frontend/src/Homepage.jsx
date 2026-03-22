@@ -29,6 +29,7 @@ export default function Homepage() {
             <br></br>
             <button onClick={handleSessionCreation}> Create a new session </button>
             <button onClick={handleEnterSandbox}> Enter Sandbox </button>
+            <button onClick={logout}> Log out</button>
         </div>
     )
 }
