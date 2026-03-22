@@ -1,5 +1,5 @@
 import { createContext, useEffect, useState } from "react";
-import { createUser } from "../api/users";
+import { createUser, loginUser } from "../api/users";
 import validator from 'validator';
 import passwordValidator from 'password-validator';
 
@@ -31,7 +31,7 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    fetch(`${API}/auth/me`, {
+    fetch(`${API}/users/me`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -46,7 +46,7 @@ export function AuthProvider({ children }) {
       });
   }, []);
 
-  const signup = async (email, username, password, cpassword) => {
+  const signup = async (username, email, password, cpassword) => {
     if (!validator.isEmail(email)) {
         return "Email given is not valid"
     }
@@ -62,31 +62,29 @@ export function AuthProvider({ children }) {
     if (password !== cpassword) {
         return "Password and Confirm Password are not the same"
     }
-    const data = await createUser(email, username, password);
+    const data = await createUser(username, email, password);
+    await login(username, password)
+    
   }
 
 
   const login = async (username, password) => {
-    const res = await fetch(`${API}/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ username, password })
-    });
-
-    const data = await res.json();
+    const data = await loginUser(username, password);
+    console.log("Login response:", data);
+    console.log("Token:", data.access_token);
 
     localStorage.setItem("token", data.access_token);
 
     // fetch user after login
-    const meRes = await fetch(`${API}/auth/me`, {
+    const meRes = await fetch(`${API}/users/me`, {
       headers: {
         Authorization: `Bearer ${data.access_token}`
       }
     });
 
+    console.log("Me status:", meRes.status);
     const userData = await meRes.json();
+    console.log("Me response:", userData);
     setUser(userData);
   };
 
