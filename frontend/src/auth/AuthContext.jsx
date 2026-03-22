@@ -45,6 +45,7 @@ export function AuthProvider({ children }) {
         logout();
       });
   }, []);
+
   const signup = async (email, username, password, cpassword) => {
     if (!validator.isEmail(email)) {
         return "Email given is not valid"
@@ -54,7 +55,7 @@ export function AuthProvider({ children }) {
         return "Username must be at least 4 characters"
     }
 
-    if (schema.validate(password)) {
+    if (!schema.validate(password)) {
         return "Password Invalid"
     }
 
@@ -95,7 +96,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, signup }}>
       {children}
     </AuthContext.Provider>
   );
