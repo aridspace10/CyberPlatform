@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from db.authentication import create_access_token
 from db.authentication import verify_password
 from db.authentication import LoginRequest
-from db.authentication import get_current_user
+from db.authentication import get_current_user, hash_password
 
 class UserCreate(BaseModel):
     username: str
@@ -33,17 +33,29 @@ def get_me(user_id=Depends(get_current_user), db: Session = Depends(get_db)):
         "username": user.username
     }
 
+
+@router.post("/login")
+def login(data: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == data.username).first()
+
+    if not user or not verify_password(data.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_access_token({"sub": user.id})
+
+    return {"access_token": token}
+
 # CREATE USER
 @router.post("/")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    new_user = User(username=user.username, email=user.email, password=user.password)
+    hpassword = hash_password(user.password)
+    new_user = User(username=user.username, email=user.email, password=hpassword)
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
     return new_user
-
 
 # GET USERS
 @router.get("/")
@@ -66,17 +78,6 @@ def update_user(user_id: int, username: str, email: str, db: Session = Depends(g
     db.refresh(user)
 
     return user
-
-@router.post("/login")
-def login(data: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == data.username).first()
-
-    if not user or not verify_password(data.password, user.password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    token = create_access_token({"sub": user.id})
-
-    return {"access_token": token}
 
 # DELETE USER
 @router.delete("/{user_id}")
