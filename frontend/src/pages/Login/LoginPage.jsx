@@ -16,7 +16,8 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await login(username, password);
+      const data = await login(username, password);
+      console.log(data)
       navigate("/")
     } catch (err) {
       setError("ACCESS DENIED — INVALID CREDENTIALS");
