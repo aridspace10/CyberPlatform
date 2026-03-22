@@ -32,7 +32,7 @@ export async function deleteUser(id) {
 }
 
 export async function loginUser(username, password) {
-    const res = await fetch("/auth/login", {
+    const res = await fetch(API + "/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
