@@ -40,7 +40,11 @@ def create_session(ses_data: SessionCreate, db: Session = Depends(get_db)):
 
 @router.post("/sessions/{session_id}")
 def join_session(ses_data: SessionJoin, db: Session = Depends(get_db)):
-    ses = SessionShell()
+    ses = SessionShell(SessionID=ses_data.sessionID,UserID=ses_data.userID,shell=ses_data.shell)
+    db.add(ses)
+    db.commit()
+    db.refresh(ses)
+    return ses
 
 # GET USERS
 @router.get("/")
