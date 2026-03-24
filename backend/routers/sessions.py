@@ -57,7 +57,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
 
 @router.get("/sandbox/{user_id}")
 def get_sandbox_session(user_id: int, db: Session = Depends(get_db)):
-    return db.query(GameSession).filter(GameSession.name == "Sandbox" and GameSession.creatorID == user_id).first()
+    return db.query(GameSession).filter(GameSession.name == "Sandbox", GameSession.creatorID == user_id).first()
 
 # UPDATE USER
 @router.put("/{session_id}")
