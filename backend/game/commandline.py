@@ -7,6 +7,9 @@ import random
 import datetime
 from .Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
 from .ShellState import ShellState
+from core.logging_config import setup_logging
+
+logger = setup_logging()
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
@@ -39,6 +42,7 @@ class CommandLine:
         tokens = lex(raw)
         parser = Parser(tokens)
         ast = parser.parse()
+        logger.debug(f"Command Parsed as {ast}")
         if isinstance(ast, Sequence):
             shell.ls, (stderr, stdout) = self.execute_sequence(ast.parts)
             return (stderr, stdout)
