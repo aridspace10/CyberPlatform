@@ -124,6 +124,14 @@ class SessionManager:
             self.sessions[session_id] = GameSession(session_id)
         return self.sessions[session_id]
     
+    def add_session(self, session_id: str, name: str):
+        # 1.Setup Session
+        new_session = GameSession(session_id) 
+        new_session.name = name
+        # 2. Assign to session manger array
+        self.sessions[session_id] = new_session
+        return self.sessions[session_id]
+    
     async def set_session_state(self, session_id: str, new_state: str) -> bool:
         session = self.get_session(session_id)
         if not session:
