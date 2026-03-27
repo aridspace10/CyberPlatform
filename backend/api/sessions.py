@@ -1,13 +1,15 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from network.SessionManger import session_manager
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from db.session import get_db
+from db.modals import GameSession
 
 router = APIRouter(prefix="/api")
 
-
 class StateUpdate(BaseModel):
     state: str
-
 
 @router.get("/sessions")
 def list_sessions():
