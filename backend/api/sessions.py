@@ -5,6 +5,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from db.session import get_db
 from db.modals import GameSession
+from services.session_service import get_sandbox_session
 
 router = APIRouter(prefix="/api")
 
@@ -36,6 +37,17 @@ def get_session(id: str):
         "players": list(session.players.keys()),
         "state": session.state
     }
+
+@router.get("/tutorial/{user_id}")
+def get_tutorial(user_id: str, db: Session = Depends(get_db)):
+    tut = get_sandbox_session(db, int(user_id))
+    if (tut == None):
+        # Create a tutorial session
+
+    else:
+        # Tutorial Exists in db, bring to session manger if needed (add please)
+        return tut.id
+
 
 
 @router.post("/sessions/{session_id}/state")
