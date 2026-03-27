@@ -4,6 +4,7 @@ from db.session import SessionLocal
 from db.modals import GameSession, ScenarioToSession, SessionShell
 from pydantic import BaseModel
 from typing import Dict, Any
+from services.session_service import get_sandbox_session as get_sandbox
 
 class SessionCreate(BaseModel):
     creatorID: int
@@ -57,7 +58,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
 
 @router.get("/sandbox/{user_id}")
 def get_sandbox_session(user_id: int, db: Session = Depends(get_db)):
-    return db.query(GameSession).filter(GameSession.name == "Sandbox", GameSession.creatorID == user_id).first()
+    return get_sandbox(db, user_id)
 
 # UPDATE USER
 @router.put("/{session_id}")
