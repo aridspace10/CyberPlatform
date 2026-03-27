@@ -1,5 +1,5 @@
 from sqlalchemy import Column, DateTime, Integer, String, JSON, ForeignKey
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 import datetime
 
 class Base(DeclarativeBase):
@@ -14,7 +14,7 @@ class Scenario(Base):
 
 class GameSession(Base):
     __tablename__ = "session"
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     name = Column(String)
     creatorID = Column(Integer, ForeignKey("users.id"))
 
