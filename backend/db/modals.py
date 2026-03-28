@@ -10,7 +10,7 @@ class Scenario(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     description = Column(String)
-    config = Column(JSON)
+    config: Mapped[dict] = mapped_column(JSON)
 
 class GameSession(Base):
     __tablename__ = "session"
