@@ -1,7 +1,7 @@
 from typing import Dict
 from fastapi import WebSocket
 from game.ShellState import ShellState
-
+from game.GameManager import GameManager
 from game.filesystem import FileSystem
 from game.commandline import CommandLine
 
@@ -21,7 +21,7 @@ class GameSession:
         self.players: Dict[str, Player] = {}
         self.connections: Dict[WebSocket, str] = {}
         self.cmd = CommandLine()
-        self.game_manger = GameManger()
+        self.game_manger: GameManager = GameManager()
 
     def get_player(self, websocket: WebSocket) -> Player | None:
         username = self.connections.get(websocket)
