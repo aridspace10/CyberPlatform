@@ -18,13 +18,10 @@ class GameSession:
         self.state = "waiting"
         self.name = "Test"
 
-        # Persistent data
         self.players: Dict[str, Player] = {}
-
-        # Runtime only (DO NOT SAVE)
         self.connections: Dict[WebSocket, str] = {}
-
         self.cmd = CommandLine()
+        self.game_manger = GameManger()
 
     def get_player(self, websocket: WebSocket) -> Player | None:
         username = self.connections.get(websocket)
@@ -52,7 +49,7 @@ class GameSession:
             # First time joining
             self.players[username] = Player(websocket, username)
         else:
-            # Reconnecting — reuse their shell + fs
+            # Reconnecting
             self.players[username].websocket = websocket
 
         await self.broadcast({
@@ -111,7 +108,7 @@ class GameSession:
             "type": "command_result",
             "stdout": stdout,
             "stderr": stderr,
-            "cwd": player.shell.cwd  # nice UX addition
+            "cwd": player.shell.cwd
         })
 
 
