@@ -5,7 +5,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from db.session import get_db
 from db.modals import GameSession
-from services.session_service import get_sandbox_session, add_session
+from services.session_service import get_sandbox_session, add_session, get_scenario_byname
 
 router = APIRouter(prefix="/api")
 
@@ -43,10 +43,16 @@ def get_tutorial(user_id: str, db: Session = Depends(get_db)):
     tut = get_sandbox_session(db, int(user_id))
     if (tut == None):
         # Create a tutorial session
-        sessionID = add_session(db, int(user_id), "tutorial")
-        session = session_manager.add_session(str(sessionID), "tutorial")
+        sessionID = add_session(db, int(user_id), "Sandbox")
+        session = session_manager.add_session(str(sessionID), "Sandbox")
         # Generate tutorial config
-
+        scenario = get_scenario_byname(db, "Sandbox")
+        if scenario == None:
+            return Exception("Admin Error: No tutorial Config")
+        config: dict = scenario.config or {}
+        session.game_manger.set_config(config)
+        session.game_manger.generate_config()
+        
         # Add tutorial config to db
 
         # Add user to tutorial session with shell gained from tutorial config
