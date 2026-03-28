@@ -16,3 +16,10 @@ def add_session(db: Session, user_id: int, name: str) -> int:
 
 def get_scenario_byname(db: Session, name: str) -> Scenario | None:
     return db.query(Scenario).filter(Scenario.name == name).first()
+
+def add_session_scenario(db: Session, sesID: int, scID: int, config: dict) -> None:
+    ses = ScenarioToSession(scenarioID=scID,sessionID=sesID,config=config)
+    db.add(ses)
+    db.commit()
+    db.refresh(ses)
+    return None
