@@ -7,14 +7,14 @@ class Base(DeclarativeBase):
 
 class Scenario(Base):
     __tablename__ = "scenario"
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name = Column(String)
     description = Column(String)
     config: Mapped[dict] = mapped_column(JSON)
 
 class GameSession(Base):
     __tablename__ = "session"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name = Column(String)
     creatorID = Column(Integer, ForeignKey("users.id"))
 
