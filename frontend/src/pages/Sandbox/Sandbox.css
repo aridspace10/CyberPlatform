@@ -1,0 +1,4 @@
+.sandbox-page {
+    display: flex;
+    flex-direction: column;
+}
