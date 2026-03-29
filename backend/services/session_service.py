@@ -23,3 +23,10 @@ def add_session_scenario(db: Session, sesID: int, scID: int, config: dict) -> No
     db.commit()
     db.refresh(ses)
     return None
+
+def add_session_shell(db: Session, sesID: int, userID: int, shell: dict) -> None:
+    ses = ScenarioToSession(SessionID=sesID,UserID=userID,shell=shell)
+    db.add(ses)
+    db.commit()
+    db.refresh(ses)
+    return None
