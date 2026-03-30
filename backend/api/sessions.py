@@ -40,6 +40,7 @@ def get_session(id: str):
 
 @router.get("/sandbox/{user_id}")
 def get_sandbox(user_id: str, db: Session = Depends(get_db)):
+    # get sandbox from db if exist
     tut = get_sandbox_session(db, int(user_id))
     if (tut == None):
         # Create a tutorial session
@@ -53,10 +54,13 @@ def get_sandbox(user_id: str, db: Session = Depends(get_db)):
         session.game_manger.set_config(config)
         # Add tutorial config to db
         add_session_scenario(db, sessionID, scenario.id, session.game_manger.gen_config)
-        # Add user to tutorial session with shell gained from tutorial config
+        # Add user to tutorial session with shell gained from tutorial config to db
         add_session_shell(db, sessionID, int(user_id), session.game_manger.get_shell())
+        return sessionID
     else:
         # Tutorial Exists in db, bring to session manger if needed (add please)
+        if (session_manager.get_session(str(tut.id)) == "404"):
+            session = session_manager.add_session(str(tut.id), "Sandbox")
         return tut.id
 
 

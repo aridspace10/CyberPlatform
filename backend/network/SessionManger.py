@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Literal
 from fastapi import WebSocket
 from game.ShellState import ShellState
 from game.GameManager import GameManager
@@ -116,9 +116,9 @@ class SessionManager:
     def __init__(self):
         self.sessions: Dict[str, GameSession] = {}
 
-    def get_session(self, session_id: str) -> GameSession:
+    def get_session(self, session_id: str) -> GameSession | Literal["404"]:
         if session_id not in self.sessions:
-            self.sessions[session_id] = GameSession(session_id)
+            return "404"
         return self.sessions[session_id]
     
     def add_session(self, session_id: str, name: str):
