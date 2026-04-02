@@ -63,8 +63,7 @@ export function AuthProvider({ children }) {
         return "Password and Confirm Password are not the same"
     }
     const data = await createUser(username, email, password);
-    await login(username, password)
-    
+    return data
   }
 
 
