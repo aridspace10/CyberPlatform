@@ -4,7 +4,7 @@ from network.SessionManger import session_manager
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from db.session import get_db
-from db.modals import GameSession, Scenario
+from db.modals import GameSession, Scenario, ScenarioToSession, SessionShell
 from services.session_service import get_sandbox_session, add_session, get_scenario_byname, add_session_scenario, add_session_shell
 
 router = APIRouter(prefix="/api")
@@ -63,7 +63,11 @@ def get_sandbox(user_id: str, db: Session = Depends(get_db)):
             session = session_manager.add_session(str(tut.id), "Sandbox")
         return {"session_id": tut.id}
 
-
+@router.get("/shells")
+async def get_shells(db: Session = Depends(get_db)):
+    return {
+        "shells": db.query(SessionShell).all()
+    }
 
 @router.post("/sessions/{session_id}/state")
 async def update_session_state(session_id: str, body: StateUpdate):
@@ -80,4 +84,54 @@ async def update_session_state(session_id: str, body: StateUpdate):
 async def get_scenarios(db: Session = Depends(get_db)):
     return {
         "scenarios": db.query(Scenario).all()
+    }
+
+@router.get("/debug/session/{session_id}")
+def debug_session(session_id: int, db: Session = Depends(get_db)):
+    # 1. Get session
+    session = db.query(GameSession).filter(GameSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # 2. Get scenario mapping
+    scenario_link = (
+        db.query(ScenarioToSession)
+        .filter(ScenarioToSession.sessionID == session_id)
+        .first()
+    )
+
+    scenario = None
+    if scenario_link:
+        scenario = (
+            db.query(Scenario)
+            .filter(Scenario.id == scenario_link.scenarioID)
+            .first()
+        )
+
+    # 3. Get all shells (players in session)
+    shells = (
+        db.query(SessionShell)
+        .filter(SessionShell.SessionID == session_id)
+        .all()
+    )
+
+    # 4. Build response
+    return {
+        "session": {
+            "id": session.id,
+            "name": session.name,
+            "creatorID": session.creatorID,
+        },
+        "scenario": {
+            "id": scenario.id if scenario else None,
+            "config": scenario_link.config if scenario_link else None,
+            "base": scenario.config if scenario else None,
+        },
+        "players": [
+            {
+                "userID": s.UserID,
+                "shell": s.shell
+            }
+            for s in shells
+        ]
     }

@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from db.modals import GameSession, ScenarioToSession, Scenario
+from db.modals import GameSession, ScenarioToSession, Scenario, SessionShell
 
 def get_sandbox_session(db: Session, user_id: int):
     return db.query(GameSession).filter(
@@ -25,7 +25,7 @@ def add_session_scenario(db: Session, sesID: int, scID: int, config: dict) -> No
     return None
 
 def add_session_shell(db: Session, sesID: int, userID: int, shell: dict) -> None:
-    ses = ScenarioToSession(SessionID=sesID,UserID=userID,shell=shell)
+    ses = SessionShell(SessionID=sesID,UserID=userID,shell=shell)
     db.add(ses)
     db.commit()
     db.refresh(ses)
