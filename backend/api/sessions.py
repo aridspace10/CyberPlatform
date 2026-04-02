@@ -4,7 +4,7 @@ from network.SessionManger import session_manager
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from db.session import get_db
-from db.modals import GameSession
+from db.modals import GameSession, Scenario
 from services.session_service import get_sandbox_session, add_session, get_scenario_byname, add_session_scenario, add_session_shell
 
 router = APIRouter(prefix="/api")
@@ -47,7 +47,7 @@ def get_sandbox(user_id: str, db: Session = Depends(get_db)):
         sessionID = add_session(db, int(user_id), "Sandbox")
         session = session_manager.add_session(str(sessionID), "Sandbox")
         # Generate tutorial config
-        scenario = get_scenario_byname(db, "Sandbox")
+        scenario = get_scenario_byname(db, "Tutorial")
         if scenario == None:
             return {"error": "No tutorial config"}
         config: dict = scenario.config or {}
@@ -74,4 +74,10 @@ async def update_session_state(session_id: str, body: StateUpdate):
     return {
         "session_id": session_id,
         "state": body.state
+    }
+
+@router.get("/scenarios")
+async def get_scenarios(db: Session = Depends(get_db)):
+    return {
+        "scenarios": db.query(Scenario).all()
     }
