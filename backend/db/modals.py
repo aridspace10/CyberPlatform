@@ -9,7 +9,6 @@ class Scenario(Base):
     __tablename__ = "scenario"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name = Column(String)
-    description = Column(String)
     config: Mapped[dict] = mapped_column(JSON)
 
 class GameSession(Base):
