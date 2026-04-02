@@ -1,7 +1,11 @@
 import SettingsTab from "../../components/SettingsTab"
+import GeneralTab from "../../components/GeneralTab"
+import EnvironmentTab from "../../components/EnvironmentTab"
+import { useParams } from "react-router-dom";
 
 export default function Sandbox() {
     let content = <GeneralTab />
+    const { sessionId } = useParams();
 
     const handleTabSwitch = (tab) => {
         switch (tab) {

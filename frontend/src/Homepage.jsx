@@ -18,8 +18,9 @@ export default function Homepage() {
         if (user == null) {
             navigate(`login`)
         }
-        console.log(user);
-        await enterTutorial(user.id);
+        const data = await enterTutorial(user.id);
+        console.log(data)
+        navigate(`/sandbox/${data["session_id"]}`)
     }
 
     return (
