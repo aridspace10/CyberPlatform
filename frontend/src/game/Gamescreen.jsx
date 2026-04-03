@@ -7,7 +7,7 @@ import Terminal from "./Terminal";
 import "./Gamescreen.css"
 export default function Gamescreen({wsRef, log, addLine}) {
   const [input, setInput] = useState("");
-  let content = <GeneralTab />
+  const [content, setContent] = useState(<GeneralTab />)
 
   function handleEnter(e) {
     if (e.key === "Enter") {
@@ -35,14 +35,18 @@ export default function Gamescreen({wsRef, log, addLine}) {
     }
   }
 
-  const handleTabSwitch = (tab) => {
+    const handleTabSwitch = (tab) => {
+        console.log("please")
         switch (tab) {
             case "General":
-                content = <GeneralTab />
+                setContent(<GeneralTab />)
+                break;
             case "Settings":
-                content = <SettingsTab />
+                setContent(<SettingsTab />)
+                break;
             case "Environment":
-                content = <EnvironmentTab />
+                setContent(<EnvironmentTab />)
+                break;
         }
     }
 
