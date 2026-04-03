@@ -45,6 +45,7 @@ export default function Game() {
 
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
+            console.log("WS message:", data);
 
             if (data.type === "chat") {
                 addLine(`${data.user}: ${data.message}`);

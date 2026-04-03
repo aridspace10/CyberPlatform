@@ -6,10 +6,10 @@ router = APIRouter()
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
-
+    print (session_manager.sessions)
     session = session_manager.get_session(session_id)
-    if session:
-        pass
+    if session == "404":
+        return
 
     try:
         # Expect join packet first
@@ -20,6 +20,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
         while True:
             data = await websocket.receive_json()
+            print(f"Received message: {data}")
 
             msg_type = data.get("type")
             if msg_type == "chat":
@@ -31,7 +32,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
             elif msg_type == "command":
 
-                player = session.players.get(websocket)
+                player = session.players.get(username)
 
                 if not player:
                     continue
