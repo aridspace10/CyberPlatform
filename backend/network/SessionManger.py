@@ -5,6 +5,8 @@ from game.GameManager import GameManager
 from game.filesystem import FileSystem
 from game.commandline import CommandLine
 
+Username = str
+
 class Player:
     def __init__(self, websocket: WebSocket, username: str):
         self.websocket = websocket
@@ -18,8 +20,8 @@ class GameSession:
         self.state = "waiting"
         self.name = "Test"
 
-        self.players: Dict[str, Player] = {}
-        self.connections: Dict[WebSocket, str] = {}
+        self.players: Dict[Username, Player] = {}
+        self.connections: Dict[WebSocket, Username] = {}
         self.cmd = CommandLine()
         self.game_manger: GameManager = GameManager()
 
