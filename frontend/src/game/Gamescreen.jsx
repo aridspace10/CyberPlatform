@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import Terminal from "./Terminal";
-export default function Gamescreen({wsRef, log}) {
+export default function Gamescreen({wsRef, log, addLine}) {
   const [input, setInput] = useState("");
 
   function handleEnter(e) {

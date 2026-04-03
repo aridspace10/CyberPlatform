@@ -16,6 +16,7 @@ class GameSession(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name = Column(String)
     creatorID = Column(Integer, ForeignKey("users.id"))
+    state = Column(String)
 
 class SessionShell(Base):
     __tablename__ = "Session_Shell"

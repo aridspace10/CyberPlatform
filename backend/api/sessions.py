@@ -44,7 +44,7 @@ def get_sandbox(user_id: str, db: Session = Depends(get_db)):
     tut = get_sandbox_session(db, int(user_id))
     if (tut == None):
         # Create a tutorial session
-        sessionID = add_session(db, int(user_id), "Sandbox")
+        sessionID = add_session(db, int(user_id), "Sandbox", "running")
         session = session_manager.add_session(str(sessionID), "Sandbox")
         # Generate tutorial config
         scenario = get_scenario_byname(db, "Tutorial")
@@ -121,6 +121,7 @@ def debug_session(session_id: int, db: Session = Depends(get_db)):
             "id": session.id,
             "name": session.name,
             "creatorID": session.creatorID,
+            "state": session.state
         },
         "scenario": {
             "id": scenario.id if scenario else None,

@@ -7,8 +7,8 @@ def get_sandbox_session(db: Session, user_id: int):
         GameSession.creatorID == user_id
     ).first()
 
-def add_session(db: Session, user_id: int, name: str) -> int:
-    ses = GameSession(name=name, creatorID=user_id)
+def add_session(db: Session, user_id: int, name: str, state: str) -> int:
+    ses = GameSession(name=name, creatorID=user_id, state=state)
     db.add(ses)
     db.commit()
     db.refresh(ses)

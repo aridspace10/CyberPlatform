@@ -10,3 +10,12 @@ export async function enterTutorial(user_id) {
     const data = await res.json();
     return data
 }
+
+export async function getFullSessionData(session_id) {
+    const res = await fetch(`${API}/debug/session/${session_id}`, {
+        method: "GET",
+    });
+
+    const data = await res.json();
+    return data
+}

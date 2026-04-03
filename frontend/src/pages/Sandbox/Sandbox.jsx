@@ -1,11 +1,19 @@
 import SettingsTab from "../../components/SettingsTab"
 import GeneralTab from "../../components/GeneralTab"
+import { useEffect, useRef, useState } from "react";
 import EnvironmentTab from "../../components/EnvironmentTab"
 import { useParams } from "react-router-dom";
+import Gamescreen from "../../game/Gamescreen";
 
 export default function Sandbox() {
     let content = <GeneralTab />
+    const [log, setLog] = useState([]);
+    const wsRef = useRef(null);
     const { sessionId } = useParams();
+
+    function addLine(text) {
+        setLog(prev => [...prev, text]);
+    }
 
     const handleTabSwitch = (tab) => {
         switch (tab) {
@@ -21,7 +29,7 @@ export default function Sandbox() {
     return (
         <div className="sandbox-page">
             <div className="main-screen">
-
+                <Gamescreen wsRef={wsRef} log={log} addLine={addLine} />
             </div>
             <div className="sidebar-page">
                 <div className="sidebar-nav">

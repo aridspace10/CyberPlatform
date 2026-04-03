@@ -1,13 +1,17 @@
 import { useScroll } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import Gamescreen from "./Gamescreen";
 import WaitingScreen from "./WaitingScreen";
 import Versus from "./Versus";
+import { useParams } from "react-router-dom";
+import { useAuth } from "../auth/useAuth";
+import { getFullSessionData } from "../api/sessions";
 
 export default function Game() {
     const location = useLocation();
-    const { sessionId } = location.state || {};
+    const { sessionId } = useParams();
+    const { user } = useAuth()
     const [sessionData, setSessionData] = useState(null);
     const [players, setPlayers] = useState([]);
     const [username, setUsername] = useState("");
@@ -20,38 +24,25 @@ export default function Game() {
         setLog(prev => [...prev, text]);
     }
 
-    const onGameStart = async () => {
-        console.log("hehe")
-        await fetch(`http://localhost:8000/api/sessions/${sessionId}/state`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ state: "starting" })
-        });
-    }
+    const hasConnected = useRef(false);
 
     useEffect(() => {
-        if (hasPrompted.current) return;
-        hasPrompted.current = true;
-
-        const name = prompt("Enter username");
-        setUsername(name || "anonymous");
-    }, []);
-
-    useEffect(() => {
-        if (!username) return;
-        if (wsRef.current) return;
+        if (!user || wsRef.current) return;
 
         const socket = new WebSocket(
             `ws://localhost:8000/ws/${sessionId}`
         );
 
-        socket.onopen = () => {
+        socket.onopen = async () => {
             socket.send(JSON.stringify({
                 type: "join",
-                username: username
+                username: user.username
             }));
-        }
-        
+
+            const sessionData = await getFullSessionData(sessionId);
+            setState(sessionData["session"]["state"]);
+        };
+
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
 
@@ -74,17 +65,19 @@ export default function Game() {
                 data.stderr.forEach(line => addLine(line));
             }
         };
+
         wsRef.current = socket;
+
         return () => {
             socket.close();
             wsRef.current = null;
         };
-    }, [username]);
+    }, [user, sessionId]);
 
     if (state == 'waiting') {
-        return (<WaitingScreen players={players} onGameStart={onGameStart} />)
+        return (<WaitingScreen players={players} />)
     } else if (state == 'running') {
-        return (<Gamescreen wsRef={wsRef} log={log} />)
+        return (<Gamescreen wsRef={wsRef} log={log} addLine={addLine} />)
     } else if (state == 'starting') {
         return (<Versus players={players} />)
     } else {
