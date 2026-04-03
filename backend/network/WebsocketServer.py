@@ -8,6 +8,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
 
     session = session_manager.get_session(session_id)
+    if session:
+        pass
 
     try:
         # Expect join packet first

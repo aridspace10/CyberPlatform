@@ -35,8 +35,8 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  /* Removed: display: flex; place-items: center; 
+     These center child elements like a single card, which breaks full-viewport pages */
   min-width: 320px;
   min-height: 100vh;
 }
