@@ -7,6 +7,7 @@ import Versus from "./Versus";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { getFullSessionData } from "../api/sessions";
+import { SessionContext } from "../components/SessionContext";
 
 export default function Game() {
     const location = useLocation();
@@ -36,10 +37,12 @@ export default function Game() {
         socket.onopen = async () => {
             socket.send(JSON.stringify({
                 type: "join",
-                username: user.username
+                username: user.username,
+                userID: user.id
             }));
 
             const sessionData = await getFullSessionData(sessionId);
+            console.log(sessionData)
             setState(sessionData["session"]["state"]);
         };
 
@@ -78,7 +81,11 @@ export default function Game() {
     if (state == 'waiting') {
         return (<WaitingScreen players={players} />)
     } else if (state == 'running') {
-        return (<Gamescreen wsRef={wsRef} log={log} addLine={addLine} />)
+        return (
+            <SessionContext.Provider value={{ sessionId, wsRef }}>
+                <Gamescreen wsRef={wsRef} log={log} addLine={addLine} />
+            </SessionContext.Provider>
+    )
     } else if (state == 'starting') {
         return (<Versus players={players} />)
     } else {
