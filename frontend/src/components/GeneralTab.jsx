@@ -1,4 +1,16 @@
+import { useState } from "react";
+import { useSession } from "./SessionContext";
+import "./Tabs.css"
+
 export default function GeneralTab() {
+    const { sessionId } = useSession();
+    const [saved, setSaved] = useState(false);
+
+    const handleSave = async () => {
+        await fetch(`/api/sessions/${sessionId}/save`, {
+            method: "POST"
+        })
+    }
 
     const handleReset = () => {
 
@@ -9,10 +21,13 @@ export default function GeneralTab() {
     }
 
     return (
-        <div className="general-tab">
-            <h1> General </h1>
-            <button onClick={handleReset}> Reset </button>
-            <button onClick={handleExit}> Exit </button>
+        <div>
+            <div className="general-tab">
+                <h1> General </h1>
+                <button className="tab-button" onClick={handleSave}> Save </button>
+                <button className="tab-button" onClick={handleReset}> Reset </button>
+                <button className="tab-button"onClick={handleExit}> Exit </button>
+            </div>
         </div>
     )
 }
