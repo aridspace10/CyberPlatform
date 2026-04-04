@@ -8,11 +8,19 @@ from game.commandline import CommandLine
 Username = str
 
 class Player:
-    def __init__(self, websocket: WebSocket, username: str):
+    def __init__(self, websocket: WebSocket, username: str, user_id: str):
         self.websocket = websocket
         self.username = username
+        self.user_id = user_id
         self.shell = ShellState()
         self.shell.fs = FileSystem()
+
+    def serialize(self) -> dict:
+        return {
+            "vars": self.shell.vars,
+            "cmds": self.shell.commands,
+            "fs": self.shell.fs.to_dict()
+        }
 
 class GameSession:
     def __init__(self, session_id: str):
@@ -44,12 +52,12 @@ class GameSession:
         self.state = new_state
         await self.broadcast(self.lobby_state())
 
-    async def connect(self, websocket: WebSocket, username: str):
+    async def connect(self, websocket: WebSocket, username: str, user_id: str):
         self.connections[websocket] = username
 
         if username not in self.players:
             # First time joining
-            self.players[username] = Player(websocket, username)
+            self.players[username] = Player(websocket, username, user_id)
         else:
             # Reconnecting
             self.players[username].websocket = websocket
