@@ -4,6 +4,6 @@ class ShellState:
     def __init__(self):
         self.cwd = ""
         self.fs = FileSystem()
-        self.env = {}
+        self.commands = []
         self.vars = {}
         self.ls = 0
