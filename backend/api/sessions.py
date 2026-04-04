@@ -1,17 +1,28 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from network.SessionManger import session_manager
+from network.SessionManger import session_manager, GameSession
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from db.session import get_db
-from db.modals import GameSession, Scenario, ScenarioToSession, SessionShell
-from services.session_service import get_sandbox_session, add_session, get_scenario_byname, add_session_scenario, add_session_shell
+from db.modals import Scenario, ScenarioToSession, SessionShell
+from services.session_service import get_session, get_sandbox_session, add_session, get_scenario_byname, add_session_scenario, add_session_shell, update_session_shell
 
 router = APIRouter(prefix="/api")
 
 class StateUpdate(BaseModel):
     state: str
 
+################### HELPERS ###################
+def populate_session_from_db(session_id: int, db: Session = Depends(get_db)):
+    ses_db = get_session(db, session_id)
+    if ses_db == None:
+        return {
+            "details": "Session does not exist"
+        }
+    ses = GameSession(str(session_id))
+    
+
+################### ROUTERS ###################
 @router.get("/sessions")
 def list_sessions():
     return {
@@ -26,7 +37,7 @@ def list_sessions():
     }
 
 @router.get("/session/{id}")
-def get_session(id: str):
+def get_session_S(id: str):
     session = session_manager.sessions.get(id)
 
     if not session:
@@ -80,6 +91,16 @@ async def update_session_state(session_id: str, body: StateUpdate):
         "state": body.state
     }
 
+@router.post("/sessions/{session_id}/save")
+async def save_session_state(session_id: str, db: Session = Depends(get_db)):
+    ses = session_manager.get_session(session_id)
+    if ses == "404":
+        return {
+            "message": "sessionID does not exist"
+        }
+    for username, player in ses.players.items():
+        update_session_shell(db, int(session_id), int(player.user_id), player.serialize())
+
 @router.get("/scenarios")
 async def get_scenarios(db: Session = Depends(get_db)):
     return {
@@ -87,9 +108,20 @@ async def get_scenarios(db: Session = Depends(get_db)):
     }
 
 @router.get("/debug/session/{session_id}")
+def get_session_data(session_id: int, db: Session = Depends(get_db)):
+    session = session_manager.get_session(str(session_id))
+    if (session != "404"):
+        return {
+            "session": session
+        }
+    else:
+        populate_session_from_db(session_id)
+        
+
+@router.get("/db/session/{session_id}")
 def debug_session(session_id: int, db: Session = Depends(get_db)):
     # 1. Get session
-    session = db.query(GameSession).filter(GameSession.id == session_id).first()
+    session = get_session(db, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 

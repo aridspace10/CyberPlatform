@@ -18,9 +18,7 @@ export default function Homepage() {
         if (user == null) {
             navigate(`login`)
         }
-        console.log(user)
         const data = await enterTutorial(user.id);
-        console.log(data)
         navigate(`/game/${data["session_id"]}`)
     }
 

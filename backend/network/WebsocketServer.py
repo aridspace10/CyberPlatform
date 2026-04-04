@@ -14,9 +14,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     try:
         # Expect join packet first
         join_data = await websocket.receive_json()
+        print (join_data)
         username = join_data.get("username", "anonymous")
+        user_id = join_data.get("userID", "0")
 
-        await session.connect(websocket, username)
+        await session.connect(websocket, username, user_id)
 
         while True:
             data = await websocket.receive_json()

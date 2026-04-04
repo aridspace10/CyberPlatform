@@ -8,7 +8,6 @@ import ProtectedRoute from "./auth/ProtectedRoute";
 import { AuthProvider } from "./auth/AuthContext";
 import Login from "./pages/Login/LoginPage";
 import Signup from "./pages/Login/SignupPage";
-import Sandbox from "./pages/Sandbox/Sandbox"
 
 export default function App() {
     return (
