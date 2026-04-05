@@ -37,3 +37,9 @@ class User(Base):
     username: Mapped[Optional[str]] = mapped_column(String, unique=True)
     email: Mapped[Optional[str]] = mapped_column(String)
     password: Mapped[Optional[str]] = mapped_column(String)
+
+class JoinRequest(Base):
+    __tablename__ = "joinRequest"
+    SessionID: Mapped[int] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
+    UserID: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    date: Mapped[DateTime] = mapped_column(DateTime)

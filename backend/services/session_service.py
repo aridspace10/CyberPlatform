@@ -18,6 +18,9 @@ def get_session(db: Session, sesID: int):
 def get_scenario_byname(db: Session, name: str) -> Scenario | None:
     return db.query(Scenario).filter(Scenario.name == name).first()
 
+def get_session_shell(db: Session, sesID: str, userID: str) -> SessionShell | None:
+    return db.query(SessionShell).filter(SessionShell.SessionID == sesID, SessionShell.UserID == userID).first()
+
 def get_session_shells(db: Session, sesID: str) -> List[SessionShell] | None:
     return db.query(SessionShell).filter(SessionShell.SessionID == sesID).all()
 

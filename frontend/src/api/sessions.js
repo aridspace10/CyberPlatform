@@ -11,8 +11,8 @@ export async function enterTutorial(user_id) {
     return data
 }
 
-export async function getFullSessionData(session_id) {
-    const res = await fetch(`${API}/debug/session/${session_id}`, {
+export async function getFullSessionData(session_id, user_id) {
+    const res = await fetch(`${API}/debug/session/${session_id}-${user_id}`, {
         method: "GET",
     });
 

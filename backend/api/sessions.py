@@ -1,26 +1,30 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from network.SessionManger import session_manager, GameSession
+from network.SessionManger import session_manager, GameSession, Player
 from fastapi import Depends
 from sqlalchemy.orm import Session
+from game.ShellState import ShellState
 from db.session import get_db
 from db.modals import Scenario, ScenarioToSession, SessionShell
-from services.session_service import get_session, get_sandbox_session, add_session, get_scenario_byname, add_session_scenario, add_session_shell, update_session_shell
+from services.session_service import get_session_shell, get_session, get_sandbox_session, add_session, get_scenario_byname, add_session_scenario, add_session_shell, update_session_shell
+from services.user_service import get_user_by_id
 
 router = APIRouter(prefix="/api")
 
 class StateUpdate(BaseModel):
     state: str
 
-################### HELPERS ###################
-def populate_session_from_db(session_id: int, db: Session = Depends(get_db)):
-    ses_db = get_session(db, session_id)
-    if ses_db == None:
-        return {
-            "details": "Session does not exist"
-        }
-    ses = GameSession(str(session_id))
-    
+# ################### HELPERS ###################
+# def populate_session_from_db(session_id: int, db: Session = Depends(get_db)):
+#     ses_db = get_session(db, session_id)
+#     if ses_db == None:
+#         return {
+#             "details": "Session does not exist"
+#         }
+#     ses = GameSession(str(session_id))
+#     shells = get_session_shells(db, str(session_id))
+#     for shell in shells:
+#         p = Player()
 
 ################### ROUTERS ###################
 @router.get("/sessions")
@@ -107,15 +111,19 @@ async def get_scenarios(db: Session = Depends(get_db)):
         "scenarios": db.query(Scenario).all()
     }
 
-@router.get("/debug/session/{session_id}")
-def get_session_data(session_id: int, db: Session = Depends(get_db)):
+@router.get("/session/{session_id}")
+def get_session_data(session_id: int, user_id: int, db: Session = Depends(get_db)):
     session = session_manager.get_session(str(session_id))
-    if (session != "404"):
+    if (session == "404"):
         return {
-            "session": session
+            "details": "Not Found"
         }
-    else:
-        populate_session_from_db(session_id)
+
+    return {
+        "details": "Found",
+        "name": session.name,
+        "state": session.state
+    }
         
 
 @router.get("/db/session/{session_id}")

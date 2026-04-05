@@ -8,7 +8,7 @@ from game.commandline import CommandLine
 Username = str
 
 class Player:
-    def __init__(self, websocket: WebSocket, username: str, user_id: str):
+    def __init__(self, websocket: WebSocket | None, username: str, user_id: str):
         self.websocket = websocket
         self.username = username
         self.user_id = user_id
