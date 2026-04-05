@@ -32,7 +32,7 @@ class ScenarioToSession(Base):
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True)
-    email = Column(String)
-    password = Column(String)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    username: Mapped[Optional[str]] = mapped_column(String, unique=True)
+    email: Mapped[Optional[str]] = mapped_column(String)
+    password: Mapped[Optional[str]] = mapped_column(String)
