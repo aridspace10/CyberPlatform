@@ -21,15 +21,15 @@ class GameSession(Base):
 
 class SessionShell(Base):
     __tablename__ = "Session_Shell"
-    SessionID = Column(Integer, ForeignKey("scenario.id"), primary_key=True)
-    UserID = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    shell = Column(JSON)
+    SessionID: Mapped[int] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
+    UserID: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    shell: Mapped[Optional[dict]] = mapped_column(JSON)
 
 class ScenarioToSession(Base):
     __tablename__ = "scenariosToGame"
-    scenarioID = Column(Integer, ForeignKey("scenario.id"), primary_key=True)
-    sessionID = Column(Integer, ForeignKey("session.id"), primary_key=True)
-    config = Column(JSON)
+    scenarioID: Mapped[int] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
+    sessionID: Mapped[int] = mapped_column(ForeignKey("session.id"), primary_key=True)
+    config: Mapped[Optional[dict]] = mapped_column(JSON)
 
 class User(Base):
     __tablename__ = "users"
