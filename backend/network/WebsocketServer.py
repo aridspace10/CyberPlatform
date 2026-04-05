@@ -1,6 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .SessionManger import session_manager, GameSession, Player
-from ..services.session_service import get_session, get_session_shell
+from services.session_service import get_session, get_session_shell
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from db.session import get_db
@@ -31,6 +31,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
             if shell_db and shell_db.shell:
                 player = Player(websocket, username, user_id)
                 shell = shell_db.shell
+                print (shell)
                 player.shell.commands = shell["cmds"]
                 player.shell.vars = shell["vars"]
                 player.shell.fs.from_dict(shell["fs"])
