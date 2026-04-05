@@ -40,19 +40,6 @@ def list_sessions():
         ]
     }
 
-@router.get("/session/{id}")
-def get_session_S(id: str):
-    session = session_manager.sessions.get(id)
-
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return {
-        "id": id,
-        "players": list(session.players.keys()),
-        "state": session.state
-    }
-
 @router.post("/sandbox/{user_id}")
 def get_sandbox(user_id: str, db: Session = Depends(get_db)):
     # get sandbox from db if exist
@@ -76,6 +63,7 @@ def get_sandbox(user_id: str, db: Session = Depends(get_db)):
         # Tutorial Exists in db, bring to session manger if needed (add please)
         if (session_manager.get_session(str(tut.id)) == "404"):
             session = session_manager.add_session(str(tut.id), "Sandbox")
+            session.state = "running"
         return {"session_id": tut.id}
 
 @router.get("/shells")
@@ -112,8 +100,9 @@ async def get_scenarios(db: Session = Depends(get_db)):
     }
 
 @router.get("/session/{session_id}")
-def get_session_data(session_id: int, user_id: int, db: Session = Depends(get_db)):
+def get_session_data(session_id: int, db: Session = Depends(get_db)):
     session = session_manager.get_session(str(session_id))
+    print (session)
     if (session == "404"):
         return {
             "details": "Not Found"

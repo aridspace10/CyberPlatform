@@ -24,7 +24,7 @@ class FileNode:
             self.depth = depth
             self.inode.from_dict(fn["inode"])
             for item in fn["items"]:
-                inode = Inode(item["type"])
+                inode = Inode(item["inode"]["type"])
                 f = FileNode(parent, item["name"], inode)
                 f.from_dict(item, depth + 1, self)
                 self.items.append(f)

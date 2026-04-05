@@ -12,7 +12,7 @@ export async function enterTutorial(user_id) {
 }
 
 export async function getFullSessionData(session_id, user_id) {
-    const res = await fetch(`${API}/debug/session/${session_id}-${user_id}`, {
+    const res = await fetch(`${API}/session/${session_id}`, {
         method: "GET",
     });
 

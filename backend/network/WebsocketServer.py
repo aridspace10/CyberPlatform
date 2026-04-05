@@ -12,6 +12,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
     await websocket.accept()
     session = session_manager.get_session(session_id)
     if session == "404":
+        print ("hehe")
         ses_db = get_session(db, int(session_id))
         if (ses_db == None):
             await websocket.close()
@@ -19,7 +20,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
         session = GameSession(str(session_id))
         session.name = ses_db.name if ses_db.name is not None else ""
         session.state = ses_db.state if ses_db.state is not None else ""
-
+        print (session.state)
     try:
         # Expect join packet first
         join_data = await websocket.receive_json()

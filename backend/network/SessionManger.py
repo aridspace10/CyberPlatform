@@ -32,6 +32,9 @@ class GameSession:
         self.connections: Dict[WebSocket, Username] = {}
         self.cmd = CommandLine()
         self.game_manger: GameManager = GameManager()
+    
+    def __str__(self) -> str:
+        return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
 
     def get_player(self, websocket: WebSocket) -> Player | None:
         username = self.connections.get(websocket)

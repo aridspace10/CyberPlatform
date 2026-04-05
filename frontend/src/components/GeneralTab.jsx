@@ -7,7 +7,7 @@ export default function GeneralTab() {
     const [saved, setSaved] = useState(false);
 
     const handleSave = async () => {
-        await fetch(`/api/sessions/${sessionId}/save`, {
+        await fetch(`http://localhost:8000/api/sessions/${sessionId}/save`, {
             method: "POST"
         })
     }

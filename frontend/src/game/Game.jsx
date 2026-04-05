@@ -41,9 +41,9 @@ export default function Game() {
                 userID: user.id
             }));
 
-            // const sessionData = await getFullSessionData(sessionId, user.id);
-            // console.log(sessionData)
-            // setState(sessionData["session"]["state"]);
+            const sessionData = await getFullSessionData(sessionId, user.id);
+            console.log(sessionData)
+            setState(sessionData["state"]);
         };
 
         socket.onmessage = (event) => {
