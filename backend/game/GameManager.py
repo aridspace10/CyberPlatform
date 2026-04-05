@@ -13,6 +13,7 @@ class GameManager:
     def get_shell(self) -> dict:
         return {
             "environment": [],
-            "cwds": [],
-            "root": []
+            "cmds": [],
+            "fs": {"lcs": 0, "nodes": []},
+            "vars": [],
         }

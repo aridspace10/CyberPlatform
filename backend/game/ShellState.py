@@ -1,4 +1,4 @@
-from .filesystem import FileSystem
+from filesystem import FileSystem
 
 class ShellState:
     def __init__(self):
