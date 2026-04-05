@@ -1,5 +1,6 @@
 from sqlalchemy import Column, DateTime, Integer, String, JSON, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
 import datetime
 
 class Base(DeclarativeBase):
@@ -8,15 +9,15 @@ class Base(DeclarativeBase):
 class Scenario(Base):
     __tablename__ = "scenario"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    name = Column(String)
+    name: Mapped[Optional[str]] = mapped_column(String)
     config: Mapped[dict] = mapped_column(JSON)
 
 class GameSession(Base):
     __tablename__ = "session"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    name = Column(String)
-    creatorID = Column(Integer, ForeignKey("users.id"))
-    state = Column(String)
+    name: Mapped[Optional[str]] = mapped_column(String)
+    creatorID: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    state: Mapped[Optional[str]] = mapped_column(String)
 
 class SessionShell(Base):
     __tablename__ = "Session_Shell"
