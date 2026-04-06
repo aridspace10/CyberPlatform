@@ -61,13 +61,13 @@ class Inode:
         return len(self.data.encode("utf-8"))
     
     def get_data(self) -> str:
-        self.atime = datetime.datetime.now()
+        self.atime = datetime.now()
         return self.data
     
     def set_data(self, data: str) -> None:
-        self.mtime = datetime.datetime.now()
+        self.mtime = datetime.now()
         self.data = data
     
     def append_data(self, data: str) -> None:
-        self.mtime = datetime.datetime.now()
+        self.mtime = datetime.now()
         self.data += "\n" + data
