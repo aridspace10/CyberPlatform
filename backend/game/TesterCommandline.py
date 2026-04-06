@@ -1,6 +1,6 @@
-from .filesystem import FileSystem
-from .commandline import CommandLine
-from .ShellState import ShellState
+from filesystem import FileSystem
+from commandline import CommandLine
+from ShellState import ShellState
 
 s = ShellState()
 f = FileSystem()

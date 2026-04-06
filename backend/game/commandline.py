@@ -1,13 +1,13 @@
-from .filenode import FileNode
-from .filesystem import FileSystem
+from game.filenode import FileNode
+from game.filesystem import FileSystem
 from collections import deque
 from typing import Literal, Tuple
-from .inode import Inode, NodeType
+from game.inode import Inode, NodeType
 import random
 import datetime
-from .Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
-from .ShellState import ShellState
 from .helpers import determine_perms_fromstr
+from game.Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
+from game.ShellState import ShellState
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
@@ -87,7 +87,7 @@ class CommandLine:
     def execute_command(self, command: Command) -> CommandReturn:
         redirs = command.pre_redirs + command.post_redirs
         for assign in command.assignments:
-            self.shell.env[assign.name] = assign.value.parts[0]
+            self.shell.vars[assign.name] = assign.value.parts[0]
 
         for redir in redirs:
             if (redir.op == "<"):
@@ -128,15 +128,15 @@ class CommandLine:
                     if isinstance(part, str):
                         word += part
                     else:
-                        if part.name not in self.shell.env:
+                        if part.name not in self.shell.vars:
                             return (1, ([f'Var Used which is unassigned: {part.name}'], []))
-                        word += self.shell.env[part.name]
+                        word += self.shell.vars[part.name]
                 args.append(word)
             return self.run_command(args, fdin)
         else:
             # save state
             saved_cwd = self.shell.cwd
-            saved_env = self.shell.env.copy()
+            saved_env = self.shell.vars.copy()
             saved_fs_current = self.filesystem.current
             saved_fs_cwd = self.filesystem.cwd
             saved_fdin = self.fdin
@@ -145,7 +145,7 @@ class CommandLine:
             status, (stderr, stdout) = self.execute_sequence(atom.sequence.parts)
             #restore state
             self.shell.cwd = saved_cwd
-            self.shell.env = saved_env
+            self.shell.vars = saved_env
             self.filesystem.current = saved_fs_current
             self.filesystem.cwd = saved_fs_cwd
             self.fdin = saved_fdin

@@ -1,0 +1,162 @@
+/* ============================================
+   Gamescreen.css — Terminal + Sidebar Layout
+   ============================================ */
+
+/* *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+ 
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+} */
+
+/* Root / Page Reset */
+.gamescreen {
+  display: flex;
+  flex-direction: row;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #0d0d0d;
+  color: #c8c8c8;
+  font-family: "Courier New", Courier, monospace;
+  box-sizing: border-box;
+}
+
+/* ============================================
+   Terminal (LEFT side — main area)
+   ============================================ */
+
+.terminal {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border-right: 1px solid #2a2a2a;
+  background-color: #0d0d0d;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.terminal .output {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px 4px;
+  line-height: 1.6;
+  font-size: 0.875rem;
+  word-break: break-word;
+  white-space: pre-wrap;
+  color: #c8c8c8;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+.terminal .output::-webkit-scrollbar {
+  width: 6px;
+}
+
+.terminal .output::-webkit-scrollbar-thumb {
+  background-color: #333;
+  border-radius: 3px;
+}
+
+.terminal .prompt {
+  flex: 0 0 auto;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-top: 1px solid #2a2a2a;
+  color: #00e676;
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 10px 4px;
+  outline: none;
+  caret-color: #00e676;
+  box-sizing: border-box;
+}
+
+.terminal .prompt::placeholder {
+  color: #444;
+}
+
+/* ============================================
+   Sidebar (RIGHT side)
+   ============================================ */
+
+.sidebar-page {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 280px;
+  width: 280px;
+  height: 100%;
+  background-color: #111;
+  border-left: 1px solid #2a2a2a;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Tab Nav */
+.sidebar-nav {
+  display: flex;
+  flex-direction: row;
+  flex: 0 0 auto;
+  border-bottom: 1px solid #2a2a2a;
+  background-color: #0d0d0d;
+}
+
+.sidebar-nav button {
+  flex: 1 1 0;
+  background: none;
+  border: none;
+  border-right: 1px solid #2a2a2a;
+  color: #777;
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 10px 4px;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.sidebar-nav button:last-child {
+  border-right: none;
+}
+
+.sidebar-nav button:hover {
+  color: #e0e0e0;
+  background-color: #1a1a1a;
+}
+
+.sidebar-nav button.active {
+  color: #00e676;
+  background-color: #111;
+  border-bottom: 2px solid #00e676;
+}
+
+/* Tab Content Area */
+.sidebar-page > *:not(.sidebar-nav) {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px;
+  box-sizing: border-box;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #aaa;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.sidebar-page > *:not(.sidebar-nav)::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-page > *:not(.sidebar-nav)::-webkit-scrollbar-thumb {
+  background-color: #2a2a2a;
+  border-radius: 2px;
+}

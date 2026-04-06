@@ -1,5 +1,6 @@
 from sqlalchemy import Column, DateTime, Integer, String, JSON, ForeignKey
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from typing import Optional
 import datetime
 
 class Base(DeclarativeBase):
@@ -7,32 +8,38 @@ class Base(DeclarativeBase):
 
 class Scenario(Base):
     __tablename__ = "scenario"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    description = Column(String)
-    config = Column(JSON)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[Optional[str]] = mapped_column(String)
+    config: Mapped[dict] = mapped_column(JSON)
 
 class GameSession(Base):
     __tablename__ = "session"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    creatorID = Column(Integer, ForeignKey("users.id"))
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[Optional[str]] = mapped_column(String)
+    creatorID: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    state: Mapped[Optional[str]] = mapped_column(String)
 
 class SessionShell(Base):
     __tablename__ = "Session_Shell"
-    SessionID = Column(Integer, ForeignKey("scenario.id"), primary_key=True)
-    UserID = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    shell = Column(JSON)
+    SessionID: Mapped[int] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
+    UserID: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    shell: Mapped[Optional[dict]] = mapped_column(JSON)
 
 class ScenarioToSession(Base):
     __tablename__ = "scenariosToGame"
-    scenarioID = Column(Integer, ForeignKey("scenario.id"), primary_key=True)
-    sessionID = Column(Integer, ForeignKey("session.id"), primary_key=True)
-    config = Column(JSON)
+    scenarioID: Mapped[int] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
+    sessionID: Mapped[int] = mapped_column(ForeignKey("session.id"), primary_key=True)
+    config: Mapped[Optional[dict]] = mapped_column(JSON)
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True)
-    email = Column(String)
-    password = Column(String)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    username: Mapped[Optional[str]] = mapped_column(String, unique=True)
+    email: Mapped[Optional[str]] = mapped_column(String)
+    password: Mapped[Optional[str]] = mapped_column(String)
+
+class JoinRequest(Base):
+    __tablename__ = "joinRequest"
+    SessionID: Mapped[int] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
+    UserID: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    date: Mapped[DateTime] = mapped_column(DateTime)

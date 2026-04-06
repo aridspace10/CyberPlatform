@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Literal, Tuple
-import datetime
+from datetime import datetime
 
 from enum import Enum
 
@@ -26,7 +26,7 @@ class Inode:
             "public": {"r": True, "w": True, "x": True},
         }
 
-        now = datetime.datetime.now()
+        now = datetime.now()
         self.btime = now
         self.ctime = now
         self.atime = now
@@ -35,23 +35,24 @@ class Inode:
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "type": self.type,
+            "type": self.type.value,
             "data": self.data,
             "permissions": self.permissions,
-            "btimes": self.btime,
-            "ctimes": self.ctime,
-            "atimes": self.atime,
-            "mtimes": self.mtime,
+            "btimes": self.btime.isoformat(),
+            "ctimes": self.ctime.isoformat(),
+            "atimes": self.atime.isoformat(),
+            "mtimes": self.mtime.isoformat(),
         }
     
     def from_dict(self, i: dict) -> None:
         self.id = i["id"]
+        self.type = NodeType(i['type'])
         self.data = i["data"]
         self.permissions = i["permissions"]
-        self.btime = i["btimes"]
-        self.ctime = i["ctimes"]
-        self.atime = i["atimes"]
-        self.mtime = i["mtimes"]
+        self.btime = datetime.fromisoformat(i["btimes"])
+        self.ctime = datetime.fromisoformat(i["ctimes"])
+        self.atime = datetime.fromisoformat(i["atimes"])
+        self.mtime = datetime.fromisoformat(i["mtimes"])
 
     @property
     def size(self):
@@ -60,15 +61,15 @@ class Inode:
         return len(self.data.encode("utf-8"))
     
     def get_data(self) -> str:
-        self.atime = datetime.datetime.now()
+        self.atime = datetime.now()
         return self.data
     
     def set_data(self, data: str) -> None:
-        self.mtime = datetime.datetime.now()
+        self.mtime = datetime.now()
         self.data = data
     
     def append_data(self, data: str) -> None:
-        self.mtime = datetime.datetime.now()
+        self.mtime = datetime.now()
         if (data == ""):
             self.data = ""
         elif (self.data == ""):

@@ -19,9 +19,13 @@ export default function App() {
                     <Route path="/profile" element={<ProtectedRoute></ProtectedRoute>} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
+                    <Route path="/game/:sessionId" element={
+                        <ProtectedRoute>
+                            <Game />
+                        </ProtectedRoute>
+                    } />
                     {/* Dev pathways */}
                     <Route path="/terminal" element={<Terminal />} />
-                    <Route path="/game" element={<Game />} />
                     <Route path="/users" element={<UserManager />} />
                 </Routes>
             </Router>

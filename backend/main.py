@@ -5,12 +5,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from db.session import engine, Base
 from routers import users
+from db.seed import seed_db
+from db.session import SessionLocal
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
     # startup
     Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        seed_db(db)   # ✅ run once on startup
+    finally:
+        db.close()
 
     yield
 
