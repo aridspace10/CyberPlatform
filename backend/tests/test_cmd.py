@@ -531,7 +531,7 @@ def test_var_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('X=5', shell_basic)
     assert stderr == []
     assert stdout == []
-    assert shell_basic.env["X"] == "5"
+    assert shell_basic.vars["X"] == "5"
 
     stderr, stdout = cl.enter_command('echo $X', shell_basic)
     assert stderr == []
