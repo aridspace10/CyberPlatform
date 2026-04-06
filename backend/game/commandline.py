@@ -235,7 +235,7 @@ class CommandLine:
             if (arg[0] == "-"):
                 for option in arg[1:]:
                     match (option):
-                        case "i":
+                        case "n":
                             clobbar = False
                         case "i":
                             interactive = True
@@ -792,7 +792,7 @@ class CommandLine:
         err = self.filesystem.add_directory(name, parent, perms)
         self.filesystem.current = saved_current
         if (err):
-            return (1, ([err], []))
+            return (1, ([f"mkdir: {err}"], []))
         if (verbose):
             return (0, ([], [f"mkdir: sucessfully created {name}"]))
         return (1, ([], []))

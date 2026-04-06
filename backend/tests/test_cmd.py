@@ -120,6 +120,12 @@ def test_mkdir_basic(cl, shell_empty: ShellState):
     assert len(shell_empty.fs.current.items) == 1
     assert shell_empty.fs.current.items[0].name == "a"
 
+    stderr, stdout = cl.enter_command('mkdir a', shell_empty)
+    assert stderr == ["mkdir: Filename 'a' already exists"]
+    assert stdout == []
+    assert len(shell_empty.fs.current.items) == 1
+    assert shell_empty.fs.current.items[0].name == "a"
+
 def test_mkdir_none(cl, shell_empty: ShellState):
     stderr, stdout = cl.enter_command('mkdir', shell_empty)
     assert stderr == ["mkdir: at least one argument should be given"]
@@ -135,7 +141,7 @@ def test_mkdir_verbose(cl, shell_empty: ShellState):
 
 def test_mkdir_error(cl, shell_empty: ShellState):
     stderr, stdout = cl.enter_command('mkdir a/b', shell_empty)
-    assert stderr == ['No directory named a']
+    assert stderr == ['mkdir: No directory named a']
     assert stdout == []
     assert len(shell_empty.fs.current.items) == 0
 
@@ -698,8 +704,6 @@ def test_cp_file_directory(cl, shell_fouritems: ShellState):
     assert len(f1.items) == 2
     assert f2 == f4
     assert f3 == f5
-
-
 
 def test_cp_errors(cl, shell_cp: ShellState):
     stderr, stdout = cl.enter_command('cp project project_backup', shell_cp)

@@ -134,6 +134,7 @@ class FileSystem:
             return self.add_directory(path)
 
     def add_directory(self, path: str, creating: bool = False, permissions: dict = {}) -> str:
+        error = ""
         saved_current = self.current
         lst = path.split("/")
         if (error := self.search("/".join(lst[0:-1]), creating)) != "":
@@ -141,9 +142,9 @@ class FileSystem:
             return error
         inode = Inode(NodeType.DIRECTORY)
         inode.permissions = permissions
-        self.current = self.current.add_child(lst[-1], inode)
+        error = self.current.add_child(lst[-1], inode)
         self.current = saved_current
-        return ""
+        return error
 
     def add_file(self, path: str, fn: FileNode | None = None):
         saved_current = self.current
