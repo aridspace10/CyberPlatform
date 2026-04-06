@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useSession } from "./SessionContext";
+import { useLocation, useNavigate } from "react-router";
 import "./Tabs.css"
 
 export default function GeneralTab() {
     const { sessionId } = useSession();
+    const navigate = useNavigate();
     const [saved, setSaved] = useState(false);
 
     const handleSave = async () => {
@@ -17,7 +19,7 @@ export default function GeneralTab() {
     }
 
     const handleExit = () => {
-        
+        navigate("/")
     }
 
     return (
