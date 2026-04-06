@@ -233,8 +233,7 @@ class CommandLine:
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
-                options = arg[1:].split()
-                for option in options:
+                for option in arg[1:]:
                     match (option):
                         case "i":
                             clobbar = False
@@ -251,7 +250,7 @@ class CommandLine:
                         case "d":
                             dereference = False
                         case "v":
-                            verbose = False
+                            verbose = True
             else:
                 files.append(arg)
             args = args[1:]

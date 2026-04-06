@@ -55,12 +55,14 @@ def fs_basic():
 @pytest.fixture
 def fs_cp():
     fs = FileSystem()
+    fs.add_file("f1.txt")
     fs.add_directory("project")
     fs.add_file("project/here.txt")
     fs.add_directory("project/files")
     fs.add_file("project/files/f1.txt")
     fs.add_file("project/files/f2.txt")
     fs.add_directory("project/empty")
+    fs.add_directory("project2")
     return fs
 
 @pytest.fixture
@@ -658,12 +660,57 @@ def test_cp_basic(cl, shell_fouritems: ShellState):
     assert isinstance(fn, FileNode)
     assert fn.get_data() == "ERROR 1\nERROR 2\nINFO 1"
 
-def test_cp_directory(cl, shell_cp: ShellState):
-    stderr, stdout = cl.enter_command('cp -r project project_backup', shell_cp)
-    assert stdout == []
+    stderr, stdout = cl.enter_command('cp -v f2.txt f3.txt', shell_fouritems)
+    assert stdout == ["cp: Copied 'f2.txt' to 'f3.txt'"]
     assert stderr == []
+    fn = shell_fouritems.fs.get_file("f3.txt")
+    assert isinstance(fn, FileNode)
+    assert fn.get_data() == "ERROR 3\nERROR 4\nINFO 2"
+
+def test_cp_directory(cl, shell_cp: ShellState):
+    stderr, stdout = cl.enter_command('cp -vr project project_backup', shell_cp)
+    assert stdout == ["cp: Copied 'project' to 'project_backup'"]
+    assert stderr == []
+    f1 = shell_cp.fs.get_file("project")
+    f2 = shell_cp.fs.get_file("project_backup")
+    assert isinstance(f1, FileNode) and isinstance(f2, FileNode)
+    assert f1.items == f2.items
+
+    stderr, stdout = cl.enter_command('cp -vr project project2', shell_cp)
+    assert stdout == ["cp: Copied 'project' to 'project2'"]
+    assert stderr == []
+    f1 = shell_cp.fs.get_file("project")
+    f2 = shell_cp.fs.get_file("project2/project")
+    assert isinstance(f1, FileNode) and isinstance(f2, FileNode)
+    assert f1.items == f2.items
+
+def test_cp_file_directory(cl, shell_fouritems: ShellState):
+    shell_fouritems.fs.add_directory("d1")
+    stderr, stdout = cl.enter_command('cp f1.txt f2.txt d1', shell_fouritems)
+    assert stderr == []
+    assert stdout == []
+    f1 = shell_fouritems.fs.get_file("d1")
+    f2 = shell_fouritems.fs.get_file("f1.txt")
+    f3 = shell_fouritems.fs.get_file("f2.txt")
+    f4 = shell_fouritems.fs.get_file("d1/f1.txt")
+    f5 = shell_fouritems.fs.get_file("d1/f2.txt")
+    assert isinstance(f1, FileNode) and isinstance(f2, FileNode) and isinstance(f3, FileNode)
+    assert len(f1.items) == 2
+    assert f2 == f4
+    assert f3 == f5
+
+
 
 def test_cp_errors(cl, shell_cp: ShellState):
     stderr, stdout = cl.enter_command('cp project project_backup', shell_cp)
     assert stdout == []
     assert stderr == ["cp: -r not specified; omitting directory 'project'"]
+
+    stderr, stdout = cl.enter_command('cp -r project f1.txt', shell_cp)
+    assert stdout == []
+    assert stderr == ["cp: cannot overwrite non-directory 'f1.txt' with directory 'project'"]
+
+def test_cp_errors2(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('cp f1.txt f2.txt f12.txt', shell_fouritems)
+    assert stdout == []
+    assert stderr == ["cp: target 'f12.txt' is not a directory"]
