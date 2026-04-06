@@ -154,9 +154,9 @@ class FileSystem:
             return error
         if fn is None:
             inode = Inode(NodeType.FILE)
-            self.current = self.current.add_child(lst[-1], inode)
+            self.current.add_child(lst[-1], inode)
         else:
-            self.current = self.current.add_child(fn.name, fn.inode)
+            self.current.add_child(fn.name, fn.inode)
         self.current = saved_current
         return ""
 

@@ -167,22 +167,24 @@ class FileNode:
                         return ""
                     return item.inode.size
 
-                content = sorted(content, key=size_sort, reverse=rev)
+                content = sorted(content, key=size_sort, reverse=not rev)
             else:
                 def time_sort(val):
-                    itemname = val[-1]
+                    itemname = val[-1].split("/")[-1]
                     item = self.access(itemname)
+                    print (item)
+                    print (item.inode.mtime)
                     if item == None:
-                        return ""
+                        return 0
                     if method == "mod":
                         return item.inode.mtime
                     elif method == "atime":
                         return item.inode.atime
                     elif method == "ctime":
                         return item.inode.ctime
-                    return ""
+                    return 0
 
-                content = sorted(content, key=time_sort, reverse=rev)
+                content = sorted(content, key=time_sort, reverse=not rev)
         else:
             if ("reverse" in extras):
                 content = content[::-1]
