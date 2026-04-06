@@ -219,14 +219,38 @@ class CommandLine:
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         recurse = False
         verbose = False
+        interactive = False
+        clobbar = True
+        recursive = False
+        verbose = False
+        dereference = True
+        hardlink = False
+        symlink = False
+        preserve = False
+        update = False
         files = []
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
                 options = arg[1:].split()
                 for option in options:
-                    if (option == "v"):
-                        verbose = True
+                    match (option):
+                        case "i":
+                            clobbar = False
+                        case "i":
+                            interactive = True
+                        case "r":
+                            recursive = True
+                        case "R":
+                            recursive = False
+                        case "u":
+                            update = True
+                        case "L":
+                            dereference = True
+                        case "d":
+                            dereference = False
+                        case "v":
+                            verbose = False
             else:
                 files.append(arg)
             args = args[1:]
