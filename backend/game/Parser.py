@@ -8,25 +8,6 @@ class Token:
     type: str
     value: str
 
-TOKEN_SPEC = [
-    ("AND",      r"&&"),
-    ("DOLLAR",   r"\$"),
-    ("OR",       r"\|\|"),
-    ("PIPE",     r"\|"),
-    ("HEREDOC",  r"<<"),
-    ("APPEND",   r">>"),
-    ("REDIR_IN", r"<"),
-    ("REDIR_OUT",r">"),
-    ("SEMI",     r";"),
-    ("LPAREN",   r"\("),
-    ("RPAREN",   r"\)"),
-    ("EQUAL",    r"="),
-    ("WORD",     r"[^\s|&;()]+"),
-    ("SKIP",     r"[ \t]+"),
-]
-
-master = re.compile("|".join(f"(?P<{name}>{regex})" for name, regex in TOKEN_SPEC))
-
 Identifier = str
 
 @dataclass
@@ -39,13 +20,19 @@ class VarUse:
     name: Identifier
 
 @dataclass
+class Word:
+    parts: list["Segment"]
+
+Segment = str | VarUse
+
+@dataclass
 class VarDeclaration:
     name: Identifier
-    value: Identifier
+    value: Word
 
 @dataclass
 class SimpleCommand:
-    args: list[str | VarUse]
+    args: list[Word]
 
 @dataclass
 class Pipe:
@@ -56,6 +43,7 @@ class Command:
     atom: Atom
     pre_redirs: list[Redirection]
     post_redirs: list[Redirection]
+    assignments: list[VarDeclaration]
 
 @dataclass
 class AndOr:
@@ -72,13 +60,82 @@ class Subshell:
 
 Atom = SimpleCommand | Subshell | VarDeclaration
 
-def lex(text):
+OPERATORS = {
+    "&&": "AND",
+    "||": "OR",
+    "|": "PIPE",
+    "<<": "HEREDOC",
+    ">>": "APPEND",
+    "<": "REDIR_IN",
+    ">": "REDIR_OUT",
+    ";": "SEMI",
+    "(": "LPAREN",
+    ")": "RPAREN",
+    "=": "EQUAL",
+    "$": "DOLLAR",
+}
+
+def lex(text: str) -> list[Token]:
     tokens = []
-    for match in master.finditer(text):
-        kind = match.lastgroup
-        value = match.group()
-        if kind != "SKIP" and kind is not None:
-            tokens.append(Token(kind, value))
+    i = 0
+    n = len(text)
+
+    while i < n:
+        c = text[i]
+
+        # skip whitespace
+        if c.isspace():
+            i += 1
+            continue
+
+        # check 2-char operators
+        if i + 1 < n:
+            two = text[i:i+2]
+            if two in OPERATORS:
+                tokens.append(Token(OPERATORS[two], two))
+                i += 2
+                continue
+
+        # check 1-char operators
+        if c in OPERATORS:
+            tokens.append(Token(OPERATORS[c], c))
+            i += 1
+            continue
+
+        # quoted strings
+        if c == '"' or c == "'":
+            quote = c
+            i += 1
+            start = i
+            buf = ""
+
+            while i < n:
+                if text[i] == quote:
+                    break
+                if quote == '"' and text[i] == "\\" and i + 1 < n:
+                    i += 1
+                    buf += text[i]
+                else:
+                    buf += text[i]
+                i += 1
+
+            if i >= n:
+                raise SyntaxError("Unterminated quote")
+
+            tokens.append(Token("WORD", buf))
+            i += 1
+            continue
+
+        # normal word
+        start = i
+        while (
+            i < n
+            and not text[i].isspace()
+            and text[i] not in "|&;()<>$\"'"
+        ):
+            i += 1
+
+        tokens.append(Token("WORD", text[start:i]))
     return tokens
 
 class Parser:
@@ -134,39 +191,89 @@ class Parser:
             if (p is not None and target is not None):
                 result.append(Redirection(p.value, target.value))
         return result
+    
+    def split_assignment(self, word: str):
+        if "=" not in word:
+            return None
+
+        name, value = word.split("=", 1)
+
+        if not name:
+            return None
+
+        if not (name[0].isalpha() or name[0] == "_"):
+            return None
+
+        if not all(c.isalnum() or c == "_" for c in name):
+            return None
+        return name, value
 
     def parse_command(self) -> Command:
-        pre = self.parse_redirections()
+        pre_redirs = self.parse_redirections()
+
+        assignments = []
+        assignments = []
+
+        while True:
+            p = self.peek()
+
+            if p is None or p.type != "WORD":
+                break
+
+            res = self.split_assignment(p.value)
+
+            if not res:
+                break
+
+            name, value = res
+            self.consume()
+
+            assignments.append(
+                VarDeclaration(name, Word([value]))
+            )
+
+        if ((p := self.peek()) is None or p.type not in ("WORD", "LPAREN")):
+            if not assignments:
+                raise SyntaxError("expected command")
+            atom = SimpleCommand([])
+            post_redirs = self.parse_redirections()
+            return Command(atom, pre_redirs, post_redirs, assignments)
+
         atom = self.parse_atom()
-        post = self.parse_redirections()
-        return Command(atom, pre, post)
+        post_redirs = self.parse_redirections()
+        return Command(atom, pre_redirs, post_redirs, assignments)
+
+    def parse_word(self):
+        p = self.peek()
+        if p is None:
+            return None
+
+        if p.type == "WORD":
+            return Word([self.consume().value])
+
+        if p.type == "DOLLAR":
+            self.consume()
+            name = self.consume("WORD")
+            return Word([VarUse(name.value)])
+
+        return None
 
     def parse_atom(self):
         if ((p := self.peek()) and p.type == "LPAREN"):
             return self.parse_subshell()
+
         args = []
-        while ((p := self.peek())):
-            if (p.type == "DOLLAR"):
-                self.consume()
-                tmp = self.consume("WORD")
-                if tmp is None:
-                    raise Exception()
-                args.append(VarUse(tmp.value))
-            elif (p.type == "WORD"):
-                tmp = self.consume()
-                if tmp is None:
-                    raise Exception()
-                args.append(tmp.value)
-            else:
+
+        while True:
+            word = self.parse_word()
+            if word is None:
                 break
-        if ((p := self.peek()) and p.type == "EQUAL"):
-            self.consume()
-            val = self.consume("WORD")
-            if val is None:
-                raise Exception()
-            return VarDeclaration(args[0], val.value)
-        else:
-            return SimpleCommand(args)
+            args.append(word)
+
+        if not args:
+            raise SyntaxError("expected command name")
+
+        return SimpleCommand(args)
 
     def parse_subshell(self):
         self.consume("LPAREN")
@@ -174,9 +281,9 @@ class Parser:
         self.consume("RPAREN")
         return Subshell(node)
 
-# text = "echo hello | grep hi && pwd"
-# tokens = lex(text)
-# parser = Parser(tokens)
-# ast = parser.parse()
-
-# print(ast)
+text = "echo $x"
+tokens = lex(text)
+parser = Parser(tokens)
+ast = parser.parse()
+print (tokens)
+print(ast)

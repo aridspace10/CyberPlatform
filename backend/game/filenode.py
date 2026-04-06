@@ -17,6 +17,11 @@ class FileNode:
             "inode": self.inode.to_dict(),
             "items": [item.to_dict() for item in self.items]
         }
+    
+    def __eq__(self, other):
+        if not isinstance(other, FileNode):
+            return False
+        return self.name == other.name and self.items == other.items and self.get_size() == other.get_size()
 
     def from_dict(self, fn: dict, depth: int, parent: FileNode | None) -> None:
         try:

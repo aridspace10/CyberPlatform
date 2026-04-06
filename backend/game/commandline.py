@@ -5,8 +5,10 @@ from typing import Literal, Tuple
 from game.inode import Inode, NodeType
 import random
 import datetime
+from .helpers import determine_perms_fromstr
 from game.Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
 from game.ShellState import ShellState
+import copy
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
@@ -22,6 +24,7 @@ class CommandLine:
             if item.name == lst[-1]:
                 if (removing):
                     item.set_data("")
+                self.filesystem.current = saved_current
                 return item
         inode = Inode(NodeType.FILE)
         self.filesystem.current.add_child(lst[-1], inode)  
@@ -46,13 +49,27 @@ class CommandLine:
             return ([], ["Admin Error: Code AAA112"]) 
 
     def execute_pipe(self, parts: list[AndOr]) -> CommandReturn:
-        self.fdin = None
-        self.fdout = None
-        status, stderr, stdout = 0, [], []
+        status = 0
+        stderr, stdout = [], []
+
+        prev_pipe = None  # holds virtual pipe between commands
+
         for part in parts:
-            self.fdin = self.fdout
+            # feed previous pipe into next command
+            self.fdin = prev_pipe
             self.fdout = None
+
             status, (stderr, stdout) = self.execute_andor(part)
+
+            # create a new pipe from stdout for next command
+            if stdout:
+                pipe_inode = Inode(NodeType.FILE)
+                pipe_node = FileNode(None, "pipe", pipe_inode)
+                pipe_node.set_data("\n".join(stdout))
+                prev_pipe = pipe_node
+            else:
+                prev_pipe = None
+
         self.fdin = None
         self.fdout = None
         return (status, (stderr, stdout))
@@ -70,6 +87,9 @@ class CommandLine:
 
     def execute_command(self, command: Command) -> CommandReturn:
         redirs = command.pre_redirs + command.post_redirs
+        for assign in command.assignments:
+            self.shell.vars[assign.name] = assign.value.parts[0]
+
         for redir in redirs:
             if (redir.op == "<"):
                 self.fdin = self.get_fd(redir.target)
@@ -97,22 +117,41 @@ class CommandLine:
         if (isinstance(atom, SimpleCommand)):
             if self.fdin is None:
                 fdin = FileNode(None, "stdin", Inode(NodeType.FILE))
+                fdin.set_data("")
             elif isinstance(self.fdin, str):
                 return (1, ([], ["Admin Error: AAA113"]))
             else:
                 fdin = self.fdin
             args = []
             for arg in atom.args:
-                if (isinstance(arg, VarUse)):
-                    args.append(str(self.shell.env[arg.name]))
-                else:
-                    args.append(arg)
+                word = ""
+                for part in arg.parts:
+                    if isinstance(part, str):
+                        word += part
+                    else:
+                        if part.name not in self.shell.vars:
+                            return (1, ([f'Var Used which is unassigned: {part.name}'], []))
+                        word += self.shell.vars[part.name]
+                args.append(word)
             return self.run_command(args, fdin)
-        elif (isinstance(atom, Subshell)):
-            return self.execute_sequence(atom.sequence.parts)
-        elif (isinstance(atom, VarDeclaration)):
-            self.shell.env[atom.name] = atom.value
-            return (0, ([], []))
+        else:
+            # save state
+            saved_cwd = self.shell.cwd
+            saved_env = self.shell.vars.copy()
+            saved_fs_current = self.filesystem.current
+            saved_fs_cwd = self.filesystem.cwd
+            saved_fdin = self.fdin
+            saved_fdout = self.fdout
+            #execute
+            status, (stderr, stdout) = self.execute_sequence(atom.sequence.parts)
+            #restore state
+            self.shell.cwd = saved_cwd
+            self.shell.vars = saved_env
+            self.filesystem.current = saved_fs_current
+            self.filesystem.cwd = saved_fs_cwd
+            self.fdin = saved_fdin
+            self.fdout = saved_fdout
+            return (status, (stderr, stdout))
 
     def execute_sequence(self, parts: list[Pipe]) -> CommandReturn:
         last_status = 0
@@ -124,6 +163,9 @@ class CommandLine:
         return last_status, (stdout, stderr)
  
     def run_command(self, args: list[str], fdin: FileNode) -> CommandReturn:
+        print (args)
+        if (not (len(args))):
+            return (0, ([], []))
         match args[0]:
             case "ls":
                 return self.ls(args[1:], fdin)
@@ -176,21 +218,106 @@ class CommandLine:
         return output
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
-        recurse = False
         verbose = False
+        interactive = False
+        clobbar = True
+        recursive = False
+        verbose = False
+        dereference = True
+        hardlink = False
+        symlink = False
+        preserve = False
+        update = False
         files = []
+        output = ([], [])
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
-                options = arg[1:].split()
-                for option in options:
-                    if (option == "v"):
-                        verbose = True
+                for option in arg[1:]:
+                    match (option):
+                        case "i":
+                            clobbar = False
+                        case "i":
+                            interactive = True
+                        case "r":
+                            recursive = True
+                        case "R":
+                            recursive = False
+                        case "u":
+                            update = True
+                        case "L":
+                            dereference = True
+                        case "d":
+                            dereference = False
+                        case "v":
+                            verbose = True
             else:
                 files.append(arg)
             args = args[1:]
         target = args[0]
-        return (1, ([], []))
+        tmp = self.filesystem.current
+        destination_created = False
+        if (error := self.filesystem.search(target)):
+            # Directory/file doesn't exist
+            if len(files) == 1:
+                destination_created = True
+                # peek at source type before creating destination
+                self.filesystem.search(files[0])
+                source_peek = self.filesystem.current
+                self.filesystem.current = tmp  # restore current
+                
+                if source_peek.get_type() == NodeType.DIRECTORY:
+                    self.filesystem.add_directory(target)
+                else:
+                    self.filesystem.add_file(target)
+                self.filesystem.search(target)
+            else:
+                return (1, ([f"cp: target '{target}' is not a directory"],[]))
+        target_fnode = self.filesystem.current
+        target_ty = target_fnode.get_type()
+        self.filesystem.current = tmp
+        for file in files:
+            self.filesystem.current = tmp
+            self.filesystem.search(file)
+            source_fnode = self.filesystem.current
+            source_ty = source_fnode.get_type()
+            if source_ty == NodeType.DIRECTORY and not recursive:
+                output[0].append(f"cp: -r not specified; omitting directory '{file}'")
+                continue
+            if (source_ty == NodeType.DIRECTORY):
+                if (target_ty == NodeType.FILE):
+                    output[0].append(f"cp: cannot overwrite non-directory '{target}' with directory '{file}'")
+                    continue
+                elif (target_ty == NodeType.DIRECTORY):
+                    if destination_created:
+                        target_fnode.items.extend(copy.deepcopy(source_fnode.items))
+                    else:
+                        target_fnode.items.append(copy.deepcopy(source_fnode))
+                    if (verbose):
+                        output[1].append(f"cp: Copied '{file}' to '{target}'")
+                elif (target_ty == NodeType.SYMLINK):
+                    pass
+            elif (source_ty == NodeType.FILE):
+                if (target_ty == NodeType.FILE):
+                    target_fnode.inode = source_fnode.inode
+                    if (verbose):
+                        output[1].append(f"cp: Copied '{file}' to '{target}'")
+                elif (target_ty == NodeType.DIRECTORY):
+                    target_fnode.items.append(source_fnode)
+                    if (verbose):
+                        output[1].append(f"cp: Copied '{file}' to '{target}'")
+                elif (target_ty == NodeType.SYMLINK):
+                    pass
+            elif (source_ty == NodeType.SYMLINK):
+                if (target_ty == NodeType.FILE):
+                    pass
+                elif (target_ty == NodeType.DIRECTORY):
+                    pass
+                elif (target_ty == NodeType.SYMLINK):
+                    pass
+            self.filesystem.current = tmp
+        self.filesystem.current = tmp
+        return (1, output)
     
     def mv(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         verbose = False
@@ -222,7 +349,7 @@ class CommandLine:
                 return (0, output)
             elif (ftype == NodeType.FILE and ttype == NodeType.DIRECTORY):
                 if (self.filesystem.current.parent == None): # literally impossible to be true
-                    return (2, ([], []))
+                    return (2, ([], [])) # pragma: no cover
                 self.filesystem.current = self.filesystem.current.parent
                 saved = None
                 for idx, item in enumerate(self.filesystem.current.items):
@@ -343,16 +470,23 @@ class CommandLine:
                         tmp = line
                     if (linenum):
                         tmp = f"{idx+1}:{tmp}"
+                    print (tmp)
                     output[1].append(tmp)
                     if (filename and not linenum):
                         return
 
         for file in files:
+            saved_current = self.filesystem.current
             if (file == "-"):
                 ty = input.inode.type
+                print (f"data: {input.inode.data}")
                 self.filesystem.current = input
             else:
-                ty = self.filesystem.search_withaccess(file)
+                err = self.filesystem.search(file)
+                if err:
+                    output[0].append(f"grep: {file} can not be found")
+                    continue
+                ty = self.filesystem.current.get_type()
             if (ty == NodeType.DIRECTORY):
                 if (recursive):
                     def recursively_search(pointer: FileNode):
@@ -400,26 +534,9 @@ class CommandLine:
                 
             args = args[1:]
         permissions = args[0]
-        if (len(permissions.rstrip()) != 3):
-            output[0].append("chmod: value given for permissions which is not of length of 3")
-            return (1, output)
-        ORDER = ["user", "group", "public"]
-        d = {"user": {"r": False, "w": False, "x": False},
-                            "group": {"r": False, "w": False, "x": False},
-                            "public": {"r": False, "w": False, "x": False}}
-        for idx, permission in enumerate(permissions):
-            try:
-                if (int(permission) > 7):
-                    output[0].append("chmod: value given which is higher then needed")
-                    return (1, output)
-            except ValueError:
-                output[0].append("chmod: value other then given integer given for permissions")
-                return (1, output)
-            permission = int(permission)
-            bits = [(permission >> i) & 1 for i in range(7, -1, -1)]
-            d[ORDER[idx]]["x"] = bool(bits[-1])
-            d[ORDER[idx]]["w"] = bool(bits[-2])
-            d[ORDER[idx]]["r"] = bool(bits[-3])
+        d = determine_perms_fromstr(permissions)
+        if isinstance(d, str):
+            return (1, ([d], []))
         file = args[1]
         saved_current = self.filesystem.current
         if (error := self.filesystem.search(file)) != "":
@@ -446,11 +563,14 @@ class CommandLine:
     def touch(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if "--help" in args:
             return (0, ([], self.useage("touch")))
+        if (not len(args)):
+            return (1, (["touch: must give atleast one argument"], []))
         files = []
         create = True
-        onlychangeaccess = False
-        onlychangemod = False
+        changeaccess = True
+        changemod = True
         date = datetime.datetime.now()
+        output = ([], [])
         while args:
             arg = args.pop(0)
             if (arg == "-"):
@@ -460,22 +580,50 @@ class CommandLine:
                     if (arg == "--no-create"):
                         create = False
                     if (arg.startswith("--date=")):
-                        date = datetime.datetime.strptime(arg.split("=")[1], "%Y-%m-%d").date()
+                        date = datetime.datetime.strptime(arg.split("=")[1], "%Y-%m-%d")
                 else:
                     for option in arg[1:]:
                         match option:
                             case "c":
                                 create = False
-                            case "a":
-                                onlychangeaccess = True
-                            case "m":
-                                onlychangemod = True
-                            case "d":
-                                date = datetime.datetime.strptime(args.pop(0), "%Y-%m-%d").date()
                                 break
+                            case "a":
+                                changeaccess = True
+                                changemod = False
+                            case "m":
+                                changeaccess = False
+                                changemod = True
+                            case "d":
+                                date = datetime.datetime.strptime(args.pop(0), "%Y-%m-%d")
+                                break
+                            case "t":
+                                date = datetime.datetime.strptime(args.pop(0), "%Y%m%d%H%M")
+                                break
+                            case _:
+                                return (1, (["touch: unknown argument given"], []))
             else:
                 files.append(arg)
-        return (0, ([], []))
+        if (not len(files)):
+            return (1, (["touch: no file given"], []))
+        for file in files:
+            sc = self.filesystem.current
+            ty = self.filesystem.search(file)
+            if (ty.startswith("No directory named") and len(file.split("/")) > 1):
+                output[0].append(ty)
+                continue
+            if (ty != ""): 
+                if (not create):
+                    continue
+                self.filesystem.current = sc
+                self.filesystem.add_file(file)
+                self.filesystem.search(file)
+            fn = self.filesystem.current
+            self.filesystem.current = sc
+            if (changeaccess):
+                fn.inode.atime = date
+            if (changemod):
+                fn.inode.mtime = date
+        return (0, output)
 
     def cat(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         output = ([], [])
@@ -609,7 +757,9 @@ class CommandLine:
         return (0, ([], [direct]))
         
     def mkdir(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
-        permissions = {"r": True, "w": True, "x": True}
+        perms = {"user": {"r": True, "w": True, "x": True},
+            "group": {"r": True, "w": False, "x": True},
+            "public": {"r": True, "w": False, "x": True}}
         verbose, parent = False, False
         if not len(args):
             return (0, (["mkdir: at least one argument should be given"], []))
@@ -620,16 +770,9 @@ class CommandLine:
                 if (arg == "-m" or arg == "--mode"):
                     arg = args.pop(0)
                     if (arg.startswith("a=")):
-                        permissions = {"r": False, "w": False, "x": False}
-                        while arg:
-                            match arg[0]:
-                                case "r":
-                                    permissions["r"] = True
-                                case "w":
-                                    permissions["w"] = True
-                                case "x":
-                                    permissions["x"] = True
-                            arg = arg[1:]
+                        perms = determine_perms_fromstr(arg[2:])
+                        if isinstance(perms, str):
+                            return (1, ([perms], []))
                     else:
                         return (1, (["mkdir: option given to -m or --mode is not correct"], []))
                 elif (arg == "-v" or arg == "--verbose"):
@@ -646,7 +789,7 @@ class CommandLine:
             return (1, (["mkdir: no name given for new directory"], []))
         
         saved_current = self.filesystem.current
-        err = self.filesystem.add_directory(name, parent, permissions)
+        err = self.filesystem.add_directory(name, parent, perms)
         self.filesystem.current = saved_current
         if (err):
             return (1, ([err], []))
@@ -741,10 +884,12 @@ class CommandLine:
         target = args[0]
         destination = args[1]
         saved_current = self.filesystem.current
-        self.filesystem.search_withaccess(target)
+        if (err := self.filesystem.search(target)) != "":
+            return (1, ([err], []))
         target_inode = self.filesystem.current.inode
         self.filesystem.current = saved_current
-        self.filesystem.add(destination)
+        self.filesystem.add_file(destination)
+        self.filesystem.search(destination)
         if (linkty == "hard"):
             self.filesystem.current.inode = target_inode
             self.filesystem.current.inode.link_count += 1
@@ -780,12 +925,8 @@ class CommandLine:
             self.filesystem.search_withaccess(file)
             input = self.filesystem.current
         data = input.get_data().split("\n")
-        output = ([], [])
-        index = 1
-        while (index != len(data)):
-            if (data[index-1] != data[index]):
-                output[1].append(data[index-1])
-        return (0, output)
+        output = list(dict.fromkeys(data))
+        return (0, ([], output))
 
     def sort(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if "--help" in args:
@@ -798,6 +939,7 @@ class CommandLine:
         scheck = False
         fold = False
         clean = False
+        remove_dups = False
         output = ""
         while args:
             arg = args.pop(0)
@@ -806,7 +948,7 @@ class CommandLine:
                     file = "-"
                     continue
                 for option in arg[1:]:
-                    match (arg):
+                    match (option):
                         case "b":
                             igblanks = True
                         case "r":
@@ -823,13 +965,17 @@ class CommandLine:
                             fold = True
                         case "i":
                             clean = True
+                        case "u":
+                            remove_dups = True
                         case _:
                             return (2, ([f"sort: unknown option given ({arg})"], []))
+            else:
+                file = arg
         if (file == "" or file == "-"):
             content = input.get_data().split("\n") 
         else:
             saved_current = self.filesystem.current
-            self.filesystem.search_withaccess(file)
+            self.filesystem.search(file)
             content = self.filesystem.current.get_data().split("\n")
             self.filesystem.current = saved_current
         for idx, line in enumerate(content):
@@ -848,6 +994,8 @@ class CommandLine:
                     else:
                         return (1, ([f"sort: {file}:{i}: disorder: {content[i]}"], []))
             return (0, ([], []))
+        if remove_dups:
+            modified = list(dict.fromkeys(modified))
         if randomize:
             r = []
             while len(modified):
@@ -859,10 +1007,12 @@ class CommandLine:
                 while vid < len(modified) and modified[vid] == element:
                     r.append(modified.pop(vid))
             modified = r
-            return (0, ([], []))
         if output:
             saved_current = self.filesystem.current
-            self.filesystem.search_withaccess(file)
+            if (self.filesystem.search(output) != ""):
+                self.filesystem.add_file(output)
+                self.filesystem.search(output)
             self.filesystem.current.set_data("\n".join(modified))
             self.filesystem.current = saved_current
+            return (0, ([], []))
         return (0, ([], modified))
