@@ -1,0 +1,8 @@
+.general-tab {
+    display: flex;
+    flex-direction: column;
+}
+
+.tab-button {
+    margin-bottom: 40px;
+}

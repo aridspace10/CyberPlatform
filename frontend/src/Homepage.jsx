@@ -9,7 +9,6 @@ export default function Homepage() {
     const navigate = useNavigate();
     const nextId = useRef(123);
     const { user, logout } = useAuth();
-    console.log(user)
     const handleSessionCreation = () => {
         const id = nextId.current++;
         navigate(`/game`, {state: {sessionId: id}});
@@ -19,7 +18,8 @@ export default function Homepage() {
         if (user == null) {
             navigate(`login`)
         }
-        await enterTutorial(user.id);
+        const data = await enterTutorial(user.id);
+        navigate(`/game/${data["session_id"]}`)
     }
 
     return (

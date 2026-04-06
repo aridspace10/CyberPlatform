@@ -1,16 +1,26 @@
-from typing import Dict
+from typing import Dict, Literal
 from fastapi import WebSocket
 from game.ShellState import ShellState
-
+from game.GameManager import GameManager
 from game.filesystem import FileSystem
 from game.commandline import CommandLine
 
+Username = str
+
 class Player:
-    def __init__(self, websocket: WebSocket, username: str):
+    def __init__(self, websocket: WebSocket | None, username: str, user_id: str):
         self.websocket = websocket
         self.username = username
+        self.user_id = user_id
         self.shell = ShellState()
         self.shell.fs = FileSystem()
+
+    def serialize(self) -> dict:
+        return {
+            "vars": self.shell.vars,
+            "cmds": self.shell.commands,
+            "fs": self.shell.fs.to_dict()
+        }
 
 class GameSession:
     def __init__(self, session_id: str):
@@ -18,13 +28,13 @@ class GameSession:
         self.state = "waiting"
         self.name = "Test"
 
-        # Persistent data
-        self.players: Dict[str, Player] = {}
-
-        # Runtime only (DO NOT SAVE)
-        self.connections: Dict[WebSocket, str] = {}
-
+        self.players: Dict[Username, Player] = {}
+        self.connections: Dict[WebSocket, Username] = {}
         self.cmd = CommandLine()
+        self.game_manger: GameManager = GameManager()
+    
+    def __str__(self) -> str:
+        return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
 
     def get_player(self, websocket: WebSocket) -> Player | None:
         username = self.connections.get(websocket)
@@ -45,14 +55,14 @@ class GameSession:
         self.state = new_state
         await self.broadcast(self.lobby_state())
 
-    async def connect(self, websocket: WebSocket, username: str):
+    async def connect(self, websocket: WebSocket, username: str, user_id: str):
         self.connections[websocket] = username
 
         if username not in self.players:
             # First time joining
-            self.players[username] = Player(websocket, username)
+            self.players[username] = Player(websocket, username, user_id)
         else:
-            # Reconnecting — reuse their shell + fs
+            # Reconnecting
             self.players[username].websocket = websocket
 
         await self.broadcast({
@@ -111,7 +121,7 @@ class GameSession:
             "type": "command_result",
             "stdout": stdout,
             "stderr": stderr,
-            "cwd": player.shell.cwd  # nice UX addition
+            "cwd": player.shell.cwd
         })
 
 
@@ -119,9 +129,17 @@ class SessionManager:
     def __init__(self):
         self.sessions: Dict[str, GameSession] = {}
 
-    def get_session(self, session_id: str) -> GameSession:
+    def get_session(self, session_id: str) -> GameSession | Literal["404"]:
         if session_id not in self.sessions:
-            self.sessions[session_id] = GameSession(session_id)
+            return "404"
+        return self.sessions[session_id]
+    
+    def add_session(self, session_id: str, name: str):
+        # 1.Setup Session
+        new_session = GameSession(session_id) 
+        new_session.name = name
+        # 2. Assign to session manger array
+        self.sessions[session_id] = new_session
         return self.sessions[session_id]
     
     async def set_session_state(self, session_id: str, new_state: str) -> bool:

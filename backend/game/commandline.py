@@ -1,12 +1,12 @@
-from .filenode import FileNode
-from .filesystem import FileSystem
+from game.filenode import FileNode
+from game.filesystem import FileSystem
 from collections import deque
 from typing import Literal, Tuple
-from .inode import Inode, NodeType
+from game.inode import Inode, NodeType
 import random
 import datetime
-from .Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
-from .ShellState import ShellState
+from game.Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
+from game.ShellState import ShellState
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 

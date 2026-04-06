@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
+import GeneralTab from "../components/GeneralTab";
+import EnvironmentTab from "../components/EnvironmentTab";
+import SettingsTab from "../components/SettingsTab";
 import Terminal from "./Terminal";
-export default function Gamescreen({wsRef, log}) {
+import "./Gamescreen.css"
+export default function Gamescreen({wsRef, log, addLine}) {
   const [input, setInput] = useState("");
+  const [content, setContent] = useState(<GeneralTab />)
 
   function handleEnter(e) {
     if (e.key === "Enter") {
@@ -30,23 +35,46 @@ export default function Gamescreen({wsRef, log}) {
     }
   }
 
+    const handleTabSwitch = (tab) => {
+        console.log("please")
+        switch (tab) {
+            case "General":
+                setContent(<GeneralTab />)
+                break;
+            case "Settings":
+                setContent(<SettingsTab />)
+                break;
+            case "Environment":
+                setContent(<EnvironmentTab />)
+                break;
+        }
+    }
+
   return (
-    <div className="terminal">
+    <div className="gamescreen">
+        <div className="sidebar-page">
+            <div className="sidebar-nav">
+                <button onClick={() => handleTabSwitch("General")}> General </button>
+                <button onClick={() => handleTabSwitch("Settings")}> Settings </button>
+                <button onClick={() => handleTabSwitch("Environment")}> Environment </button>
+            </div>
+            {content}
+        </div> 
 
-      <div className="output">
-        {log.map((line, i) => (
-          <div key={i}>{line}</div>
-        ))}
-      </div>
-
-      <input
-        className="prompt"
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={handleEnter}
-        autoFocus
-      />
-
+        <div className="terminal">
+            <div className="output">
+                {log.map((line, i) => (
+                <div key={i}>{line}</div>
+                ))}
+            </div>
+            <input
+                className="prompt"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleEnter}
+                autoFocus
+            />
+        </div>
     </div>
   );
 }
