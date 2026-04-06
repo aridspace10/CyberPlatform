@@ -8,6 +8,7 @@ import datetime
 from .helpers import determine_perms_fromstr
 from game.Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
 from game.ShellState import ShellState
+import copy
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
@@ -229,6 +230,7 @@ class CommandLine:
         preserve = False
         update = False
         files = []
+        output = ([], [])
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
@@ -255,7 +257,63 @@ class CommandLine:
                 files.append(arg)
             args = args[1:]
         target = args[0]
-        return (1, ([], []))
+        tmp = self.filesystem.current
+        if (error := self.filesystem.search(target)):
+            # Directory/file doesn't exist
+            if len(files) == 1:
+                # peek at source type before creating destination
+                self.filesystem.search(files[0])
+                source_peek = self.filesystem.current
+                self.filesystem.current = tmp  # restore current
+                
+                if source_peek.get_type() == NodeType.DIRECTORY:
+                    self.filesystem.add_directory(target)
+                else:
+                    self.filesystem.add_file(target)
+                self.filesystem.search(target)
+            else:
+                return (1, ([f"cp: target '{target}' is not a directory"],[]))
+        target_fnode = self.filesystem.current
+        target_ty = target_fnode.get_type()
+        self.filesystem.current = tmp
+        for file in files:
+            self.filesystem.search(file)
+            source_fnode = self.filesystem.current
+            source_ty = source_fnode.get_type()
+            if source_ty == NodeType.DIRECTORY and not recursive:
+                output[0].append(f"cp: -r not specified; omitting directory '{file}'")
+                continue
+            if (source_ty == NodeType.DIRECTORY):
+                if (target_ty == NodeType.FILE):
+                    output[0].append(f"cp: cannot overwrite non-directory '{target}' with directory '{file}'")
+                    continue
+                elif (target_ty == NodeType.DIRECTORY):
+                    target_fnode.items.append(copy.deepcopy(source_fnode))
+                    if (verbose):
+                        output[1].append(f"cp: Copied '{file}' to '{target}'")
+                elif (target_ty == NodeType.SYMLINK):
+                    pass
+            elif (source_ty == NodeType.FILE):
+                if (target_ty == NodeType.FILE):
+                    target_fnode.inode = source_fnode.inode
+                    if (verbose):
+                        output[1].append(f"cp: Copied '{file}' to '{target}'")
+                elif (target_ty == NodeType.DIRECTORY):
+                    target_fnode.items.append(source_fnode)
+                    if (verbose):
+                        output[1].append(f"cp: Copied '{file}' to '{target}'")
+                elif (target_ty == NodeType.SYMLINK):
+                    pass
+            elif (source_ty == NodeType.SYMLINK):
+                if (target_ty == NodeType.FILE):
+                    pass
+                elif (target_ty == NodeType.DIRECTORY):
+                    pass
+                elif (target_ty == NodeType.SYMLINK):
+                    pass
+            self.filesystem.current = tmp
+
+        return (1, output)
     
     def mv(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         verbose = False

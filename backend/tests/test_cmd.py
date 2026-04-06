@@ -53,6 +53,17 @@ def fs_basic():
     return fs
 
 @pytest.fixture
+def fs_cp():
+    fs = FileSystem()
+    fs.add_directory("project")
+    fs.add_file("project/here.txt")
+    fs.add_directory("project/files")
+    fs.add_file("project/files/f1.txt")
+    fs.add_file("project/files/f2.txt")
+    fs.add_directory("project/empty")
+    return fs
+
+@pytest.fixture
 def shell_basic(fs_basic):
     s = ShellState()
     s.fs = fs_basic
@@ -63,6 +74,13 @@ def shell_basic(fs_basic):
 def shell_fouritems(fs_fouritems):
     s = ShellState()
     s.fs = fs_fouritems
+    s.cwd = "/"
+    return s
+
+@pytest.fixture
+def shell_cp(fs_cp):
+    s = ShellState()
+    s.fs = fs_cp
     s.cwd = "/"
     return s
 
@@ -630,3 +648,22 @@ def test_pipes_sortuniq(cl, shell_basic: ShellState):
     assert len(stdout) == len(names)
     for i in range(0, len(names)):
         assert stdout[i] == names[i]
+
+######### CP ###################
+def test_cp_basic(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('cp f1.txt copied.txt', shell_fouritems)
+    assert stdout == []
+    assert stderr == []
+    fn = shell_fouritems.fs.get_file("copied.txt")
+    assert isinstance(fn, FileNode)
+    assert fn.get_data() == "ERROR 1\nERROR 2\nINFO 1"
+
+def test_cp_directory(cl, shell_cp: ShellState):
+    stderr, stdout = cl.enter_command('cp -r project project_backup', shell_cp)
+    assert stdout == []
+    assert stderr == []
+
+def test_cp_errors(cl, shell_cp: ShellState):
+    stderr, stdout = cl.enter_command('cp project project_backup', shell_cp)
+    assert stdout == []
+    assert stderr == ["cp: -r not specified; omitting directory 'project'"]

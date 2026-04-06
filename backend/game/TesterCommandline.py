@@ -1,13 +1,10 @@
-from filesystem import FileSystem
-from commandline import CommandLine
-from ShellState import ShellState
+from game.filesystem import FileSystem
+from game.commandline import CommandLine
+from game.ShellState import ShellState
 
 s = ShellState()
 f = FileSystem()
 f.add_file("f1.txt")
-f.add_directory("d2")
-f.add_directory("d2/f3.txt")
 s.fs = f
 cmd = CommandLine()
-print (cmd.enter_command('X=5', s))
-print (cmd.enter_command("echo $X", s))
+print (cmd.enter_command('cp f1.txt f2.txt', s))
