@@ -218,7 +218,6 @@ class CommandLine:
         return output
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
-        recurse = False
         verbose = False
         interactive = False
         clobbar = True
@@ -258,9 +257,11 @@ class CommandLine:
             args = args[1:]
         target = args[0]
         tmp = self.filesystem.current
+        destination_created = False
         if (error := self.filesystem.search(target)):
             # Directory/file doesn't exist
             if len(files) == 1:
+                destination_created = True
                 # peek at source type before creating destination
                 self.filesystem.search(files[0])
                 source_peek = self.filesystem.current
@@ -277,6 +278,7 @@ class CommandLine:
         target_ty = target_fnode.get_type()
         self.filesystem.current = tmp
         for file in files:
+            self.filesystem.current = tmp
             self.filesystem.search(file)
             source_fnode = self.filesystem.current
             source_ty = source_fnode.get_type()
@@ -288,7 +290,10 @@ class CommandLine:
                     output[0].append(f"cp: cannot overwrite non-directory '{target}' with directory '{file}'")
                     continue
                 elif (target_ty == NodeType.DIRECTORY):
-                    target_fnode.items.append(copy.deepcopy(source_fnode))
+                    if destination_created:
+                        target_fnode.items.extend(copy.deepcopy(source_fnode.items))
+                    else:
+                        target_fnode.items.append(copy.deepcopy(source_fnode))
                     if (verbose):
                         output[1].append(f"cp: Copied '{file}' to '{target}'")
                 elif (target_ty == NodeType.SYMLINK):
@@ -312,7 +317,7 @@ class CommandLine:
                 elif (target_ty == NodeType.SYMLINK):
                     pass
             self.filesystem.current = tmp
-
+        self.filesystem.current = tmp
         return (1, output)
     
     def mv(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
