@@ -91,6 +91,7 @@ class FileNode:
             move += 1
             content.append((move, self.name))
         return content
+    
     def add_child(self, name: str, inode: Inode) -> str:
         """ Adds a child to the filenode """
         for file in self.items:
@@ -102,6 +103,7 @@ class FileNode:
             if (self.parent is not None):
                 self.parent.accumualate_depth()
         self.items.append(file)
+        return ""
     
     def search(self, name: str) -> NodeType | None:
         for item in self.items:
@@ -128,8 +130,21 @@ class FileNode:
 
     def list_content(self, prev: str, deep: int = 0, detail: int = 0, extras: dict[str, bool | str] = {}) -> list:
         content: list[list] = []
-        for item in self.items:
-            itemname = prev + "/" + item.name if prev else item.name
+        items = self.items
+        if "showhiddenall" in extras:
+            items.append(self) 
+            if self.parent is not None:
+                items.append(self.parent)
+
+        for item in items:
+            if ((item.name[0] == ".") and ("showhiddenall" not in extras or "showhidden" not in extras)):
+                continue
+            if (item == self):
+                itemname = "."
+            elif (item == self.parent):
+                itemname = ".."
+            else:
+                itemname = prev + "/" + item.name if prev else item.name
             tmp = []
 
             if "inode" in extras:
@@ -142,7 +157,7 @@ class FileNode:
 
             content.append(tmp)
 
-            if item.get_type() == NodeType.DIRECTORY and deep:
+            if item.get_type() == NodeType.DIRECTORY and deep and itemname not in [".", ".."]:
                 deep -= 1
                 content.extend(item.list_content(prev + "/" + item.name, deep))
         
@@ -173,7 +188,7 @@ class FileNode:
                     itemname = val[-1].split("/")[-1]
                     item = self.access(itemname)
                     print (item)
-                    print (item.inode.mtime)
+                    print (item.inode.ctime)
                     if item == None:
                         return 0
                     if method == "mod":

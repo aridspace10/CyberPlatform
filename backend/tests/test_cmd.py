@@ -14,8 +14,11 @@ LS_FILES = ["xms.bin", "silly.c", "sigma.dat", "crap.js",
              "sheet.xsl", "nope.csv", "nothing.log", "cool.png",
              "record.ods", "stuff.sql", "annoying.java", "yikes.py"
         ]
+random.shuffle(LS_FILES)
 
-sizes = random.sample(LS_FILES, 5)
+f = random.sample(LS_FILES, 10)
+sizes = f[0:5]
+atimes = f[5:]
 
 # Basic helpers to create a filesystem with one file
 @pytest.fixture
@@ -77,29 +80,46 @@ def fs_cp():
 @pytest.fixture
 def fs_ls():
     fs = FileSystem()
-    files = LS_FILES.copy()
-    random.shuffle(files)
-    for file in files:
+    # files = LS_FILES.copy()
+    # random.shuffle(LS_FILES)
+    for file in LS_FILES:
+        time.sleep(0.1)
         fs.add_file(file)
+    time.sleep(0.5)
     fn = fs.get_file(sizes[0])
     assert isinstance(fn, FileNode)
     fn.set_data("123456789" * 1000)
+    fn = fs.get_file(atimes[0])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
     time.sleep(0.1)
     fn = fs.get_file(sizes[1])
     assert isinstance(fn, FileNode)
     fn.set_data("123456789" * 100)
+    fn = fs.get_file(atimes[1])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
     time.sleep(0.1)
     fn = fs.get_file(sizes[2])
     assert isinstance(fn, FileNode)
     fn.set_data("123456789" * 50)
+    fn = fs.get_file(atimes[2])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
     time.sleep(0.1)
     fn = fs.get_file(sizes[3])
     assert isinstance(fn, FileNode)
     fn.set_data("123456789" * 10)
+    fn = fs.get_file(atimes[3])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
     time.sleep(0.1)
     fn = fs.get_file(sizes[4])
     assert isinstance(fn, FileNode)
     fn.set_data("123456789" * 1)
+    fn = fs.get_file(atimes[4])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
     return fs
 
 @pytest.fixture
@@ -276,6 +296,19 @@ def test_ls_organisation(cl, shell_ls: ShellState):
     assert stderr == []
     for i in range(0, 5):
         assert stdout[i] == times[i]
+
+    stderr, stdout = cl.enter_command('ls -u', shell_ls)
+    atimes.reverse()
+    assert stderr == []
+    for i in range(0, 5):
+        assert stdout[i] == atimes[i]
+
+    stderr, stdout = cl.enter_command('ls -c', shell_ls)
+    print (stdout)
+    print (LS_FILES)
+    assert stderr == []
+    for i in range(0, 5):
+        assert stdout[i] == LS_FILES[-(i+1)]
     
 
 ####### CD ####################
