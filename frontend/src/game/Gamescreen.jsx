@@ -8,6 +8,33 @@ import "./Gamescreen.css"
 export default function Gamescreen({wsRef, log, addLine}) {
   const [input, setInput] = useState("");
   const [content, setContent] = useState(<GeneralTab />)
+    const [commandCount, setCommandCount] = useState(-1);
+    const getCommand = (count) => {
+        if (count === -1) {
+            setInput("");
+        }
+
+        
+    }
+
+    const handleKeyDown = (e) => {
+        switch (e.key) {
+            case 'ArrowUp':
+                commandCount += 1
+                getCommand(count);
+                break;
+            case 'ArrowDown':
+                if (commandCount >= 0) {
+                    commandCount -= 1;
+                    getCommand(count);
+                }
+                break;
+            case 'ArrowLeft':  
+                break;
+            case 'ArrowRight': 
+                break;
+        }
+    }
 
   function handleEnter(e) {
     if (e.key === "Enter") {
