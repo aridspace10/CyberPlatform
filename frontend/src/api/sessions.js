@@ -19,3 +19,12 @@ export async function getFullSessionData(session_id, user_id) {
     const data = await res.json();
     return data
 }
+
+export async function getUserCommand(session_id, user_id, count) {
+    const res = await fetch(`${API}/session/${session_id}/user/${user_id}/command/${count}`, {
+        method: "GET"
+    });
+
+    const data = await res.json();
+    return data;
+}
