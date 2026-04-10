@@ -1,4 +1,5 @@
 from game.filesystem import FileSystem
+from typing import List
 
 class ShellState:
     def __init__(self):
@@ -12,6 +13,9 @@ class CommandHistory:
     def __init__(self, maxlen=1000):
         self.commands = []
         self.maxlen = maxlen
+
+    def get_commands(self) -> List:
+        return self.commands
 
     def add(self, cmd: str):
         self.commands.append(cmd)
