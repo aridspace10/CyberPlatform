@@ -18,7 +18,7 @@ class Player:
     def serialize(self) -> dict:
         return {
             "vars": self.shell.vars,
-            "cmds": self.shell.commands,
+            "cmds": self.shell.commands.get_commands(),
             "fs": self.shell.fs.to_dict()
         }
 
@@ -36,10 +36,13 @@ class GameSession:
     def __str__(self) -> str:
         return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
 
-    def get_player(self, websocket: WebSocket) -> Player | None:
+    def get_player_by_connect(self, websocket: WebSocket) -> Player | None:
         username = self.connections.get(websocket)
         if not username:
             return None
+        return self.players.get(username)
+    
+    def get_player(self, username: str) -> Player | None:
         return self.players.get(username)
 
     def lobby_state(self) -> dict:
