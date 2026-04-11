@@ -113,7 +113,26 @@ def get_session_data(session_id: int, db: Session = Depends(get_db)):
         "name": session.name,
         "state": session.state
     }
-        
+
+@router.get("/session/{session_id}/user/{user_id}/command/{count}")
+def get_user_command(session_id: int, user_id: int, count: int, db: Session = Depends(get_db)):
+    session = session_manager.get_session(str(session_id))
+    if (session == "404"):
+        return {
+            "details": "Session Not Found"
+        }
+    
+    user = get_user_by_id(db, user_id)
+    if (user == None or user.username == None):
+        return {
+            "details": "User invalid"
+        }
+    player = session.get_player(user.username)
+    if (player == None):
+        return {
+            "details": "Username invalid"
+        }
+    return player.shell.commands.get(count)
 
 @router.get("/db/session/{session_id}")
 def debug_session(session_id: int, db: Session = Depends(get_db)):
