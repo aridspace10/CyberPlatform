@@ -9,6 +9,9 @@ class ShellState:
         self.vars = {}
         self.ls = 0
 
+    def __str__(self) -> str:
+        return f"cwd: {self.cwd}, command: {str(self.commands)}"
+
 class CommandHistory:
     def __init__(self, maxlen=1000):
         self.commands = []
