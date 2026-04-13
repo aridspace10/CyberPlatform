@@ -23,4 +23,7 @@ class CommandHistory:
             self.commands.pop(0)
 
     def get(self, n: int):
-        return self.commands[n - 1]
+        if n < len(self.commands):
+            return self.commands[n]
+        else:
+            return ""
