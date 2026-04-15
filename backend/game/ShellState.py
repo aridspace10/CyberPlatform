@@ -10,7 +10,7 @@ class ShellState:
         self.ls = 0
 
     def __str__(self) -> str:
-        return f"cwd: {self.cwd}, command: {str(self.commands)}"
+        return f"cwd: {self.cwd}, command: {self.commands.commands}"
 
 class CommandHistory:
     def __init__(self, maxlen=1000):

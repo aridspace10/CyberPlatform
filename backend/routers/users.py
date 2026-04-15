@@ -33,7 +33,6 @@ def get_me(user_id=Depends(get_current_user), db: Session = Depends(get_db)):
         "username": user.username
     }
 
-
 @router.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == data.username).first()
