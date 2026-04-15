@@ -37,7 +37,7 @@ export default function Gamescreen({wsRef, log, addLine, sessionID}) {
                 break;
             }
             case 'ArrowDown': {
-                const nextCount = commandCount - 1;
+                const nextCount = commandCount - 1; 
                 setCommandCount(nextCount);
                 getCommand(nextCount);
                 break;
