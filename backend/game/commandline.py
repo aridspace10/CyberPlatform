@@ -103,6 +103,8 @@ class CommandLine:
                 self.fdout = self.get_fd(redir.target)
                 if (isinstance(self.fdout, str)):
                     return (1, ([self.fdout], []))
+            elif (redir.op == "<<"):
+                self.shell.command_state = "heredoc"
         status, (stderr, stdout) = self.execute_atom(command.atom)
         if command.pre_redirs or command.post_redirs:
             if isinstance(self.fdout, FileNode):
