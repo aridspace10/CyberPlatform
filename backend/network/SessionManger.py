@@ -18,9 +18,12 @@ class Player:
     def serialize(self) -> dict:
         return {
             "vars": self.shell.vars,
-            "cmds": self.shell.commands,
+            "cmds": self.shell.commands.get_commands(),
             "fs": self.shell.fs.to_dict()
         }
+    
+    def __str__(self) -> str:
+        return f"Username-ID: {self.username}-{self.user_id}\n Player shell: {str(self.shell)}"
 
 class GameSession:
     def __init__(self, session_id: str):
@@ -36,10 +39,13 @@ class GameSession:
     def __str__(self) -> str:
         return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
 
-    def get_player(self, websocket: WebSocket) -> Player | None:
+    def get_player_by_connect(self, websocket: WebSocket) -> Player | None:
         username = self.connections.get(websocket)
         if not username:
             return None
+        return self.players.get(username)
+    
+    def get_player(self, username: str) -> Player | None:
         return self.players.get(username)
 
     def lobby_state(self) -> dict:
@@ -115,6 +121,8 @@ class GameSession:
             })
     
     async def _handle_command(self, player: Player, command: str):
+        print ("HEHE")
+        player.shell.commands.add(command)
         stdout, stderr = self.cmd.enter_command(command, player.shell)
 
         await player.websocket.send_json({
@@ -141,6 +149,9 @@ class SessionManager:
         # 2. Assign to session manger array
         self.sessions[session_id] = new_session
         return self.sessions[session_id]
+    
+    def remove_session(self, session_id):
+        del self.sessions[session_id]
     
     async def set_session_state(self, session_id: str, new_state: str) -> bool:
         session = self.get_session(session_id)

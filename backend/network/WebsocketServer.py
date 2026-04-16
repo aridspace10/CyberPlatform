@@ -4,6 +4,7 @@ from services.session_service import get_session, get_session_shell
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from db.session import get_db
+from game.ShellState import CommandHistory
 
 router = APIRouter()
 
@@ -31,8 +32,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
             if shell_db and shell_db.shell:
                 player = Player(websocket, username, user_id)
                 shell = shell_db.shell
-                print (shell)
-                player.shell.commands = shell["cmds"]
+                ch = CommandHistory()
+                ch.commands = shell["cmds"]
+                player.shell.commands = CommandHistory()
                 player.shell.vars = shell["vars"]
                 player.shell.fs.from_dict(shell["fs"])
                 session.players[username] = player
@@ -54,14 +56,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
                 })
 
             elif msg_type == "command":
-
+                
                 player = session.players.get(username)
-
                 if not player:
                     continue
 
                 raw = data.get("input", "")
-
+                player.shell.commands.add(raw)
                 stdout, stderr = session.cmd.enter_command(
                     raw,
                     player.shell

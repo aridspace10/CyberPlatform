@@ -4,10 +4,49 @@ import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
 import Terminal from "./Terminal";
+import { useAuth } from "../auth/useAuth";
 import "./Gamescreen.css"
-export default function Gamescreen({wsRef, log, addLine}) {
+import { getUserCommand } from "../api/sessions";
+export default function Gamescreen({wsRef, log, addLine, sessionID}) {
   const [input, setInput] = useState("");
   const [content, setContent] = useState(<GeneralTab />)
+    const [commandCount, setCommandCount] = useState(0);
+    const { user } = useAuth()
+    const getCommand = async (count) => {
+        if (count <= 0) {
+            setCommandCount(0);
+            setInput("");
+            return;
+        }
+        const data = await getUserCommand(sessionID, user.id, count);
+        console.log(data)
+        if (data == null || data === "") {
+            // Hit the end of history, don't go further
+            setCommandCount(prev => prev - 1);
+        } else {
+            setInput(data);
+    }
+}
+
+    const handleKeyDown = (e) => {
+        switch (e.key) {
+            case 'ArrowUp': {
+                const nextCount = commandCount + 1;
+                setCommandCount(nextCount);
+                getCommand(nextCount);
+                break;
+            }
+            case 'ArrowDown': {
+                const nextCount = commandCount - 1; 
+                setCommandCount(nextCount);
+                getCommand(nextCount);
+                break;
+            }
+            case 'Enter':
+                handleEnter(e);
+                break;
+        }
+}
 
   function handleEnter(e) {
     if (e.key === "Enter") {
@@ -71,7 +110,8 @@ export default function Gamescreen({wsRef, log, addLine}) {
                 className="prompt"
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                onKeyDown={handleEnter}
+                onKeyDown={handleKeyDown}
+                autoComplete="off"
                 autoFocus
             />
         </div>

@@ -54,3 +54,18 @@ def update_session_shell(db: Session, sesID: int, userID: int, shell: dict) -> N
 
     db.commit()
     db.refresh(ses)
+
+############# DELETE ###############
+def delete_session_shell(db: Session, sesID: int) -> None:
+    db.query(SessionShell).filter(SessionShell.SessionID == sesID).delete()
+    db.query(ScenarioToSession).filter(ScenarioToSession.sessionID == sesID).delete()
+    db.query(GameSession).filter(GameSession.id == sesID).delete()
+    db.commit()
+    return None
+
+def wipe_session_db(db: Session) -> None:
+    db.query(SessionShell).delete()
+    db.query(ScenarioToSession).delete()
+    db.query(GameSession).delete()
+    db.commit()
+    return None
