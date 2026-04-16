@@ -9,18 +9,13 @@ class ShellState:
         self.commands = CommandHistory()
         self.vars = {}
         self.ls = 0
-        self.pending_heredoc: HereDocBuffer | None = None
+        self.command_state = ""
+        self.heredoc_delimiter = ""
+        self.pending_lines = []
+        self.heredoc_command = ""
 
     def __str__(self) -> str:
         return f"cwd: {self.cwd}, command: {self.commands.commands}"
-
-@dataclass
-class HereDocBuffer:
-    delimiter: str
-    lines: list[str]
-    original_command: str
-    strip_tabs: bool = False
-    no_expand: bool = False
 
 class CommandHistory:
     def __init__(self, maxlen=1000):

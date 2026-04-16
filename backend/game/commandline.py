@@ -7,7 +7,7 @@ import random
 import datetime
 from .helpers import determine_perms_fromstr
 from game.Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
-from game.ShellState import ShellState
+from game.ShellState import ShellState, HereDocBuffer
 import copy
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
@@ -35,6 +35,23 @@ class CommandLine:
     
     def enter_command(self, raw: str, shell: ShellState) -> Tuple[list[str], list[str]]:
         self.filesystem = shell.fs
+        if shell.command_state == "heredoc":
+            if raw.strip() == shell.heredoc_delimiter:
+                # Done — inject body as fdin and re-execute the original command
+                shell.command_state = ""
+                pipe_inode = Inode(NodeType.FILE)
+                pipe_node = FileNode(None, "heredoc", pipe_inode)
+                pipe_node.set_data("\n".join(shell.pending_lines))
+                self.fdin = pipe_node
+                shell.pending_lines = []
+                # Re-run original command with fdin now populated
+                return self.execute_raw(shell.heredoc_command, shell)
+            else:
+                shell.pending_lines.append(raw)
+                return ([], [])  # signal "still buffering" to the websocket handler
+        return self.execute_raw(raw, shell)
+
+    def execute_raw(self, raw: str, shell: ShellState) -> Tuple[list[str], list[str]]:
         if (self.filesystem.cwd != shell.cwd):
             self.filesystem.search(shell.cwd)
             self.filesystem.cwd = shell.cwd
@@ -105,6 +122,9 @@ class CommandLine:
                     return (1, ([self.fdout], []))
             elif (redir.op == "<<"):
                 self.shell.command_state = "heredoc"
+                self.shell.heredoc_delimiter = redir.target
+                self.shell.pending_lines = []
+                return (-1, ([], []))
         status, (stderr, stdout) = self.execute_atom(command.atom)
         if command.pre_redirs or command.post_redirs:
             if isinstance(self.fdout, FileNode):
