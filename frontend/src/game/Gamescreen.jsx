@@ -6,8 +6,8 @@ import SettingsTab from "../components/SettingsTab";
 import Terminal from "./Terminal";
 import "./Gamescreen.css"
 export default function Gamescreen({wsRef, chatLog, commandLog, addChatLine, addCommandLine}) {
-  const [input, setInput] = useState("");
-  const [content, setContent] = useState(<GeneralTab />)
+    const [input, setInput] = useState("");
+    const [content, setContent] = useState(<GeneralTab />)
 
     function handleChatEnter(e) {
         if (e.key === "Enter") {
@@ -39,7 +39,6 @@ export default function Gamescreen({wsRef, chatLog, commandLog, addChatLine, add
     }
 
     const handleTabSwitch = (tab) => {
-        console.log("please")
         switch (tab) {
             case "General":
                 setContent(<GeneralTab />)
@@ -53,31 +52,31 @@ export default function Gamescreen({wsRef, chatLog, commandLog, addChatLine, add
         }
     }
 
-  return (
-    <div className="gamescreen">
-        <div className="sidebar-page">
-            <div className="sidebar-nav">
-                <button onClick={() => handleTabSwitch("General")}> General </button>
-                <button onClick={() => handleTabSwitch("Settings")}> Settings </button>
-                <button onClick={() => handleTabSwitch("Environment")}> Environment </button>
-            </div>
-            {content}
-        </div> 
+    return (
+        <div className="gamescreen">
+            <div className="sidebar-page">
+                <div className="sidebar-nav">
+                    <button onClick={() => handleTabSwitch("General")}> General </button>
+                    <button onClick={() => handleTabSwitch("Settings")}> Settings </button>
+                    <button onClick={() => handleTabSwitch("Environment")}> Environment </button>
+                </div>
+                {content}
+            </div> 
 
-        <div className="terminal">
-            <div className="output">
-                {log.map((line, i) => (
-                <div key={i}>{line}</div>
-                ))}
+            <div className="terminal">
+                <div className="output">
+                    {log.map((line, i) => (
+                    <div key={i}>{line}</div>
+                    ))}
+                </div>
+                <input
+                    className="prompt"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={handleTerminalEnter}
+                    autoFocus
+                />
             </div>
-            <input
-                className="prompt"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleTerminalEnter}
-                autoFocus
-            />
         </div>
-    </div>
-  );
+    );
 }
