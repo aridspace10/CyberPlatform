@@ -3,6 +3,7 @@ import { useLocation } from "react-router";
 import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
+import ChatTab from "../components/ChatTab"
 import Terminal from "./Terminal";
 import "./Gamescreen.css"
 export default function Gamescreen({wsRef, chatLog, commandLog, addChatLine, addCommandLine}) {
@@ -49,6 +50,9 @@ export default function Gamescreen({wsRef, chatLog, commandLog, addChatLine, add
             case "Environment":
                 setContent(<EnvironmentTab />)
                 break;
+            case "Chat":
+                setContent(<ChatTab />)
+                break;
         }
     }
 
@@ -59,6 +63,7 @@ export default function Gamescreen({wsRef, chatLog, commandLog, addChatLine, add
                     <button onClick={() => handleTabSwitch("General")}> General </button>
                     <button onClick={() => handleTabSwitch("Settings")}> Settings </button>
                     <button onClick={() => handleTabSwitch("Environment")}> Environment </button>
+                    <button onClick={() => handleTabSwitch("Chat")}> Chat </button>
                 </div>
                 {content}
             </div> 
