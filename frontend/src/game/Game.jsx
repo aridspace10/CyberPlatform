@@ -26,6 +26,10 @@ export default function Game() {
         setCommandLog(prev => [...prev, text]);
     }
 
+    function addChatLine(text) {
+        setChatLog(prev => [...prev, text]);
+    }
+
     const hasConnected = useRef(false);
 
     useEffect(() => {
@@ -52,7 +56,7 @@ export default function Game() {
             console.log("WS message:", data);
 
             if (data.type === "chat") {
-                addCommandLine(`${data.user}: ${data.message}`);
+                addChatLine(`${data.user}: ${data.message}`);
             }
 
             if (data.type === "lobby_update") {
