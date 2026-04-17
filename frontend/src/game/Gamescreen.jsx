@@ -5,35 +5,38 @@ import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
 import Terminal from "./Terminal";
 import "./Gamescreen.css"
-export default function Gamescreen({wsRef, log, addLine}) {
+export default function Gamescreen({wsRef, chatLog, commandLog, addChatLine, addCommandLine}) {
   const [input, setInput] = useState("");
   const [content, setContent] = useState(<GeneralTab />)
 
-  function handleEnter(e) {
-    if (e.key === "Enter") {
+    function handleChatEnter(e) {
+        if (e.key === "Enter") {
+            if (!wsRef.current || wsRef.current.readyState !== 1) {
+                addLine("[SYSTEM] Not connected");
+                return;
+            }
 
-      if (!wsRef.current || wsRef.current.readyState !== 1) {
-        addLine("[SYSTEM] Not connected");
-        return;
-      }
-
-      if (input.startsWith("/chat ")) {
-        wsRef.current.send(JSON.stringify({
-          type: "chat",
-          message: input.substring(6)
-        }));
-      }
-      else {
-        wsRef.current.send(JSON.stringify({
-          type: "command",
-          input: input
-        }));
-      }
-
-      addLine("> " + input);
-      setInput("");
+            wsRef.current.send(JSON.stringify({
+            type: "chat",
+            message: input.substring(6)
+            }));
+        }
     }
-  }
+
+    function handleTerminalEnter(e) {
+        if (e.key === "Enter") {
+            if (!wsRef.current || wsRef.current.readyState !== 1) {
+                addLine("[SYSTEM] Not connected");
+                return;
+            }
+            wsRef.current.send(JSON.stringify({
+                type: "command",
+                input: input
+            }));
+            addLine("> " + input);
+            setInput("");
+        }
+    }
 
     const handleTabSwitch = (tab) => {
         console.log("please")
@@ -71,7 +74,7 @@ export default function Gamescreen({wsRef, log, addLine}) {
                 className="prompt"
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                onKeyDown={handleEnter}
+                onKeyDown={handleTerminalEnter}
                 autoFocus
             />
         </div>

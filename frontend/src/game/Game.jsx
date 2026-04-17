@@ -88,7 +88,7 @@ export default function Game() {
     } else if (state == 'running') {
         return (
             <SessionContext.Provider value={{ sessionId, wsRef }}>
-                <Gamescreen wsRef={wsRef} log={log} addLine={addCommandLine} />
+                <Gamescreen wsRef={wsRef} commandLog={commandLog} chatLog={chatLog} addChatLine={addChatLine} addCommandLine={addCommandLine} />
             </SessionContext.Provider>
     )
     } else if (state == 'starting') {
