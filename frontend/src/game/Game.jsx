@@ -18,11 +18,12 @@ export default function Game() {
     const [username, setUsername] = useState("");
     const wsRef = useRef(null);
     const hasPrompted = useRef(false);
-    const [log, setLog] = useState([]);
+    const [commandLog, setCommandLog] = useState([]);
+    const [chatLog, setChatLog] = useState([]);
     const [state, setState] = useState("")
 
-    function addLine(text) {
-        setLog(prev => [...prev, text]);
+    function addCommandLine(text) {
+        setCommandLog(prev => [...prev, text]);
     }
 
     const hasConnected = useRef(false);
@@ -51,7 +52,7 @@ export default function Game() {
             console.log("WS message:", data);
 
             if (data.type === "chat") {
-                addLine(`${data.user}: ${data.message}`);
+                addCommandLine(`${data.user}: ${data.message}`);
             }
 
             if (data.type === "lobby_update") {
@@ -61,12 +62,12 @@ export default function Game() {
             }
 
             if (data.type === "system") {
-                addLine(`[SYSTEM] ${data.message}`);
+                addCommandLine(`[SYSTEM] ${data.message}`);
             }
 
             if (data.type === "command_output") {
-                data.stdout.forEach(line => addLine(line));
-                data.stderr.forEach(line => addLine(line));
+                data.stdout.forEach(line => addCommandLine(line));
+                data.stderr.forEach(line => addCommandLine(line));
             }
         };
 
@@ -83,7 +84,7 @@ export default function Game() {
     } else if (state == 'running') {
         return (
             <SessionContext.Provider value={{ sessionId, wsRef }}>
-                <Gamescreen wsRef={wsRef} log={log} addLine={addLine} />
+                <Gamescreen wsRef={wsRef} log={log} addLine={addCommandLine} />
             </SessionContext.Provider>
     )
     } else if (state == 'starting') {
