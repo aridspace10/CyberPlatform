@@ -8,6 +8,11 @@ import { useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { getFullSessionData } from "../api/sessions";
 import { SessionContext } from "../components/SessionContext";
+import GeneralTab from "../components/GeneralTab";
+import EnvironmentTab from "../components/EnvironmentTab";
+import SettingsTab from "../components/SettingsTab";
+import ChatTab from "../components/ChatTab"
+import "./Gamescreen.css"
 
 export default function Game() {
     const location = useLocation();
@@ -21,6 +26,8 @@ export default function Game() {
     const [commandLog, setCommandLog] = useState([]);
     const [chatLog, setChatLog] = useState([]);
     const [state, setState] = useState("")
+    const [sidebar, setSidebar] = useState(null);
+    const [mainbar, setMainbar] = useState(null);
 
     function addCommandLine(text) {
         setCommandLog(prev => [...prev, text]);
@@ -28,6 +35,20 @@ export default function Game() {
 
     function addChatLine(text) {
         setChatLog(prev => [...prev, text]);
+    }
+    
+    function handleChatEnter(e) {
+        if (e.key === "Enter") {
+            if (!wsRef.current || wsRef.current.readyState !== 1) {
+                addLine("[SYSTEM] Not connected");
+                return;
+            }
+
+            wsRef.current.send(JSON.stringify({
+                type: "chat",
+                message: input.substring(6)
+            }));
+        }
     }
 
     const hasConnected = useRef(false);
@@ -83,19 +104,51 @@ export default function Game() {
         };
     }, [user, sessionId]);
 
-    if (state == 'waiting') {
-        return (<WaitingScreen players={players} />)
-    } else if (state == 'running') {
-        return (
-            <SessionContext.Provider value={{ sessionId, wsRef }}>
-                <Gamescreen wsRef={wsRef} commandLog={commandLog} chatLog={chatLog} addChatLine={addChatLine} addCommandLine={addCommandLine} />
-            </SessionContext.Provider>
-    )
-    } else if (state == 'starting') {
-        return (<Versus players={players} />)
-    } else {
-        return (
-            <h1> Loading... </h1>
-        )
+    const handleTabSwitch = (tab) => {
+        switch (tab) {
+            case "General":
+                setSidebar(<GeneralTab />)
+                break;
+            case "Settings":
+                setSidebar(<SettingsTab />)
+                break;
+            case "Environment":
+                setSidebar(<EnvironmentTab />)
+                break;
+            case "Chat":
+                setSidebar(<ChatTab />)
+                break;
+        }
     }
+
+    useEffect(() => {
+        if (state == 'waiting') {
+            setMainbar(<WaitingScreen players={players} />)
+        } else if (state == 'running') {
+            setMainbar(
+                <SessionContext.Provider value={{ sessionId, wsRef }}>
+                    <Gamescreen wsRef={wsRef} commandLog={commandLog} chatLog={chatLog} addChatLine={addChatLine} addCommandLine={addCommandLine} />
+                </SessionContext.Provider>
+        )
+        } else if (state == 'starting') {
+            setMainbar(<Versus players={players} />)
+        } else {
+            setMainbar(<h1> Loading... </h1>)
+        }
+    }, []);
+
+    return (
+        <div className="game">
+            <div className="sidebar-page">
+                <div className="sidebar-nav">
+                    <button onClick={() => handleTabSwitch("General")}> General </button>
+                    <button onClick={() => handleTabSwitch("Settings")}> Settings </button>
+                    <button onClick={() => handleTabSwitch("Environment")}> Environment </button>
+                    <button onClick={() => handleTabSwitch("Chat")}> Chat </button>
+                </div>
+                {sidebarContent}
+            </div> 
+            {mainbarContent}
+        </div>
+    )
 }
