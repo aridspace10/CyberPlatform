@@ -91,6 +91,7 @@ export default function Game() {
             }
 
             if (data.type === "command_output") {
+                console.log("hey")
                 data.stdout.forEach(line => addCommandLine(line));
                 data.stderr.forEach(line => addCommandLine(line));
             }
@@ -127,7 +128,7 @@ export default function Game() {
         } else if (state == 'running') {
             setMainbar(
                 <SessionContext.Provider value={{ sessionId, wsRef }}>
-                    <Gamescreen wsRef={wsRef} commandLog={commandLog} chatLog={chatLog} addChatLine={addChatLine} addCommandLine={addCommandLine} />
+                    <Gamescreen wsRef={wsRef} commandLog={commandLog} addCommandLine={addCommandLine} />
                 </SessionContext.Provider>
         )
         } else if (state == 'starting') {
@@ -135,7 +136,7 @@ export default function Game() {
         } else {
             setMainbar(<h1> Loading... </h1>)
         }
-    }, []);
+    }, [state, commandLog]);
 
     return (
         <div className="game">
@@ -146,9 +147,9 @@ export default function Game() {
                     <button onClick={() => handleTabSwitch("Environment")}> Environment </button>
                     <button onClick={() => handleTabSwitch("Chat")}> Chat </button>
                 </div>
-                {sidebarContent}
+                {sidebar}
             </div> 
-            {mainbarContent}
+            {mainbar}
         </div>
     )
 }

@@ -2,21 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import Terminal from "./Terminal";
 import "./Gamescreen.css"
-export default function Gamescreen({wsRef, commandLog, addChatLine, addCommandLine}) {
+export default function Gamescreen({wsRef, commandLog, addCommandLine}) {
     const [input, setInput] = useState("");
-    const [content, setContent] = useState(<GeneralTab />)
 
     function handleTerminalEnter(e) {
         if (e.key === "Enter") {
             if (!wsRef.current || wsRef.current.readyState !== 1) {
-                addLine("[SYSTEM] Not connected");
+                addCommandLine("[SYSTEM] Not connected");
                 return;
             }
             wsRef.current.send(JSON.stringify({
                 type: "command",
                 input: input
             }));
-            addLine("> " + input);
+            addCommandLine("> " + input);
             setInput("");
         }
     }
@@ -25,7 +24,7 @@ export default function Gamescreen({wsRef, commandLog, addChatLine, addCommandLi
         <div className="gamescreen">
             <div className="terminal">
                 <div className="output">
-                    {log.map((line, i) => (
+                    {commandLog.map((line, i) => (
                     <div key={i}>{line}</div>
                     ))}
                 </div>
