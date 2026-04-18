@@ -1,3 +1,6 @@
 __pycache__
 venv
 node_modules
+.coverage
+.coveragerc
+app.db
