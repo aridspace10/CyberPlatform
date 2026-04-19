@@ -118,14 +118,20 @@ def lex(text: str) -> list[Token]:
             i += 1
             continue
         # normal word
-        start = i
-        while (
-            i < n
-            and not text[i].isspace()
-            and text[i] not in "|&;()<>$\"'"
-        ):
+        buf = ""
+        while i < n:
+            c = text[i]
+            # stop if unescaped operator or whitespace
+            if c.isspace() or c in "|&;()<>$\"'":
+                break
+            # handle escape
+            if c == "\\" and i + 1 < n:
+                i += 1
+                buf += text[i]
+            else:
+                buf += c
             i += 1
-        tokens.append(Token("WORD", text[start:i]))
+        tokens.append(Token("WORD", buf))
     return tokens
 
 class Parser:
