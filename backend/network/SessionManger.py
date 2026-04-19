@@ -1,4 +1,4 @@
-from typing import Dict, Literal
+from typing import Dict, Literal, List, Set
 from fastapi import WebSocket
 from game.ShellState import ShellState
 from game.GameManager import GameManager
@@ -30,6 +30,8 @@ class GameSession:
 
         self.players: Dict[Username, Player] = {}
         self.connections: Dict[WebSocket, Username] = {}
+        self.requests: Set[Username] = set()
+
         self.cmd = CommandLine()
         self.game_manger: GameManager = GameManager()
     

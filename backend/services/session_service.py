@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List 
-from db.modals import GameSession, ScenarioToSession, Scenario, SessionShell
+from db.modals import GameSession, ScenarioToSession, Scenario, SessionShell, JoinRequest
+from datetime import datetime
 
 
 ############# GETTERS #############
@@ -44,6 +45,14 @@ def add_session_shell(db: Session, sesID: int, userID: int, shell: dict) -> None
     db.add(ses)
     db.commit()
     db.refresh(ses)
+    return None
+
+def add_join_request(db: Session, sesID: int, userID: int) -> None:
+    now = datetime.now()
+    req = JoinRequest(SessionID=sesID, UserID=userID, date=now)
+    db.add(req)
+    db.commit()
+    db.refresh(req)
     return None
 
 ############## UPDATERS ###############
