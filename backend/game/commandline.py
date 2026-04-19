@@ -201,6 +201,8 @@ class CommandLine:
                 return self.uniq(args[1:], fdin)
             case "sort":    
                 return self.sort(args[1:], fdin)
+            case "find":
+                return self.find(args[1:], fdin)
             case _:
                 return (1, (["Unknown command given"], []))
 
@@ -216,6 +218,9 @@ class CommandLine:
             for line in f:
                 output.append(line)
         return output
+    
+    def find(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+        return (0, ([], []))
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         verbose = False
@@ -853,9 +858,6 @@ class CommandLine:
         for line in lines: 
             output[1].append(" ".join(line))
         return (0, output)
-    
-    def find(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
-        return (1, ([], []))
     
     def cd(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if (not args):
