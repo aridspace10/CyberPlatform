@@ -79,15 +79,12 @@ def lex(text: str) -> list[Token]:
     tokens = []
     i = 0
     n = len(text)
-
     while i < n:
         c = text[i]
-
         # skip whitespace
         if c.isspace():
             i += 1
             continue
-
         # check 2-char operators
         if i + 1 < n:
             two = text[i:i+2]
@@ -95,20 +92,17 @@ def lex(text: str) -> list[Token]:
                 tokens.append(Token(OPERATORS[two], two))
                 i += 2
                 continue
-
         # check 1-char operators
         if c in OPERATORS:
             tokens.append(Token(OPERATORS[c], c))
             i += 1
             continue
-
         # quoted strings
         if c == '"' or c == "'":
             quote = c
             i += 1
             start = i
             buf = ""
-
             while i < n:
                 if text[i] == quote:
                     break
@@ -118,14 +112,11 @@ def lex(text: str) -> list[Token]:
                 else:
                     buf += text[i]
                 i += 1
-
             if i >= n:
                 raise SyntaxError("Unterminated quote")
-
             tokens.append(Token("WORD", buf))
             i += 1
             continue
-
         # normal word
         start = i
         while (
@@ -134,7 +125,6 @@ def lex(text: str) -> list[Token]:
             and text[i] not in "|&;()<>$\"'"
         ):
             i += 1
-
         tokens.append(Token("WORD", text[start:i]))
     return tokens
 
