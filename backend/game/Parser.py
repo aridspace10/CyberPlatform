@@ -85,6 +85,11 @@ def lex(text: str) -> list[Token]:
         if c.isspace():
             i += 1
             continue
+        # handle escape globally
+        if c == "\\" and i + 1 < n:
+            tokens.append(Token("WORD", text[i+1]))
+            i += 2
+            continue
         # check 2-char operators
         if i + 1 < n:
             two = text[i:i+2]
