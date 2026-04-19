@@ -57,11 +57,35 @@ def session_join(session_id: str, user_id: str, db: Session = Depends(get_db)):
 
 @router.get("/session/{session_id}/accept/{user_id}")
 def session_accept(session_id: str, user_id: str, db: Session = Depends(get_db)):
-    pass
+    # Get Session and User Data
+    session = session_manager.get_session(session_id)
+    if (session == "404"):
+        return {
+            "details": "Session not found"
+        }
+    user = get_user_by_id(db, int(user_id))
+    if (user is None or user.username is None):
+        return {
+            "details": "User not found"
+        }
+    # Remove Request
+    session.requests.remove(user.username)
+    return None
 
 @router.get("/session/{session_id}/decline/{user_id}")
 def session_decline(session_id: str, user_id: str, db: Session = Depends(get_db)):
-    pass
+    session = session_manager.get_session(session_id)
+    if (session == "404"):
+        return {
+            "details": "Session not found"
+        }
+    user = get_user_by_id(db, int(user_id))
+    if (user is None or user.username is None):
+        return {
+            "details": "User not found"
+        }
+    session.requests.remove(user.username)
+    return None
 
 @router.post("/sandbox/{user_id}")
 def get_sandbox(user_id: str, db: Session = Depends(get_db)):
