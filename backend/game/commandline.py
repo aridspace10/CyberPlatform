@@ -6,7 +6,7 @@ from game.inode import Inode, NodeType
 import random
 import datetime
 from .helpers import determine_perms_fromstr
-from game.Parser import CommandParser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
+from game.Parser import CommandParser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse, FindParser, AndNode, OrNode, NotNode, FilterNode
 from game.ShellState import ShellState
 import copy
 
@@ -222,9 +222,20 @@ class CommandLine:
     def find(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if (len(args) < 1):
             return (1, (["find: atleast one argument needs to be given"], []))
-        dir = args.pop(0)
-        maxdepth = -1
-        mindepth = 0
+        while (len(args) and args[0] == "-"):
+            arg = args.pop(0)
+        if (len(args) < 1):
+            return (1, (["find: starting locaiton needs to be given"], []))
+        starting = []
+        while len(args) and not args[0].startswith("-") and args[0] not in ["(", "!", ")"]:
+            starting.append(args.pop(0))
+        if (not len(starting)):
+            starting = ["."]
+        parser = FindParser(args)
+        node = parser.parse()
+        for start in starting:
+            self.filesystem.search(start)
+            self.filesystem.current.find(node)
         return (0, ([], []))
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
