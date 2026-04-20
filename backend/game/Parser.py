@@ -63,26 +63,28 @@ class Subshell:
 Atom = SimpleCommand | Subshell | VarDeclaration
 
 ############ FIND CLASSES ############
+class Node:
+    def eval(self, f) -> bool:
+        raise NotImplementedError
+
 @dataclass
-class AndNode:
+class OrNode(Node):
     left: Node
     right: Node
 
 @dataclass
-class OrNode:
+class AndNode(Node):
     left: Node
     right: Node
 
 @dataclass
-class NotNode:
+class NotNode(Node):
     node: Node
 
 @dataclass
-class FilterNode:
+class FilterNode(Node):
     type: str
     value: str
-
-Node = AndNode | OrNode | NotNode | FilterNode
 
 OPERATORS = {
     "&&": "AND",
@@ -312,3 +314,62 @@ parser = CommandParser(tokens)
 ast = parser.parse()
 print (tokens)
 print(ast)
+
+class FindParser():
+    def __init__(self, tokens) -> None:
+        self.tokens = tokens
+        self.pos = 0
+
+    def peek(self) -> str | None:
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else None
+
+    def consume(self, expected_type=None):
+        tok = self.peek()
+        self.pos += 1
+        return tok
+
+    # entry point
+    def parse(self):
+        return self.parse_or()
+    
+    def parse_or(self):
+        node = self.parse_and()
+
+        while self.peek() and self.peek().value == "-o":
+            self.consume()
+            right = self.parse_and()
+            node = OrNode(node, right)
+
+        return node
+    
+    def parse_and(self):
+        node = self.parse_factor()
+
+        while True:
+            tok = self.peek()
+            if not tok or tok.value in [")", "-o"]:
+                break
+
+            right = self.parse_factor()
+            node = AndNode(node, right)
+
+        return node
+    
+    def parse_factor(self):
+        tok = self.peek()
+
+        if tok.value == "!":
+            self.consume()
+            return NotNode(self.parse_factor())
+
+        if tok.value == "(":
+            self.consume()
+            node = self.parse_or()
+            if self.consume().value != ")":
+                raise SyntaxError("Missing )")
+            return node
+
+        filt = self.consume()
+        val = self.consume()
+        return FilterNode(filt, val)
+
