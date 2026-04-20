@@ -63,6 +63,26 @@ class Subshell:
 Atom = SimpleCommand | Subshell | VarDeclaration
 
 ############ FIND CLASSES ############
+@dataclass
+class AndNode:
+    left: Node
+    right: Node
+
+@dataclass
+class OrNode:
+    left: Node
+    right: Node
+
+@dataclass
+class NotNode:
+    node: Node
+
+@dataclass
+class FilterNode:
+    type: str
+    value: str
+
+Node = AndNode | OrNode | NotNode | FilterNode
 
 OPERATORS = {
     "&&": "AND",
