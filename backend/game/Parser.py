@@ -323,7 +323,7 @@ class FindParser():
     def peek(self) -> str | None:
         return self.tokens[self.pos] if self.pos < len(self.tokens) else None
 
-    def consume(self, expected_type=None):
+    def consume(self, expected_type=None) -> str | None:
         tok = self.peek()
         self.pos += 1
         return tok
@@ -335,7 +335,7 @@ class FindParser():
     def parse_or(self):
         node = self.parse_and()
 
-        while self.peek() and self.peek().value == "-o":
+        while self.peek() and self.peek() == "-o":
             self.consume()
             right = self.parse_and()
             node = OrNode(node, right)
@@ -347,7 +347,7 @@ class FindParser():
 
         while True:
             tok = self.peek()
-            if not tok or tok.value in [")", "-o"]:
+            if not tok or tok in [")", "-o"]:
                 break
 
             right = self.parse_factor()
@@ -355,21 +355,27 @@ class FindParser():
 
         return node
     
-    def parse_factor(self):
+    def parse_factor(self) -> Node:
         tok = self.peek()
+        if tok == None: 
+            raise SyntaxError()
 
-        if tok.value == "!":
+        if tok == "!":
             self.consume()
             return NotNode(self.parse_factor())
 
-        if tok.value == "(":
+        if tok == "(":
             self.consume()
             node = self.parse_or()
-            if self.consume().value != ")":
+            if self.consume() != ")":
                 raise SyntaxError("Missing )")
             return node
 
         filt = self.consume()
+        if (filt == None):
+            return FilterNode("", "")
         val = self.consume()
+        if (val == None):
+            raise SyntaxError(f"No value for given for: {filt}")
         return FilterNode(filt, val)
 
