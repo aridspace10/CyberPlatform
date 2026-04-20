@@ -1,7 +1,8 @@
 from __future__ import annotations
-from typing import Literal, Tuple
+from typing import Literal, Tuple, List
 import datetime
 from game.inode import Inode, NodeType
+from game.Parser import Node, NotNode, OrNode, AndNode, FilterNode
 
 class FileNode:
     def __init__(self, parent: FileNode | None, name: str, inode: Inode):
@@ -124,6 +125,40 @@ class FileNode:
                     return "dir"
                 return self.items.pop(idx)
         return ""
+    
+    def _evalNode(self, node: Node) -> bool:
+        if (isinstance(node, OrNode)):
+            return self._evalOrFindNode(node)
+        elif (isinstance(node, AndNode)):
+            return self._evalAndNode(node)
+        elif (isinstance(node, NotNode)):
+            return not self._evalNode(node.node)
+        elif (isinstance(node, FilterNode)):
+            return self._evalFilterNode(node)
+        return False
+    
+    def _evalOrFindNode(self, node: OrNode) -> bool:
+        val = self._evalNode(node.left)
+        if (not val):
+            return self._evalNode(node.right)
+        return True
+
+    def _evalAndNode(self, node: AndNode) -> bool:
+        val = self._evalNode(node.left)
+        if (val):
+            return self._evalNode(node.right)
+        return False
+
+    def _evalFilterNode(self, node: FilterNode) -> bool:
+        return True
+    
+    def find(self, filter: Node) -> List[str]:
+        output = []
+        for item in self.items:
+            output.extend(item.find(filter))
+        if (self._evalNode(filter)):
+            output.append(self.name)
+        return []
                 
     def len(self) -> int:
         return len(self.items)
