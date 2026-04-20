@@ -6,7 +6,7 @@ from game.inode import Inode, NodeType
 import random
 import datetime
 from .helpers import determine_perms_fromstr
-from game.Parser import Parser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
+from game.Parser import CommandParser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse
 from game.ShellState import ShellState
 import copy
 
@@ -40,7 +40,7 @@ class CommandLine:
             self.filesystem.cwd = shell.cwd
         self.shell = shell
         tokens = lex(raw)
-        parser = Parser(tokens)
+        parser = CommandParser(tokens)
         ast = parser.parse()
         if isinstance(ast, Sequence):
             shell.ls, (stderr, stdout) = self.execute_sequence(ast.parts)
@@ -220,6 +220,11 @@ class CommandLine:
         return output
     
     def find(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+        if (len(args) < 1):
+            return (1, (["find: atleast one argument needs to be given"], []))
+        dir = args.pop(0)
+        maxdepth = -1
+        mindepth = 0
         return (0, ([], []))
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:

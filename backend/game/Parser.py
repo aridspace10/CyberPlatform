@@ -3,6 +3,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+
+############ COMMAND LINE CLASSES ############
 @dataclass
 class Token:
     type: str
@@ -59,6 +61,8 @@ class Subshell:
     sequence: Sequence
 
 Atom = SimpleCommand | Subshell | VarDeclaration
+
+############ FIND CLASSES ############
 
 OPERATORS = {
     "&&": "AND",
@@ -139,7 +143,7 @@ def lex(text: str) -> list[Token]:
         tokens.append(Token("WORD", buf))
     return tokens
 
-class Parser:
+class CommandParser:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
@@ -284,7 +288,7 @@ class Parser:
 
 text = "echo $x"
 tokens = lex(text)
-parser = Parser(tokens)
+parser = CommandParser(tokens)
 ast = parser.parse()
 print (tokens)
 print(ast)
