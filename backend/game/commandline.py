@@ -231,8 +231,8 @@ class CommandLine:
             starting.append(args.pop(0))
         if (not len(starting)):
             starting = ["."]
-        parser = FindParser(args)
-        node = parser.parse()
+        fparser = FindParser(args)
+        node = fparser.parse()
         for start in starting:
             self.filesystem.search(start)
             self.filesystem.current.find(node)
