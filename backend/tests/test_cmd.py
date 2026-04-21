@@ -834,5 +834,5 @@ def test_find_error(cl, shell_basic: ShellState):
 
 def test_find_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('find .', shell_basic)
-    assert stdout == [".","./f1.txt","./f2.txt","./d1/f3.txt", "./d1/f4.txt"]
+    assert stdout == [".","./f1.txt","./f2.txt","./d1" ,"./d1/f3.txt", "./d1/f4.txt"]
     assert stderr == []

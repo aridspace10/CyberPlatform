@@ -152,13 +152,22 @@ class FileNode:
     def _evalFilterNode(self, node: FilterNode) -> bool:
         return True
     
-    def find(self, filter: Node) -> List[str]:
+    def _join(self, past: str) -> str:
+        if (self.parent == None):
+            return "."
+        if past == ".":
+            return f"./{self.name}"
+        return f"{past}/{self.name}"
+    
+    def find(self, filter: Node, past: str) -> List[str]:
         output = []
+        current_path = "." if past == "." and self.name == "" else self._join(past)
+        if self._evalNode(filter):
+            output.append(current_path)
+
         for item in self.items:
-            output.extend(item.find(filter))
-        if (self._evalNode(filter)):
-            output.append(self.name)
-        return []
+            output.extend(item.find(filter, current_path))
+        return output
                 
     def len(self) -> int:
         return len(self.items)

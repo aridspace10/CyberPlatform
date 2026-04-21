@@ -308,13 +308,6 @@ class CommandParser:
         self.consume("RPAREN")
         return Subshell(node)
 
-text = "echo $x"
-tokens = lex(text)
-parser = CommandParser(tokens)
-ast = parser.parse()
-print (tokens)
-print(ast)
-
 class FindParser():
     def __init__(self, tokens) -> None:
         self.tokens = tokens
@@ -378,4 +371,8 @@ class FindParser():
         if (val == None):
             raise SyntaxError(f"No value for given for: {filt}")
         return FilterNode(filt, val)
-
+    
+text = ["(", "-name", "*.txt", "-o", "-name", "*.md", ")", "-type", "f"]
+parser = FindParser(text)
+ast = parser.parse()
+print(ast)
