@@ -3,6 +3,7 @@ from typing import Literal, Tuple, List
 import datetime
 from game.inode import Inode, NodeType
 from game.Parser import Node, NotNode, OrNode, AndNode, FilterNode
+import fnmatch
 
 class FileNode:
     def __init__(self, parent: FileNode | None, name: str, inode: Inode):
@@ -148,8 +149,24 @@ class FileNode:
         if (val):
             return self._evalNode(node.right)
         return False
+    
+    def _evalFindType(self, val: str):
+        match (val):
+            case ("f"):
+                return self.get_type() == NodeType.FILE
+            case ("d"):
+                return self.get_type() == NodeType.DIRECTORY
+            case ("s"):
+                return self.get_type() == NodeType.SYMLINK
+            case _:
+                raise SyntaxError(f"Value for -type not allowed: ${val}") 
 
     def _evalFilterNode(self, node: FilterNode) -> bool:
+        match (node.type):
+            case ("-type"):
+                return self._evalFindType(node.value)
+            case ("-name"):
+                return fnmatch.fnmatch(self.name, node.value)
         return True
     
     def _join(self, past: str) -> str:

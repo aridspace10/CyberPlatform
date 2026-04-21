@@ -836,3 +836,29 @@ def test_find_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('find .', shell_basic)
     assert stdout == [".","./f1.txt","./f2.txt","./d1" ,"./d1/f3.txt", "./d1/f4.txt"]
     assert stderr == []
+
+def test_find_file(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('find . -type f', shell_basic)
+    assert stdout == ["./f1.txt","./f2.txt","./d1/f3.txt", "./d1/f4.txt"]
+    assert stderr == []
+
+def test_find_or(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('find . -type f -o -type d', shell_basic)
+    assert stdout == [".","./f1.txt","./f2.txt","./d1" ,"./d1/f3.txt", "./d1/f4.txt"]
+    assert stderr == []
+
+def test_find_name(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('find . -name \"f*.txt\"', shell_basic)
+    assert stdout == ["./f1.txt","./f2.txt","./d1/f3.txt", "./d1/f4.txt"]
+    assert stderr == []
+
+    stderr, stdout = cl.enter_command('find . -name f4.txt', shell_basic)
+    assert stdout == ["./d1/f4.txt"]
+    assert stderr == []
+
+def test_find_and(cl, shell_basic: ShellState):
+    shell_basic.fs.add_file("f3.txt")
+    stderr, stdout = cl.enter_command('find . -type d -name f3.txt', shell_basic)
+    assert stdout == []
+    assert stderr == []
+    
