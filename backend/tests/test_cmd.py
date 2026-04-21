@@ -825,3 +825,14 @@ def test_cp_errors2(cl, shell_fouritems: ShellState):
     stderr, stdout = cl.enter_command('cp f1.txt f2.txt f12.txt', shell_fouritems)
     assert stdout == []
     assert stderr == ["cp: target 'f12.txt' is not a directory"]
+
+################# FIND ##################
+def test_find_error(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('find', shell_basic)
+    assert stdout == []
+    assert stderr == ["find: atleast one argument needs to be given"]
+
+def test_find_basic(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('find .', shell_basic)
+    assert stdout == [".","./f1.txt","./f2.txt","./d1/f3.txt", "./d1/f4.txt"]
+    assert stderr == []
