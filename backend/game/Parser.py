@@ -1,42 +1,51 @@
 from __future__ import annotations
-import re
 from dataclasses import dataclass
 from typing import Literal
+
 
 @dataclass
 class Token:
     type: str
     value: str
 
+
 Identifier = str
+
 
 @dataclass
 class Redirection:
     op: Literal[">", ">>", "<", "<<"]
     target: Identifier
 
+
 @dataclass
 class VarUse:
     name: Identifier
+
 
 @dataclass
 class Word:
     parts: list["Segment"]
 
+
 Segment = str | VarUse
+
 
 @dataclass
 class VarDeclaration:
     name: Identifier
     value: Word
 
+
 @dataclass
 class SimpleCommand:
     args: list[Word]
 
+
 @dataclass
 class Pipe:
     parts: list[AndOr]
+
 
 @dataclass
 class Command:
@@ -45,18 +54,22 @@ class Command:
     post_redirs: list[Redirection]
     assignments: list[VarDeclaration]
 
+
 @dataclass
 class AndOr:
     first: Command
     rest: list[tuple[Literal["&&", "||"], Command]]
 
+
 @dataclass
 class Sequence:
     parts: list[Pipe]
 
+
 @dataclass
 class Subshell:
     sequence: Sequence
+
 
 Atom = SimpleCommand | Subshell | VarDeclaration
 
@@ -75,6 +88,7 @@ OPERATORS = {
     "$": "DOLLAR",
 }
 
+
 def lex(text: str) -> list[Token]:
     tokens = []
     i = 0
@@ -90,7 +104,7 @@ def lex(text: str) -> list[Token]:
 
         # check 2-char operators
         if i + 1 < n:
-            two = text[i:i+2]
+            two = text[i : i + 2]
             if two in OPERATORS:
                 tokens.append(Token(OPERATORS[two], two))
                 i += 2
@@ -128,15 +142,12 @@ def lex(text: str) -> list[Token]:
 
         # normal word
         start = i
-        while (
-            i < n
-            and not text[i].isspace()
-            and text[i] not in "|&;()<>$\"'"
-        ):
+        while i < n and not text[i].isspace() and text[i] not in "|&;()<>$\"'":
             i += 1
 
         tokens.append(Token("WORD", text[start:i]))
     return tokens
+
 
 class Parser:
     def __init__(self, tokens):
@@ -156,11 +167,11 @@ class Parser:
     # entry point
     def parse(self):
         return self.parse_sequence()
-    
+
     def parse_sequence(self) -> Sequence:
         node = self.parse_pipeline()
         result = [node]
-        while ((p := self.peek()) and p.type == "SEMI"):
+        while (p := self.peek()) and p.type == "SEMI":
             self.consume("SEMI")
             result.append(self.parse_pipeline())
         return Sequence(result)
@@ -168,7 +179,7 @@ class Parser:
     def parse_pipeline(self) -> Pipe:
         node = self.parse_andor()
         result = [node]
-        while ((p := self.peek()) and p.type == "PIPE"):
+        while (p := self.peek()) and p.type == "PIPE":
             self.consume("PIPE")
             result.append(self.parse_andor())
         return Pipe(result)
@@ -176,22 +187,24 @@ class Parser:
     def parse_andor(self):
         first = self.parse_command()
         rest = []
-        while ((p := self.peek()) and (p.type == "AND" or p.type == "OR")):
+        while (p := self.peek()) and (p.type == "AND" or p.type == "OR"):
             tmp = self.consume()
             if tmp is None:
                 raise Exception()
             rest.append((tmp.value, self.parse_command()))
         return AndOr(first, rest)
-    
+
     def parse_redirections(self) -> list[Redirection]:
         result = []
-        while ((p := self.peek()) and (p.value == ">" or p.value == ">>" or p.value == "<<" or p.value == "<")):
+        while (p := self.peek()) and (
+            p.value == ">" or p.value == ">>" or p.value == "<<" or p.value == "<"
+        ):
             self.consume()
             target = self.consume()
-            if (p is not None and target is not None):
+            if p is not None and target is not None:
                 result.append(Redirection(p.value, target.value))
         return result
-    
+
     def split_assignment(self, word: str):
         if "=" not in word:
             return None
@@ -228,11 +241,9 @@ class Parser:
             name, value = res
             self.consume()
 
-            assignments.append(
-                VarDeclaration(name, Word([value]))
-            )
+            assignments.append(VarDeclaration(name, Word([value])))
 
-        if ((p := self.peek()) is None or p.type not in ("WORD", "LPAREN")):
+        if (p := self.peek()) is None or p.type not in ("WORD", "LPAREN"):
             if not assignments:
                 raise SyntaxError("expected command")
             atom = SimpleCommand([])
@@ -259,7 +270,7 @@ class Parser:
         return None
 
     def parse_atom(self):
-        if ((p := self.peek()) and p.type == "LPAREN"):
+        if (p := self.peek()) and p.type == "LPAREN":
             return self.parse_subshell()
 
         args = []
@@ -281,9 +292,10 @@ class Parser:
         self.consume("RPAREN")
         return Subshell(node)
 
+
 text = "echo $x"
 tokens = lex(text)
 parser = Parser(tokens)
 ast = parser.parse()
-print (tokens)
+print(tokens)
 print(ast)

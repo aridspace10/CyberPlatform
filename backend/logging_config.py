@@ -1,6 +1,7 @@
 import logging
 import json
 
+
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         log_record = {
@@ -12,9 +13,10 @@ class JsonFormatter(logging.Formatter):
             log_record.update(record.extra_data)
         return json.dumps(log_record)
 
+
 def setup_logging():
     logger = logging.getLogger("cyber")
-    
+
     if logger.hasHandlers():  # جلوگیری duplicate logs
         return logger
 

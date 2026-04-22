@@ -7,20 +7,23 @@ from db.session import get_db
 
 router = APIRouter()
 
+
 @router.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session = Depends(get_db)):
+async def websocket_endpoint(
+    websocket: WebSocket, session_id: str, db: Session = Depends(get_db)
+):
     await websocket.accept()
     session = session_manager.get_session(session_id)
     if session == "404":
-        print ("hehe")
+        print("hehe")
         ses_db = get_session(db, int(session_id))
-        if (ses_db == None):
+        if ses_db == None:
             await websocket.close()
             return
         session = GameSession(str(session_id))
         session.name = ses_db.name if ses_db.name is not None else ""
         session.state = ses_db.state if ses_db.state is not None else ""
-        print (session.state)
+        print(session.state)
     try:
         # Expect join packet first
         join_data = await websocket.receive_json()
@@ -32,7 +35,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
             if shell_db and shell_db.shell:
                 player = Player(websocket, username, user_id)
                 shell = shell_db.shell
-                print (shell)
+                print(shell)
                 player.shell.commands = shell["cmds"]
                 player.shell.vars = shell["vars"]
                 player.shell.fs.from_dict(shell["fs"])
@@ -48,14 +51,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
 
             msg_type = data.get("type")
             if msg_type == "chat":
-                await session.broadcast({
-                    "type": "chat",
-                    "user": username,
-                    "message": data.get("message", "")
-                })
+                await session.broadcast(
+                    {
+                        "type": "chat",
+                        "user": username,
+                        "message": data.get("message", ""),
+                    }
+                )
 
             elif msg_type == "command":
-
                 player = session.players.get(username)
 
                 if not player:
@@ -63,16 +67,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
 
                 raw = data.get("input", "")
 
-                stdout, stderr = session.cmd.enter_command(
-                    raw,
-                    player.shell
-                )
+                stdout, stderr = session.cmd.enter_command(raw, player.shell)
 
-                await session.send_to(websocket, {
-                    "type": "command_output",
-                    "stdout": stdout,
-                    "stderr": stderr
-                })
+                await session.send_to(
+                    websocket,
+                    {"type": "command_output", "stdout": stdout, "stderr": stderr},
+                )
 
     except WebSocketDisconnect:
         session.disconnect(websocket)
