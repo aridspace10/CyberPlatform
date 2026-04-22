@@ -17,7 +17,7 @@ async def websocket_endpoint(
     if session == "404":
         print("hehe")
         ses_db = get_session(db, int(session_id))
-        if ses_db == None:
+        if ses_db is None:
             await websocket.close()
             return
         session = GameSession(str(session_id))

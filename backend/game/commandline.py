@@ -364,7 +364,7 @@ class CommandLine:
                 return (0, output)
             elif ftype == NodeType.FILE and ttype == NodeType.DIRECTORY:
                 if (
-                    self.filesystem.current.parent == None
+                    self.filesystem.current.parent is None
                 ):  # literally impossible to be true
                     return (2, ([], []))  # pragma: no cover
                 self.filesystem.current = self.filesystem.current.parent
@@ -374,7 +374,7 @@ class CommandLine:
                         saved = item
                         self.filesystem.current.items.pop(idx)
                         break
-                if saved == None:
+                if saved is None:
                     return (2, ([f"mv: could not find file {target}"], []))
                 self.filesystem.search(target)
                 self.filesystem.current.items.append(saved)
@@ -734,7 +734,7 @@ class CommandLine:
             if ty == NodeType.DIRECTORY:
                 output[0].append(f"head: ${file} is a directory")
                 continue
-            if content == None or isinstance(content, str):
+            if content is None or isinstance(content, str):
                 return (1, ([], []))
             counter = 0
             data = content.get_data()

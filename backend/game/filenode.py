@@ -85,7 +85,7 @@ class FileNode:
 
     def accumualate_depth(self) -> None:
         self.depth += 1
-        if self.parent != None:
+        if self.parent is not None:
             self.parent.accumualate_depth()
 
     def preorder_traversal(
@@ -127,7 +127,7 @@ class FileNode:
     def delete_child(self, name: str, recurse: bool = False) -> FileNode | str:
         for idx, item in enumerate(self.items):
             if item.name == name:
-                if item.get_type() == NodeType.DIRECTORY and recurse == False:
+                if item.get_type() == NodeType.DIRECTORY and not recurse:
                     return "dir"
                 return self.items.pop(idx)
         return ""
@@ -193,7 +193,7 @@ class FileNode:
                 def size_sort(val):
                     itemname = val[-1]
                     item = self.access(itemname)
-                    if item == None:
+                    if item is None:
                         return ""
                     return item.inode.size
 
