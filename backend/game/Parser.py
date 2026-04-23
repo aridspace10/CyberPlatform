@@ -89,7 +89,11 @@ class FilterNode(Node):
 @dataclass
 class ExecNode(Node):
     command: list[str]
-    mode: str
+    mode: Literal[";", "+"]
+
+@dataclass
+class DeleteNode(Node):
+    pass
 
 OPERATORS = {
     "&&": "AND",

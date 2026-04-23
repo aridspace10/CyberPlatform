@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Literal, Tuple, List
 import datetime
 from game.inode import Inode, NodeType
-from game.Parser import Node, NotNode, OrNode, AndNode, FilterNode
+from game.Parser import Node, NotNode, OrNode, AndNode, FilterNode, ExecNode
 import fnmatch
 
 class FileNode:
@@ -123,6 +123,14 @@ class FileNode:
             return (not self._evalNode(node.node, actions), actions)
         elif (isinstance(node, FilterNode)):
             return (self._evalFilterNode(node), actions)
+        elif (isinstance(node, ExecNode)):
+            if (node.mode == "+"):
+                pass
+            else: #mode == ;
+                for i, part in enumerate(node.command):
+                    if ("{}" in part):
+                        node.command[i] = part.replace("{}", self.current_path)
+                actions.append(" ".join(node.command))
         return (False, actions)
     
     def _evalOrFindNode(self, node: OrNode, actions: list[str]) -> Tuple[bool, list[str]]:
@@ -170,13 +178,13 @@ class FileNode:
     
     def find(self, filter: Node, past: str) -> Tuple[List[str], List[str]]:
         output = []
-        current_path = "." if past == "." and self.name == "" else self._join(past)
+        self.current_path = "." if past == "." and self.name == "" else self._join(past)
         (passed, actions) = self._evalNode(filter, [])
         if passed:
-            output.append(current_path)
+            output.append(self.current_path)
 
         for item in self.items:
-            toprint, execs = item.find(filter, current_path)
+            toprint, execs = item.find(filter, self.current_path)
             output.extend(toprint)
             actions.extend(execs)
         return (output, actions)

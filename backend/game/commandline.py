@@ -237,7 +237,6 @@ class CommandLine:
             fparser = FindParser(args)
             node = fparser.parse()
         output = ([], [])
-        print (node)
         for start in starting:
             if (err := self.filesystem.search(start)):
                 output[0].append(err)
