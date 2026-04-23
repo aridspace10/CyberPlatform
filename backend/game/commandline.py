@@ -237,13 +237,15 @@ class CommandLine:
             fparser = FindParser(args)
             node = fparser.parse()
         output = ([], [])
+        print (node)
         for start in starting:
             if (err := self.filesystem.search(start)):
                 output[0].append(err)
                 continue
 
             start_node = self.filesystem.current   # AFTER search
-            output[1].extend(start_node.find(node, "."))
+            (toprints, execs) = start_node.find(node, ".")
+            output[1].extend(toprints)
         return (0, output)
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:

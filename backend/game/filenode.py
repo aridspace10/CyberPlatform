@@ -126,13 +126,13 @@ class FileNode:
         return (False, actions)
     
     def _evalOrFindNode(self, node: OrNode, actions: list[str]) -> Tuple[bool, list[str]]:
-        val = self._evalNode(node.left, actions)
+        val, actions = self._evalNode(node.left, actions)
         if (not val):
             return self._evalNode(node.right, actions)
         return (True, actions)
 
     def _evalAndNode(self, node: AndNode, actions: list[str]) -> Tuple[bool, list[str]]:
-        val = self._evalNode(node.left, actions)
+        val, actions = self._evalNode(node.left, actions)
         if (val):
             return self._evalNode(node.right, actions)
         return (False, actions)
@@ -156,7 +156,10 @@ class FileNode:
                 return fnmatch.fnmatch(self.name, node.value)
             case ("-true"):
                 return True
-        return True
+            case (""): # the empty find
+                return True
+            case _:
+                raise SyntaxError("-type not found")
     
     def _join(self, past: str) -> str:
         if (self.parent == None):
