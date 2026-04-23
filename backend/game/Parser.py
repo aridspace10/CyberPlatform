@@ -86,6 +86,11 @@ class FilterNode(Node):
     type: str
     value: str
 
+@dataclass
+class ExecNode(Node):
+    command: list[str]
+    mode: str
+
 OPERATORS = {
     "&&": "AND",
     "||": "OR",
@@ -367,12 +372,22 @@ class FindParser():
         filt = self.consume()
         if (filt == None):
             return FilterNode("", "")
+        if (filt in ["-true", "-false", "-empty", "-delete"]): # Singular 
+            return FilterNode(filt, "")
+        if (filt == "-exec"):
+            cmd = []
+            while self.peek() not in (";", "+"):
+                cmd.append(self.consume())
+            mode = self.consume()
+            if (mode == None):
+                raise SyntaxError("Expected ; or +")
+            return ExecNode(cmd, mode)
         val = self.consume()
         if (val == None):
             raise SyntaxError(f"No value for given for: {filt}")
         return FilterNode(filt, val)
     
-text = ["(", "-name", "*.txt", "-o", "-name", "*.md", ")", "-type", "f"]
+text = ["(", "-name", "*.txt", "-o", "-true", ")", "-exec", "cat", "{}", ";"]
 parser = FindParser(text)
 ast = parser.parse()
 print(ast)

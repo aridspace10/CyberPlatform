@@ -114,28 +114,28 @@ class FileNode:
                 return self.items.pop(idx)
         return ""
     
-    def _evalNode(self, node: Node) -> bool:
+    def _evalNode(self, node: Node, actions: list[str]) -> Tuple[bool, list[str]]:
         if (isinstance(node, OrNode)):
-            return self._evalOrFindNode(node)
+            return self._evalOrFindNode(node, actions)
         elif (isinstance(node, AndNode)):
-            return self._evalAndNode(node)
+            return self._evalAndNode(node, actions)
         elif (isinstance(node, NotNode)):
-            return not self._evalNode(node.node)
+            return (not self._evalNode(node.node, actions), actions)
         elif (isinstance(node, FilterNode)):
-            return self._evalFilterNode(node)
-        return False
+            return (self._evalFilterNode(node), actions)
+        return (False, actions)
     
-    def _evalOrFindNode(self, node: OrNode) -> bool:
-        val = self._evalNode(node.left)
+    def _evalOrFindNode(self, node: OrNode, actions: list[str]) -> Tuple[bool, list[str]]:
+        val = self._evalNode(node.left, actions)
         if (not val):
-            return self._evalNode(node.right)
-        return True
+            return self._evalNode(node.right, actions)
+        return (True, actions)
 
-    def _evalAndNode(self, node: AndNode) -> bool:
-        val = self._evalNode(node.left)
+    def _evalAndNode(self, node: AndNode, actions: list[str]) -> Tuple[bool, list[str]]:
+        val = self._evalNode(node.left, actions)
         if (val):
-            return self._evalNode(node.right)
-        return False
+            return self._evalNode(node.right, actions)
+        return (False, actions)
     
     def _evalFindType(self, val: str):
         match (val):
@@ -154,6 +154,8 @@ class FileNode:
                 return self._evalFindType(node.value)
             case ("-name"):
                 return fnmatch.fnmatch(self.name, node.value)
+            case ("-true"):
+                return True
         return True
     
     def _join(self, past: str) -> str:
@@ -163,15 +165,18 @@ class FileNode:
             return f"./{self.name}"
         return f"{past}/{self.name}"
     
-    def find(self, filter: Node, past: str) -> List[str]:
+    def find(self, filter: Node, past: str) -> Tuple[List[str], List[str]]:
         output = []
         current_path = "." if past == "." and self.name == "" else self._join(past)
-        if self._evalNode(filter):
+        (passed, actions) = self._evalNode(filter, [])
+        if passed:
             output.append(current_path)
 
         for item in self.items:
-            output.extend(item.find(filter, current_path))
-        return output
+            toprint, execs = item.find(filter, current_path)
+            output.extend(toprint)
+            actions.extend(execs)
+        return (output, actions)
                 
     def len(self) -> int:
         return len(self.items)
@@ -235,8 +240,6 @@ class FileNode:
                 def time_sort(val):
                     itemname = val[-1].split("/")[-1]
                     item = self.access(itemname)
-                    print (item)
-                    print (item.inode.ctime)
                     if item == None:
                         return 0
                     if method == "mod":
