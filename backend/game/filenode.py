@@ -81,19 +81,6 @@ class FileNode:
         if (self.parent != None):
             self.parent.accumualate_depth()
     
-    def preorder_traversal(self, content: list[Tuple[int, str]], move: int) -> list[Tuple[int, str]]:
-        if (self.items):
-            mid = len(self.items) // 2
-            for idx, item in enumerate(self.items):
-                if (idx == mid):
-                    content.append((move, self.name + "-|"))
-                content = (item.preorder_traversal(content, move + 1))
-        else:
-            content.append((move, "--"))
-            move += 1
-            content.append((move, self.name))
-        return content
-    
     def add_child(self, name: str, inode: Inode) -> str:
         """ Adds a child to the filenode """
         for file in self.items:
