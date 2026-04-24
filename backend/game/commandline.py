@@ -1042,7 +1042,7 @@ class CommandLine:
                     r.append(modified.pop(vid))
             modified = r
         if output:
-            saved_current = self.filesystem.current'
+            saved_current = self.filesystem.current
             # If file don't exist already
             if (self.filesystem.search(output) != ""):
                 self.filesystem.add_file(output)
