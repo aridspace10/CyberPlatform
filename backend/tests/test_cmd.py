@@ -409,6 +409,15 @@ def test_head_count(cl, shell_basic: ShellState):
     for i in range(r, 0):
         assert stdout[-i] == str(i)
 
+def test_head_bytes(cl, shell_basic: ShellState):
+    r = random.randint(5, 20)
+    stderr, stdout = cl.enter_command(f'head -b {r} f2.txt', shell_basic)
+    assert stderr == []
+    expected_lines = r // 2
+    assert len(stdout) == expected_lines
+    for i, line in enumerate(stdout):
+        assert line == str(i + 1)
+
 ######### TOUCH ############
 def test_touch_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('touch --no-create f1.txt', shell_basic)
@@ -722,6 +731,17 @@ def test_sort_dups(cl, shell_basic: ShellState):
     for i in range(0, len(names)):
         assert stdout[i] == names[i]
 
+def test_sort_output(cl, shell_basic: ShellState):
+    names = setup_names(shell_basic, "f2.txt")
+    stderr, stdout = cl.enter_command('sort -o f1.txt f2.txt', shell_basic)
+    shell_basic.fs.search("f1.txt")
+    data = shell_basic.fs.current.get_data().split("\n")
+    shell_basic.fs.current = shell_basic.fs.filehead
+    assert stderr == []
+    assert stdout == []
+    for i in range(0, len(names)):
+        assert data[i] == names[i]
+
 def test_sort_sorted(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     stderr, stdout = cl.enter_command('sort -o s1.txt f2.txt', shell_basic)
@@ -878,4 +898,8 @@ def test_find_and(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('find . -type d -name f3.txt', shell_basic)
     assert stdout == []
     assert stderr == []
-    
+
+def test_find_delete(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('find . -type f -name f3.txt -delete', shell_basic)
+    assert stdout == []
+    assert stderr == []
