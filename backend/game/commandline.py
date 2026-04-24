@@ -699,7 +699,7 @@ class CommandLine:
                         lines = int(val)
                 elif (arg == "-c"):
                     b = int(args.pop(0))
-                elif (arg.startswith("--lines=")):
+                elif (arg.startswith("--bytes=")):
                     val = arg.split("=")[1]
                     if (val[0] == "-"):
                         rev = True
