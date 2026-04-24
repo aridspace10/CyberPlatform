@@ -1017,6 +1017,7 @@ class CommandLine:
         if check or scheck:
             for i in range(0, len(modified)):
                 if modified[i] != content[i]:
+                    # Silent check or not
                     if scheck:
                         return (1, ([], []))
                     else:
@@ -1026,17 +1027,23 @@ class CommandLine:
             modified = list(dict.fromkeys(modified))
         if randomize:
             r = []
+            # while an element hasn't been moved
             while len(modified):
+                # Pick a random element in modified
                 vid = random.randrange(len(modified))
+                # if there is multiple of one element move backwards
                 while vid > 0 and modified[vid-1] == modified[vid]:
                     vid -= 1
+                # Get element and append to end of new array
                 element = modified.pop(vid)
                 r.append(element)
+                # Keep removing element which are the saeme
                 while vid < len(modified) and modified[vid] == element:
                     r.append(modified.pop(vid))
             modified = r
         if output:
-            saved_current = self.filesystem.current
+            saved_current = self.filesystem.current'
+            # If file don't exist already
             if (self.filesystem.search(output) != ""):
                 self.filesystem.add_file(output)
                 self.filesystem.search(output)
