@@ -380,7 +380,7 @@ class FindParser():
             return FilterNode(filt, "")
         if (filt == "-exec"):
             cmd = []
-            while self.peek() not in (";", "+"):
+            while (tok := self.peek()) is not None and tok not in (";", "+"):
                 cmd.append(self.consume())
             mode = self.consume()
             if (mode == None):

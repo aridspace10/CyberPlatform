@@ -832,6 +832,18 @@ def test_find_error(cl, shell_basic: ShellState):
     assert stdout == []
     assert stderr == ["find: atleast one argument needs to be given"]
 
+    stderr, stdout = cl.enter_command('find \( -type f -o -type d', shell_basic)
+    assert stdout == []
+    assert stderr == ["find: Missing )"]
+
+    stderr, stdout = cl.enter_command('find . -type', shell_basic)
+    assert stdout == []
+    assert stderr == ["find: No value for given for: -type"]
+
+    stderr, stdout = cl.enter_command('find . -exec cat {}', shell_basic)
+    assert stdout == []
+    assert stderr == ["find: Expected ; or +"]
+
 def test_find_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('find .', shell_basic)
     assert stdout == [".","./f1.txt","./f2.txt","./d1" ,"./d1/f3.txt", "./d1/f4.txt"]
@@ -854,6 +866,11 @@ def test_find_name(cl, shell_basic: ShellState):
 
     stderr, stdout = cl.enter_command('find . -name f4.txt', shell_basic)
     assert stdout == ["./d1/f4.txt"]
+    assert stderr == []
+
+def test_find_not(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('find . ! -name \"f*.txt\"', shell_basic)
+    assert stdout == [".", "./d1"]
     assert stderr == []
 
 def test_find_and(cl, shell_basic: ShellState):

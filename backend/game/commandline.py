@@ -235,7 +235,10 @@ class CommandLine:
             node = FilterNode("","")
         else:
             fparser = FindParser(args)
-            node = fparser.parse()
+            try:
+                node = fparser.parse()
+            except Exception as e:
+                return (2, ([f"find: {str(e)}"], []))
         output = ([], [])
         for start in starting:
             if (err := self.filesystem.search(start)):
