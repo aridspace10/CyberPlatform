@@ -722,6 +722,17 @@ def test_sort_dups(cl, shell_basic: ShellState):
     for i in range(0, len(names)):
         assert stdout[i] == names[i]
 
+def test_sort_output(cl, shell_basic: ShellState):
+    names = setup_names(shell_basic, "f2.txt")
+    stderr, stdout = cl.enter_command('sort -o f1.txt f2.txt', shell_basic)
+    shell_basic.fs.search("f1.txt")
+    data = shell_basic.fs.current.get_data().split("\n")
+    shell_basic.fs.current = shell_basic.fs.filehead
+    assert stderr == []
+    assert stdout == []
+    for i in range(0, len(names)):
+        assert data[i] == names[i]
+
 def test_sort_sorted(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     stderr, stdout = cl.enter_command('sort -o s1.txt f2.txt', shell_basic)
