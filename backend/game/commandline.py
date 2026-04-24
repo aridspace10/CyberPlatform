@@ -707,7 +707,7 @@ class CommandLine:
                         rev = True
                         b = int(val[1:]) * -1
                     else:
-                        b = int(val[1:])
+                        b = int(val)
                 else:
                     output[0].append(f"head: Unknown argument (${arg}) given")
             else:
@@ -729,14 +729,24 @@ class CommandLine:
                 return (1, ([],[]))
             counter = 0
             data = content.get_data()
-            for line in data.split("\n"):
-                output[1].append(line)
-                counter += 1
-                curb += len(line.encode("utf-8"))
-                if (b == -1 and counter >= lines):
-                    break
-                if (b != -1 and curb >= b):
-                    break
+            if rev and b != -1:
+                trimmed = data.encode("utf-8")[:b]  # b is negative, slices off last abs(b) bytes
+                for line in trimmed.decode("utf-8").split("\n"):
+                    output[1].append(line)
+            else:
+                for line in data.split("\n"):
+                    line_bytes = len(line.encode("utf-8")) + 1
+                    if b != -1 and curb + line_bytes > b:
+                        # output partial line if there are remaining bytes
+                        remaining = b - curb
+                        if remaining > 0:
+                            output[1].append(line.encode("utf-8")[:remaining].decode("utf-8"))
+                        break
+                    output[1].append(line)
+                    curb += line_bytes
+                    counter += 1
+                    if b == -1 and counter >= lines:
+                        break
             self.filesystem.current = saved_current
         return (0, output)
 

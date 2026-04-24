@@ -1,6 +1,7 @@
 import pytest
 import datetime
 import random
+import math
 from game.commandline import CommandLine
 from game.ShellState import ShellState
 from game.filesystem import FileSystem
@@ -411,12 +412,20 @@ def test_head_count(cl, shell_basic: ShellState):
 
 def test_head_bytes(cl, shell_basic: ShellState):
     r = random.randint(5, 20)
-    stderr, stdout = cl.enter_command(f'head -b {r} f2.txt', shell_basic)
+    stderr, stdout = cl.enter_command(f'head -c {r} f2.txt', shell_basic)
     assert stderr == []
-    expected_lines = r // 2
+    expected_lines = math.ceil(r / 2)
     assert len(stdout) == expected_lines
     for i, line in enumerate(stdout):
-        assert line == str(i + 1)
+        assert line == str(i)
+
+    stderr, stdout = cl.enter_command(f'head --bytes={r} f2.txt', shell_basic)
+    assert stderr == []
+    expected_lines = math.ceil(r / 2)
+    assert len(stdout) == expected_lines
+    for i, line in enumerate(stdout):
+        assert line == str(i)
+    
 
 ######### TOUCH ############
 def test_touch_basic(cl, shell_basic: ShellState):
