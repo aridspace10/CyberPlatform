@@ -862,7 +862,7 @@ def test_find_and(cl, shell_basic: ShellState):
     assert stdout == []
     assert stderr == []
 
-def test_find_delete((cl, shell_basic: ShellState):
+def test_find_delete(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('find . -type f -name f3.txt -delete', shell_basic)
     assert stdout == []
     assert stderr == []
