@@ -409,6 +409,15 @@ def test_head_count(cl, shell_basic: ShellState):
     for i in range(r, 0):
         assert stdout[-i] == str(i)
 
+def test_head_bytes(cl, shell_basic: ShellState):
+    r = random.randint(5, 20)
+    stderr, stdout = cl.enter_command(f'head -b {r} f2.txt', shell_basic)
+    assert stderr == []
+    expected_lines = r // 2
+    assert len(stdout) == expected_lines
+    for i, line in enumerate(stdout):
+        assert line == str(i + 1)
+
 ######### TOUCH ############
 def test_touch_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('touch --no-create f1.txt', shell_basic)
