@@ -57,15 +57,14 @@ class FileNode:
                 permission += key if value else "-"
         return permission
     
-    def update_permissions(self, updated: dict, recurse: bool, verbose: list[str]) -> list[str]:
+    def update_permissions(self, updated: dict, recurse: bool) -> list[str]:
         self.ctime = datetime.datetime.now()
         self.inode.permissions = updated
-
-        verbose.append(f"Updated permissions of ${self.name} with ${self.get_permission_str(self)}")
-        if (recurse):
+        result = [f"Updated permissions of {self.name} with {self.get_permission_str(self)}"]
+        if recurse:
             for item in self.items:
-                verbose.extend(item.update_permissions(updated, recurse, verbose))
-        return verbose
+                result.extend(item.update_permissions(updated, recurse))
+        return result
 
     def get_data(self) -> str:
         return self.inode.get_data()

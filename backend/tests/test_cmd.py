@@ -157,7 +157,7 @@ def cl():
 
 ######## HELPS #################
 def test_cmd_helps(cl, shell_empty):
-    cmds = ['mkdir', 'cat', 'chmod', 'grep', 'head', 'ln', 'ls', 'mv', 'sort', 'touch']
+    cmds = ['mkdir', 'cat', 'chmod', 'grep', 'head', 'ln', 'ls', 'mv', 'sort', 'touch', "rm"]
     for cmd in cmds:
         stderr, stdout = cl.enter_command(f'{cmd} --help', shell_empty)
         with open(f"../static/help/{cmd}.txt") as f:
@@ -537,9 +537,9 @@ def test_chmod_basic(cl, shell_basic: ShellState):
     fn = shell_basic.fs.get_file("f1.txt")
     assert isinstance(fn,FileNode)
     assert shell_basic.fs.current.get_permission_str(fn) == "-rwxrwxrwx"
-    stderr, stdout = cl.enter_command('chmod -R 000 d1', shell_basic)
+    stderr, stdout = cl.enter_command('chmod -Rv 000 d1', shell_basic)
+    assert stdout == ["Updated permissions of d1 with d---------", 'Updated permissions of f3.txt with ----------', 'Updated permissions of f4.txt with ----------']
     assert stderr == []
-    assert stdout == []
     fn = shell_basic.fs.get_file("d1")
     assert isinstance(fn,FileNode)
     assert shell_basic.fs.current.get_permission_str(fn) == "d---------"
@@ -547,6 +547,12 @@ def test_chmod_basic(cl, shell_basic: ShellState):
     assert fn.get_permission_str(fn.items[0]) == "----------"
 
 def test_chmod_errors(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('chmod -y 888 not_exist.txt', shell_basic)
+    assert stderr == ["chmod: Unknown output given"]
+    assert stdout == []
+    stderr, stdout = cl.enter_command('chmod 777 not_exist.txt', shell_basic)
+    assert stderr == ["chmod: No directory named not_exist.txt"]
+    assert stdout == []
     stderr, stdout = cl.enter_command('chmod 888 f1.txt', shell_basic)
     assert stderr == ["chmod: value given which is higher then needed"]
     assert stdout == []
@@ -780,6 +786,16 @@ def test_pipes_lsgrep(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('ls | grep f', shell_basic)
     assert stderr == []
     assert stdout == ["f1.txt", "f2.txt"]
+
+def test_pipes_lshead(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | head --lines=2', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["f1.txt", "f2.txt"]
+
+def test_pipes_lshead2(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command('ls | head', shell_empty)
+    assert stderr == []
+    assert stdout == []
 
 def test_pipes_sortuniq(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")

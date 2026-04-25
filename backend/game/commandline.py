@@ -554,16 +554,13 @@ class CommandLine:
         while len(args) > 2:
             arg = args[0]
             if (arg[0] == "-"):
-                if (arg[1:] == "-help"):
-                    return (0, ([], self.useage("chmod")))
-                options = arg[1:].split()
-                for option in options:
+                for option in arg[1:]:
                     if (option == "R"):
                         recurse = True
                     elif (option == "v"):
                         verbose = True
                     else:
-                        return (1, ([], ["chmod: Unknown output given"]))
+                        return (1, (["chmod: Unknown output given"], []))
                 
             args = args[1:]
         permissions = args[0]
@@ -574,18 +571,13 @@ class CommandLine:
         saved_current = self.filesystem.current
         if (error := self.filesystem.search(file)) != "":
             self.filesystem.current = saved_current
-            output[0].append(error)
+            output[0].append(f"chmod: {error}")
             return (1, output)
-        temp = self.filesystem.current.update_permissions(d, recurse, [])
+        temp = self.filesystem.current.update_permissions(d, recurse)
         if verbose:
             output[1].extend(temp)
-        if (recurse):
-            for idx, item in enumerate(self.filesystem.current.items):
-                temp = self.filesystem.current.items[idx].update_permissions(d, True, [])
-                if verbose:
-                    output[1].extend(temp)
         self.filesystem.current = saved_current
-        return (1, output)
+        return (0, output)
     
     def echo(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         output = " ".join(args)
@@ -722,6 +714,7 @@ class CommandLine:
             else: 
                 ty = self.filesystem.search_withaccess(file)
                 content = self.filesystem.current
+            print(f"content: {content.inode.data}")
             if (ty == NodeType.DIRECTORY):
                 output[0].append(f"head: ${file} is a directory")
                 continue
@@ -729,6 +722,8 @@ class CommandLine:
                 return (1, ([],[]))
             counter = 0
             data = content.get_data()
+            if (data == ''):
+                return (0, ([], []))
             if rev and b != -1:
                 trimmed = data.encode("utf-8")[:b]  # b is negative, slices off last abs(b) bytes
                 for line in trimmed.decode("utf-8").split("\n"):
@@ -756,11 +751,12 @@ class CommandLine:
     def rm(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         recurse, verbose = False, False
         output = ([], [])
+        if ("--help" in args):
+            return (0, ([], self.useage("rm")))
+        
         while len(args) > 1:
             arg = args[0]
             if (arg[0] == "-"):
-                if (arg == "--help"):
-                    return (0, ([], self.useage("rm")))
                 options = arg[1:].split()
                 for option in options:
                     if (option == "r" or option == "R"):
@@ -771,11 +767,11 @@ class CommandLine:
         filename = args[0]
         result = self.filesystem.current.delete_child(filename, recurse)
         if (result == ""):
-            output[0].append(f"{filename} was not found")
+            output[0].append(f"rm: {filename} was not found")
         elif (result == "dir"):
             output[0].append(f"rm: cannot remove '{filename}': Is a directory")
         elif (verbose):
-            output[1].append("File sucessfully deleted")
+            output[1].append("rm: File sucessfully deleted")
         return (0, output)
 
     def pwd(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
@@ -895,6 +891,7 @@ class CommandLine:
         self.filesystem.current = saved_current
         for line in lines: 
             output[1].append(" ".join(line))
+        print (output)
         return (0, output)
     
     def cd(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
