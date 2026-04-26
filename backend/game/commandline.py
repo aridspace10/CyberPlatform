@@ -260,7 +260,7 @@ class CommandLine:
         files = []
         expressions = []
         backup = ""
-        while (len(args) and args[0][0]):
+        while (len(args) and args[0][0] == "-"):
             arg = args.pop(0)
             if (arg.startswith("--file=")):
                 files.append(arg.split("=")[1])
@@ -275,17 +275,64 @@ class CommandLine:
                             files.append(args.pop(0))
                         case ("e"):
                             expressions.append(args.pop(0))
+                        case ("i"):
+                            backup = "-i"
         cur = self.filesystem.current
+        output = ([], [])
         for file in files:
             # Save backup if request
             self.filesystem.search(file)
-            data = self.filesystem.current.get_data()
-            if (backup):
+            old = self.filesystem.current.get_data()
+            if backup not in ("", "-i"):
                 inode = Inode(NodeType.FILE)
-                inode.set_data(data)
+                inode.set_data(old)
                 fn = FileNode(self.filesystem.current.parent, backup.replace("i", self.filesystem.current.name, 1) ,inode)
                 self.filesystem.add_file("..", fn)
-        return (0, ([], []))
+            # Apply commands to line
+            new = []
+            for expression in expressions:
+                # Setup 
+                l = len(expression)
+                before_s = ""
+                pattern = ""
+                replacement = ""
+                glob = False
+                delete = False
+                sprint = False
+                occur = 1
+                csensentive = True
+                write = True
+                # Parse Expression
+                index = 0
+                while index < l and expression[index] != "s":
+                    before_s += expression[index]
+                    index += 1
+                index += 1
+                delim = expression[index]
+                while index < l and expression[index] != delim:
+                    pattern += expression[index]
+                    index += 1
+                index += 1
+                while index < l and expression[index] != delim:
+                    replacement += expression[index]
+                    index += 1
+                index += 1
+                while index < l:
+                    match (expression[index]):
+                        case "g":
+                            glob = True
+                        case "I":
+                            csensentive = False
+                        case "w":
+                            write = True
+                    index += 1
+                # Check each line
+                for line in old.split("\n"):
+                    new.append(line)
+            if (backup):
+                self.filesystem.current.set_data(" ".join(new))
+            output[1].extend(new)
+        return (0, output)
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         verbose = False
