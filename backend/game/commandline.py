@@ -344,7 +344,7 @@ class CommandLine:
                 for i, line in enumerate(new):
                     if (single != -1):
                         if single != i:
-                            break
+                            continue
                     elif (between != []):
                         if between[0] > i:
                             continue # go to next line
