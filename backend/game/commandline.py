@@ -289,7 +289,7 @@ class CommandLine:
                 fn = FileNode(self.filesystem.current.parent, backup.replace("i", self.filesystem.current.name, 1) ,inode)
                 self.filesystem.add_file("..", fn)
             # Apply commands to line
-            new = []
+            new = old.split("\n")
             for expression in expressions:
                 # Setup 
                 l = len(expression)
@@ -326,9 +326,33 @@ class CommandLine:
                         case "w":
                             write = True
                     index += 1
+
+                # Works on before
+                sp = before_s.split(",")
+                between = []
+                if (len(sp) == 2):
+                    try:
+                        between = [int(sp[0]), int(sp[1])]
+                    except:
+                        raise SyntaxError("Expected Int")
+                single = -1
+                try:
+                    single = int(before_s)
+                except:
+                    raise SyntaxError("Expected Int")
                 # Check each line
-                for line in old.split("\n"):
-                    new.append(line)
+                for i, line in enumerate(new):
+                    if (single != -1):
+                        if single != i:
+                            break
+                    elif (between != []):
+                        if between[0] > i:
+                            continue # go to next line
+                        if between[1] < i:
+                            break # give up we out of range
+                    new[i] = line.replace(pattern, replacement, -1 if glob else 1)
+                    if (sprint and new[i] != line):
+                        output[1].append(new[i])
             if (backup):
                 self.filesystem.current.set_data(" ".join(new))
             output[1].extend(new)
