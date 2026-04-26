@@ -203,6 +203,8 @@ class CommandLine:
                 return self.sort(args[1:], fdin)
             case "find":
                 return self.find(args[1:], fdin)
+            case "sed":
+                return self.sed(args[1:], fdin)
             case _:
                 return (1, (["Unknown command given"], []))
 
@@ -249,6 +251,41 @@ class CommandLine:
             (toprints, execs) = start_node.find(node, ".")
             output[1].extend(toprints)
         return (0, output)
+    
+    def sed(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+        if "--help" in args:
+            return (0, ([], self.useage("sed")))
+        if (len(args) < 1):
+            return (2, ([], []))
+        files = []
+        expressions = []
+        backup = ""
+        while (len(args) and args[0][0]):
+            arg = args.pop(0)
+            if (arg.startswith("--file=")):
+                files.append(arg.split("=")[1])
+            elif (arg.startswith("--expression=")):
+                expressions.append(arg.split("=")[1])
+            elif (arg.startswith("-i.")):
+                backup = arg
+            else:
+                for option in arg[1:]:
+                    match (option):
+                        case ("f"):
+                            files.append(args.pop(0))
+                        case ("e"):
+                            expressions.append(args.pop(0))
+        cur = self.filesystem.current
+        for file in files:
+            # Save backup if request
+            self.filesystem.search(file)
+            data = self.filesystem.current.get_data()
+            if (backup):
+                inode = Inode(NodeType.FILE)
+                inode.set_data(data)
+                fn = FileNode(self.filesystem.current.parent, backup.replace("i", self.filesystem.current.name, 1) ,inode)
+                self.filesystem.add_file("..", fn)
+        return (0, ([], []))
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         verbose = False
