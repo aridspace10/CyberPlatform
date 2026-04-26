@@ -222,9 +222,9 @@ class CommandLine:
     def find(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if (len(args) < 1):
             return (1, (["find: atleast one argument needs to be given"], []))
-        while (len(args) and args[0] == "-"):
+        while (len(args) and args[0][0] == "-"):
             arg = args.pop(0)
-        if (len(args) < 1):
+        if (not len(args)):
             return (1, (["find: starting locaiton needs to be given"], []))
         starting = []
         while len(args) and not args[0].startswith("-") and args[0] not in ["(", "!", ")"]:

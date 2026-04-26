@@ -889,6 +889,14 @@ def test_find_error(cl, shell_basic: ShellState):
     assert stdout == []
     assert stderr == ["find: Expected ; or +"]
 
+    stderr, stdout = cl.enter_command('find not_exist.jsx -type f', shell_basic)
+    assert stdout == []
+    assert stderr == ["No directory named not_exist.jsx"]
+
+    stderr, stdout = cl.enter_command('find -h', shell_basic)
+    assert stdout == []
+    assert stderr == ["find: starting locaiton needs to be given"]
+
 def test_find_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('find .', shell_basic)
     assert stdout == [".","./f1.txt","./f2.txt","./d1" ,"./d1/f3.txt", "./d1/f4.txt"]

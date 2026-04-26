@@ -383,15 +383,16 @@ class FindParser():
             while (tok := self.peek()) is not None and tok not in (";", "+"):
                 cmd.append(self.consume())
             mode = self.consume()
-            if (mode == None):
+            if (mode == None or mode != ";" or mode != "+"):
                 raise SyntaxError("Expected ; or +")
             return ExecNode(cmd, mode)
         val = self.consume()
         if (val == None):
             raise SyntaxError(f"No value for given for: {filt}")
         return FilterNode(filt, val)
-    
-text = ["(", "-name", "*.txt", "-o", "-true", ")", "-exec", "cat", "{}", ";"]
-parser = FindParser(text)
-ast = parser.parse()
-print(ast)
+
+if __name__ == "__main__":
+    text = ["(", "-name", "*.txt", "-o", "-true", ")", "-exec", "cat", "{}", ";"]
+    parser = FindParser(text)
+    ast = parser.parse()
+    print(ast)
