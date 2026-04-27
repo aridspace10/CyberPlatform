@@ -66,6 +66,13 @@ def fs_basic():
     return fs
 
 @pytest.fixture
+def fs_sed():
+    fs = FileSystem()
+    fs.add_file("f1.txt")
+    fs.current.items[0].set_data("cat wolf cat\nhi cat")
+    return fs
+
+@pytest.fixture
 def fs_cp():
     fs = FileSystem()
     fs.add_file("f1.txt")
@@ -148,6 +155,13 @@ def shell_cp(fs_cp):
 def shell_ls(fs_ls):
     s = ShellState()
     s.fs = fs_ls
+    s.cwd = "/"
+    return s
+
+@pytest.fixture
+def shell_sed(fs_sed):
+    s = ShellState()
+    s.fs = fs_sed
     s.cwd = "/"
     return s
 
@@ -936,3 +950,58 @@ def test_find_delete(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('find . -type f -name f3.txt -delete', shell_basic)
     assert stdout == []
     assert stderr == []
+
+###### SED ##############
+def test_sed_error(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command("sed", shell_empty)
+    assert stderr == ["sed [OPTION]... {script-only-if-no-other-script} [input-file]..."]
+    assert stdout == []
+
+def test_sed_malformed1(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command("sed s/foo", shell_empty)
+    assert stderr == ["sed: substution expects s/pattern/replacement/"]
+    assert stdout == []
+
+def test_sed_malformed2(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command("sed 's/foo/bar'", shell_empty)
+    assert stderr == ["sed: expected terminating delim"]
+    assert stdout == []
+
+def test_sed_malformed3(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command("sed 's/foo/bar/z'", shell_empty)
+    assert stderr == ["sed: unknown expression flag - z"]
+    assert stdout == []
+
+def test_sed_malformed4(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command("sed -a s/foo/bar/", shell_empty)
+    assert stderr == ["sed: unknown option given - a"]
+    assert stdout == []
+
+def test_sed_basic(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed s/cat/dog/", shell_sed)
+    assert stdout == ["dog wolf cat\nhi dog"]
+    assert stderr == []
+
+def test_sed_global(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed s/cat/dog/g", shell_sed)
+    assert stdout == ["dog wolf dog\nhi dog"]
+    assert stderr == []
+
+def test_sed_nochange(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed s/not/exist/", shell_sed)
+    assert stderr == []
+    assert stdout == ["cat wolf cat\nhi cat"]
+
+def test_sed_emreplace(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed s/cat//", shell_sed)
+    assert stderr == []
+    assert stdout == [" wolf dog\nhi "]
+
+def test_sed_alternatedelim(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed s|cat|dog|g", shell_sed)
+    assert stderr == []
+    assert stdout == ["cat wolf cat\nhi cat"]
+
+    stderr, stdout = cl.enter_command("sed s#cat#dog#", shell_sed)
+    assert stderr == []
+    assert stdout == ["cat wolf dog\nhi cat"]

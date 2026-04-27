@@ -256,7 +256,7 @@ class CommandLine:
         if "--help" in args:
             return (0, ([], self.useage("sed")))
         if (len(args) < 1):
-            return (2, ([], []))
+            return (2, (["sed [OPTION]... {script-only-if-no-other-script} [input-file]..."], []))
         files = []
         expressions = []
         backup = ""
