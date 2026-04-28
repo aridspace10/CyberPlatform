@@ -1195,3 +1195,13 @@ def test_sed_overlapping(cl, shell_sed):
 
     assert stdout == ["bb"]
 
+def test_sed_negated_line_address(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+      "sed '2!d' f1.txt",
+      shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+      "hi cat"
+    ]
