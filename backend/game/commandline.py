@@ -355,10 +355,14 @@ class CommandLine:
                     while index < l and expression[index] != delim:
                         pattern += expression[index]
                         index += 1
+                    if (index == l):
+                        return (1, (["sed: substution expects s/pattern/replacement/"], []))
                     index += 1
                     while index < l and expression[index] != delim:
                         replacement += expression[index]
                         index += 1
+                    if (index == l and expression[index - 1] != delim):
+                        return (1, (["sed: expected terminating delim"], []))
                     index += 1
                     while index < l:
                         match (expression[index]):
@@ -369,12 +373,12 @@ class CommandLine:
                             case "w":
                                 write = True
                             case _:
-                                return (1, ([f"sed: unknown flag given - {expression[index]}"],[]))
+                                return (1, ([f"sed: unknown expression flag - {expression[index]}"],[]))
                         index += 1
                     # Check each line
                     for i, line in enumerate(new):
                         if (single is not None):
-                            if (single != i):
+                            if (not rev_single and single != i) or (rev_single and single == i):
                                 continue
                         elif (between != []):
                             if between[0] > i:

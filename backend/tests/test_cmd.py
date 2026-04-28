@@ -1083,23 +1083,23 @@ def test_sed_error(cl, shell_empty: ShellState):
     assert stderr == ["sed [OPTION]... {script-only-if-no-other-script} [input-file]..."]
     assert stdout == []
 
-def test_sed_malformed1(cl, shell_empty: ShellState):
-    stderr, stdout = cl.enter_command("sed s/foo", shell_empty)
+def test_sed_malformed1(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command("sed s/foo f1.txt", shell_basic)
     assert stderr == ["sed: substution expects s/pattern/replacement/"]
     assert stdout == []
 
-def test_sed_malformed2(cl, shell_empty: ShellState):
-    stderr, stdout = cl.enter_command("sed 's/foo/bar'", shell_empty)
+def test_sed_malformed2(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command("sed 's/foo/bar' f1.txt", shell_basic)
     assert stderr == ["sed: expected terminating delim"]
     assert stdout == []
 
-def test_sed_malformed3(cl, shell_empty: ShellState):
-    stderr, stdout = cl.enter_command("sed 's/foo/bar/z'", shell_empty)
+def test_sed_malformed3(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command("sed 's/foo/bar/z' f1.txt", shell_basic)
     assert stderr == ["sed: unknown expression flag - z"]
     assert stdout == []
 
-def test_sed_malformed4(cl, shell_empty: ShellState):
-    stderr, stdout = cl.enter_command("sed -a 's/foo/bar/' f1.txt", shell_empty)
+def test_sed_malformed4(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command("sed -a 's/foo/bar/' f1.txt", shell_basic)
     assert stderr == ["sed: unknown option given - a"]
     assert stdout == []
 
