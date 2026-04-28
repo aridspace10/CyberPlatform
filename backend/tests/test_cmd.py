@@ -827,6 +827,128 @@ def test_pipes_sortuniq(cl, shell_basic: ShellState):
     for i in range(0, len(names)):
         assert stdout[i] == names[i]
 
+def test_pipes_lsgrep_inverse(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('ls | grep -v f1', shell_basic)
+    assert stderr == []
+    assert stdout == ["f2.txt"]
+
+
+def test_pipes_lssort(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | sort', shell_fouritems)
+    assert stderr == []
+    assert stdout == sorted(stdout)
+
+
+def test_pipes_ls_tail(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | tail --lines=2', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["f3.txt", "f4.txt"]
+
+
+def test_pipes_catgrep(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat wolf cat", "hi cat"]
+
+
+def test_pipes_catgrephead(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | head --lines=1', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat wolf cat"]
+
+
+def test_pipes_catgreptail(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | tail --lines=1', shell_sed)
+    assert stderr == []
+    assert stdout == ["hi cat"]
+
+
+def test_pipes_catwc_lines(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | wc -l', shell_sed)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+def test_pipes_catwc_words(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | wc -w', shell_sed)
+    assert stderr == []
+    assert stdout == ["5"]
+
+
+def test_pipes_cat_sort(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | sort', shell_sed)
+    assert stderr == []
+    assert stdout == sorted(stdout)
+
+
+def test_pipes_catuniq(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f2.txt | uniq', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat CaT Cat"]
+
+
+def test_pipes_grep_wc(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | wc -l', shell_sed)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+def test_pipes_lsgrepwc(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('ls | grep txt | wc -l', shell_basic)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+def test_pipes_multiple_grep(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | grep wolf', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat wolf cat"]
+
+
+def test_pipes_head_tail_combo(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | head --lines=3 | tail --lines=1', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["f3.txt"]
+
+
+def test_pipes_ls_grep_no_match(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('ls | grep xyz', shell_basic)
+    assert stderr == []
+    assert stdout == []
+
+
+def test_pipes_empty_chain(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command('ls | grep f | wc -l', shell_empty)
+    assert stderr == []
+    assert stdout == ["0"]
+
+
+def test_pipes_long_chain(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command(
+        'cat f1.txt | grep cat | sort | head --lines=1 | wc -w',
+        shell_sed
+    )
+    assert stderr == []
+    assert stdout == ["3"]
+
+
+def test_pipes_cat_grep_ignorecase(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f2.txt | grep -i cat', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat CaT Cat"]
+
+
+def test_pipes_ls_head_wc(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | head --lines=3 | wc -l', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["3"]
+
+
+def test_pipes_sort_tail(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | sort | tail --lines=1', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["f4.txt"]
+
 ######### CP ###################
 def test_cp_basic(cl, shell_fouritems: ShellState):
     stderr, stdout = cl.enter_command('cp f1.txt copied.txt', shell_fouritems)
