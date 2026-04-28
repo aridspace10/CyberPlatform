@@ -1082,6 +1082,60 @@ def test_sed_expression_order(cl, shell_sed):
         "wolf wolf cat",
         "hi wolf"
     ]
+
+def test_sed_case_insensitive_single(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+      "sed 's/cat/dog/I' f2.txt",
+      shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+      "dog CaT Cat"
+    ]
+
+def test_sed_delete_blank_lines(cl, shell_sed):
+    shell_sed.fs.add_file("blank.txt")
+    shell_sed.fs.current.items[0].set_data(
+      "a\n\nb\n\nc"
+    )
+
+    stderr, stdout = cl.enter_command(
+      r"sed '/^$/d' blank.txt",
+      shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+      "a","b","c"
+    ]
+
+def test_sed_path_delimiters(cl, shell_sed):
+    shell_sed.fs.add_file("path.txt")
+    shell_sed.fs.current.items[0].set_data(
+      "/usr/bin"
+    )
+
+    stderr, stdout = cl.enter_command(
+      "sed 's|/usr/bin|/opt/bin|' path.txt",
+      shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+      "/opt/bin"
+    ]
+
+def test_sed_empty_file(cl, shell_sed):
+    shell_sed.fs.add_file("empty.txt")
+
+    stderr, stdout = cl.enter_command(
+      "sed 's/cat/dog/' empty.txt",
+      shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == []
   
 def test_sed_expression_order_changes_result(cl, shell_sed):
     stderr, stdout = cl.enter_command(
@@ -1094,4 +1148,50 @@ def test_sed_expression_order_changes_result(cl, shell_sed):
         "dog wolf dog",
         "hi dog"
     ]
+
+def test_sed_reverse_range(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+      "sed '5,2d' f3.txt",
+      shell_sed
+    )
+
+    assert stderr == []
+
+def test_sed_bad_address(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+      "sed 'x,4d' f1.txt",
+      shell_sed
+    )
+
+    assert stdout == []
+    assert stderr == []
+
+def test_sed_inplace_backup(cl, shell_sed):
+    old = shell_sed.fs.get_file("f1.txt")
+    assert isinstance(old, FileNode)
+    stderr, stdout = cl.enter_command(
+      "sed -i.bak 's/cat/dog/g' f1.txt",
+      shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == []
+    fn = shell_sed.fs.get_file("f1.txt.bak")
+    assert isinstance(fn, FileNode)
+    assert fn.get_data() == old.get_data()
+    new = shell_sed.fs.get_file("f1.txt")
+    assert isinstance(new, FileNode)
+    asser new.get_data() == []
+    
+
+def test_sed_overlapping(cl, shell_sed):
+    shell_sed.fs.add_file("ov.txt")
+    shell_sed.fs.current.items[0].set_data("aaaa")
+
+    stderr, stdout = cl.enter_command(
+      "sed 's/aa/b/g' ov.txt",
+      shell_sed
+    )
+
+    assert stdout == ["bb"]
 
