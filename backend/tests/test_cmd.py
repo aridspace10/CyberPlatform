@@ -1156,7 +1156,7 @@ def test_sed_addressing2(cl, shell_sed: ShellState):
     assert stdout == ["cat wolf cat", "hi dog", "whats up", " the dog", " test cat here"]
     assert stderr == []
 
-def test_sed_delete(cl, shell_sed, ShellState):
+def test_sed_delete(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed '2d' f1.txt", shell_sed)
     assert stdout == ["cat wolf cat"]
     assert stderr == []
