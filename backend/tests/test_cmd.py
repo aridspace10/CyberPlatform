@@ -70,6 +70,10 @@ def fs_sed():
     fs = FileSystem()
     fs.add_file("f1.txt")
     fs.current.items[0].set_data("cat wolf cat\nhi cat")
+    fs.add_file("f2.txt")
+    fs.current.items[0].set_data("cat CaT Cat")
+    fs.add_file("f3.txt")
+    fs.current.items[0].set_data("cat wolf cat\nhi cat\n whats up\n the cat\n test cat here")
     return fs
 
 @pytest.fixture
@@ -973,35 +977,121 @@ def test_sed_malformed3(cl, shell_empty: ShellState):
     assert stdout == []
 
 def test_sed_malformed4(cl, shell_empty: ShellState):
-    stderr, stdout = cl.enter_command("sed -a s/foo/bar/", shell_empty)
+    stderr, stdout = cl.enter_command("sed -a 's/foo/bar/' f1.txt", shell_empty)
     assert stderr == ["sed: unknown option given - a"]
     assert stdout == []
 
 def test_sed_basic(cl, shell_sed: ShellState):
-    stderr, stdout = cl.enter_command("sed s/cat/dog/", shell_sed)
-    assert stdout == ["dog wolf cat\nhi dog"]
+    stderr, stdout = cl.enter_command("sed 's/cat/dog/' f1.txt", shell_sed)
+    assert stdout == ["dog wolf cat", "hi dog"]
     assert stderr == []
 
 def test_sed_global(cl, shell_sed: ShellState):
-    stderr, stdout = cl.enter_command("sed s/cat/dog/g", shell_sed)
-    assert stdout == ["dog wolf dog\nhi dog"]
+    stderr, stdout = cl.enter_command("sed 's/cat/dog/g' f1.txt", shell_sed)
+    assert stdout == ["dog wolf dog", "hi dog"]
     assert stderr == []
 
 def test_sed_nochange(cl, shell_sed: ShellState):
-    stderr, stdout = cl.enter_command("sed s/not/exist/", shell_sed)
+    stderr, stdout = cl.enter_command("sed 's/not/exist/' f1.txt", shell_sed)
     assert stderr == []
-    assert stdout == ["cat wolf cat\nhi cat"]
+    assert stdout == ["cat wolf cat", "hi cat"]
 
 def test_sed_emreplace(cl, shell_sed: ShellState):
-    stderr, stdout = cl.enter_command("sed s/cat//", shell_sed)
+    stderr, stdout = cl.enter_command("sed 's/cat//' f1.txt", shell_sed)
     assert stderr == []
-    assert stdout == [" wolf dog\nhi "]
+    assert stdout == [" wolf dog", "hi "]
 
 def test_sed_alternatedelim(cl, shell_sed: ShellState):
-    stderr, stdout = cl.enter_command("sed s|cat|dog|g", shell_sed)
+    stderr, stdout = cl.enter_command("sed 's|cat|dog|g' f1.txt", shell_sed)
     assert stderr == []
     assert stdout == ["cat wolf cat\nhi cat"]
 
-    stderr, stdout = cl.enter_command("sed s#cat#dog#", shell_sed)
+    stderr, stdout = cl.enter_command("sed 's#cat#dog#' f1.txt", shell_sed)
     assert stderr == []
-    assert stdout == ["cat wolf dog\nhi cat"]
+    assert stdout == ["cat wolf dog", "hi cat"]
+
+def test_sed_noccurences(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed 's/cat/dog/2' f1.txt", shell_sed)
+    assert stdout == ["cat wolf dog", "hi cat"]
+    assert stderr == []
+
+def test_sed_cinsentive(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed 's/cat/dog/Ig' f2.txt", shell_sed)
+    assert stdout == ["dog wolf dog", "hi dog"]
+    assert stderr == []
+
+def test_sed_addressing(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed '2s/cat/dog/' f1.txt", shell_sed)
+    assert stdout == ["cat wolf cat\nhi dog"]
+    assert stderr == []
+
+    stderr, stdout = cl.enter_command("sed '$s/cat/dog/' f1.txt", shell_sed)
+    assert stdout == ["cat wolf cat", "hi dog"]
+    assert stderr == []
+
+def test_sed_addressing2(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed '2,4s/cat/dog/' f3.txt", shell_sed)
+    assert stdout == ["cat wolf cat", "hi dog", "whats up", " the dog", " test cat here"]
+    assert stderr == []
+
+def test_sed_delete(cl, shell_sed, ShellState):
+    stderr, stdout = cl.enter_command("sed '2d' f1.txt", shell_sed)
+    assert stdout == ["cat wolf cat"]
+    assert stderr == []
+
+    stderr, stdout = cl.enter_command("sed '$d' f1.txt", shell_sed)
+    assert stdout == ["cat wolf cat"]
+    assert stderr == []
+
+    stderr, stdout = cl.enter_command("sed '2,4d' f3.txt", shell_sed)
+    assert stdout == ["cat wolf cat", " test cat here"]
+    assert stderr == []
+
+def test_sed_multexpr(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command("sed -e 's/cat/dog/' -e 's/wolf/howl/ f1.txt", shell_sed)
+    assert stdout == ["dog howl cat", "hi dog"]
+    assert stderr == []
+
+def test_sed_print_flag(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        "sed -n 's/cat/dog/p' f1.txt",
+        shell_sed
+    )
+    assert stderr == []
+    assert stdout == [
+        "dog wolf cat",
+        "hi dog"
+    ]
+
+def test_sed_print_flag_no_match(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        "sed -n 's/bird/fish/p' f1.txt",
+        shell_sed
+    )
+    assert stderr == []
+    assert stdout == []
+
+def test_sed_expression_order(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        "sed -e 's/cat/dog/' -e 's/dog/wolf/' f1.txt",
+        shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+        "wolf wolf cat",
+        "hi wolf"
+    ]
+  
+def test_sed_expression_order_changes_result(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        "sed -e 's/dog/wolf/' -e 's/cat/dog/' f1.txt",
+        shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+        "dog wolf dog",
+        "hi dog"
+    ]
+
