@@ -1303,7 +1303,7 @@ def test_sed_inplace_backup(cl, shell_sed):
     assert fn.get_data() == old.get_data()
     new = shell_sed.fs.get_file("f1.txt")
     assert isinstance(new, FileNode)
-    asser new.get_data() == []
+    assert new.get_data() == []
     
 
 def test_sed_overlapping(cl, shell_sed):
