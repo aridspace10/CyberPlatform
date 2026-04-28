@@ -71,9 +71,9 @@ def fs_sed():
     fs.add_file("f1.txt")
     fs.current.items[0].set_data("cat wolf cat\nhi cat")
     fs.add_file("f2.txt")
-    fs.current.items[0].set_data("cat CaT Cat")
+    fs.current.items[1].set_data("cat CaT Cat")
     fs.add_file("f3.txt")
-    fs.current.items[0].set_data("cat wolf cat\nhi cat\n whats up\n the cat\n test cat here")
+    fs.current.items[2].set_data("cat wolf cat\nhi cat\n whats up\n the cat\n test cat here")
     return fs
 
 @pytest.fixture
@@ -1286,11 +1286,10 @@ def test_sed_bad_address(cl, shell_sed):
     )
 
     assert stdout == []
-    assert stderr == []
+    assert stderr == ["sed: expected int, got x,4"]
 
 def test_sed_inplace_backup(cl, shell_sed):
-    old = shell_sed.fs.get_file("f1.txt")
-    assert isinstance(old, FileNode)
+    old = shell_sed.fs.get_file("f1.txt").get_data()
     stderr, stdout = cl.enter_command(
       "sed -i.bak 's/cat/dog/g' f1.txt",
       shell_sed
@@ -1299,19 +1298,19 @@ def test_sed_inplace_backup(cl, shell_sed):
     assert stderr == []
     assert stdout == []
     fn = shell_sed.fs.get_file("f1.txt.bak")
+    print (shell_sed.fs.current.items)
     assert isinstance(fn, FileNode)
-    assert fn.get_data() == old.get_data()
+    assert fn.get_data() == old
     new = shell_sed.fs.get_file("f1.txt")
     assert isinstance(new, FileNode)
-    assert new.get_data() == []
+    assert new.get_data() == "dog wolf dog\nhi dog"
     
 
 def test_sed_overlapping(cl, shell_sed):
-    shell_sed.fs.add_file("ov.txt")
     shell_sed.fs.current.items[0].set_data("aaaa")
 
     stderr, stdout = cl.enter_command(
-      "sed 's/aa/b/g' ov.txt",
+      "sed 's/aa/b/g' f1.txt",
       shell_sed
     )
 

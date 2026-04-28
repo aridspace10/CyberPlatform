@@ -277,17 +277,30 @@ class CommandLine:
                             expressions.append(args.pop(0))
                         case ("i"):
                             backup = "-i"
+                        case _:
+                            return (1, ([f"sed: unknown option given - {option}"], []))
+
+        while (len(args)):
+            arg = args.pop(0)
+            if (not len(expressions)):
+                expressions.append(arg)
+            else:
+                files.append(arg)
+
         cur = self.filesystem.current
         output = ([], [])
         for file in files:
-            # Save backup if request
+            # Get file data
             self.filesystem.search(file)
             old = self.filesystem.current.get_data()
+
+            # Save backup if request
             if backup not in ("", "-i"):
                 inode = Inode(NodeType.FILE)
                 inode.set_data(old)
-                fn = FileNode(self.filesystem.current.parent, backup.replace("i", self.filesystem.current.name, 1) ,inode)
-                self.filesystem.add_file("..", fn)
+                assert self.filesystem.current.parent != None
+                self.filesystem.current.parent.add_child(backup.replace("-i", self.filesystem.current.name, 1), inode)
+
             # Apply commands to line
             new = old.split("\n")
             for expression in expressions:
@@ -302,60 +315,97 @@ class CommandLine:
                 occur = 1
                 csensentive = True
                 write = True
+
                 # Parse Expression
                 index = 0
-                while index < l and expression[index] != "s":
+                while index < l and expression[index] not in ["s", "d"]:
                     before_s += expression[index]
                     index += 1
-                index += 1
-                delim = expression[index]
-                while index < l and expression[index] != delim:
-                    pattern += expression[index]
-                    index += 1
-                index += 1
-                while index < l and expression[index] != delim:
-                    replacement += expression[index]
-                    index += 1
-                index += 1
-                while index < l:
-                    match (expression[index]):
-                        case "g":
-                            glob = True
-                        case "I":
-                            csensentive = False
-                        case "w":
-                            write = True
-                    index += 1
 
-                # Works on before
-                sp = before_s.split(",")
+                single = None
+                rev_single = False
                 between = []
-                if (len(sp) == 2):
-                    try:
-                        between = [int(sp[0]), int(sp[1])]
-                    except:
-                        raise SyntaxError("Expected Int")
-                single = -1
-                try:
-                    single = int(before_s)
-                except:
-                    raise SyntaxError("Expected Int")
-                # Check each line
-                for i, line in enumerate(new):
-                    if (single != -1):
-                        if single != i:
-                            continue
-                    elif (between != []):
-                        if between[0] > i:
-                            continue # go to next line
-                        if between[1] < i:
-                            break # give up we out of range
-                    new[i] = line.replace(pattern, replacement, -1 if glob else 1)
-                    if (sprint and new[i] != line):
-                        output[1].append(new[i])
+                if (len(before_s)):
+                    sp = before_s.split(",")
+                    if (len(sp) == 2):
+                        try:
+                            between = [int(sp[0]) - 1, int(sp[1]) - 1]
+                        except:
+                            return (1, ([f"sed: expected int, got {before_s}"], []))
+                    else:
+                        single = None
+                        rev_single = False
+                        try:
+                            if (before_s[-1] == "!"):
+                                single = int(before_s[:-1])
+                                rev_single = True
+                            elif (before_s == "$"):
+                                single = -1
+                            else:
+                                single = int(before_s)
+                        except:
+                            return (1, ([f"sed: expected int, got {before_s}"], []))
+                        single = single - 1 if single != -1 else single
+                # Substituion
+                if (expression[index] == "s"):
+                    index += 1
+                    delim = expression[index]
+                    index += 1
+                    
+                    while index < l and expression[index] != delim:
+                        pattern += expression[index]
+                        index += 1
+                    index += 1
+                    while index < l and expression[index] != delim:
+                        replacement += expression[index]
+                        index += 1
+                    index += 1
+                    while index < l:
+                        match (expression[index]):
+                            case "g":
+                                glob = True
+                            case "I":
+                                csensentive = False
+                            case "w":
+                                write = True
+                            case _:
+                                return (1, ([f"sed: unknown flag given - {expression[index]}"],[]))
+                        index += 1
+                    # Check each line
+                    for i, line in enumerate(new):
+                        if (single is not None):
+                            if (single != i):
+                                continue
+                        elif (between != []):
+                            if between[0] > i:
+                                continue # go to next line
+                            if between[1] < i:
+                                break # give up we out of range
+                        new[i] = line.replace(pattern, replacement, -1 if glob else 1)
+                elif (expression[index] == "d"):
+                    if (single == -1):
+                        print ("hehe")
+                        new.pop()
+                        continue
+                    tmp = []
+                    for i, line in enumerate(new):
+                        if (single is not None):
+                            if (rev_single and single == i) or (not rev_single and single != i):
+                                # no Delete time
+                                tmp.append(line)
+                        else:
+                            print (between)
+                            if (between[0] > i or between[1] < i):
+                                # no Delete time
+                                tmp.append(line)
+                    new = tmp
+                else:
+                    raise SyntaxError("Unknown Expression Given")
             if (backup):
-                self.filesystem.current.set_data(" ".join(new))
-            output[1].extend(new)
+                self.filesystem.current.set_data("\n".join(new))
+            else:
+                output[1].extend(new)
+            self.filesystem.current = cur
         return (0, output)
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
