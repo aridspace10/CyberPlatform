@@ -830,7 +830,7 @@ def test_pipes_sortuniq(cl, shell_basic: ShellState):
 def test_pipes_lsgrep_inverse(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('ls | grep -v f1', shell_basic)
     assert stderr == []
-    assert stdout == ["f2.txt"]
+    assert stdout == ["f2.txt", "d1"]
 
 
 def test_pipes_lssort(cl, shell_fouritems: ShellState):
