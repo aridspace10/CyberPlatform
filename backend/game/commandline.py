@@ -205,6 +205,8 @@ class CommandLine:
                 return self.find(args[1:], fdin)
             case "sed":
                 return self.sed(args[1:], fdin)
+            case "wc":
+                return self.wc(args[1:], fdin)
             case _:
                 return (1, (["Unknown command given"], []))
 
@@ -410,6 +412,55 @@ class CommandLine:
             else:
                 output[1].extend(new)
             self.filesystem.current = cur
+        return (0, output)
+
+    def wc(self, args, input):
+        output = ([], [])
+
+        words = bytes_flag = chars = lines = False
+        files = []
+
+        for arg in args:
+            if arg in ("-c","--bytes"):
+                bytes_flag = True
+            elif arg in ("-m","--chars"):
+                chars = True
+            elif arg in ("-l","--lines"):
+                lines = True
+            elif arg in ("-w","--words"):
+                words = True
+            else:
+                files.append(arg)
+
+        if not any([words, bytes_flag, chars, lines]):
+            words = bytes_flag = chars = lines = True
+
+        cur = self.filesystem.current
+
+        for file in files:
+            self.filesystem.search(file)
+            data = self.filesystem.current.get_data()
+            self.filesystem.current = cur
+
+            parts = []
+
+            if lines:
+                parts.append(str(data.count("\n")))
+
+            if words:
+                parts.append(str(len(data.split())))
+
+            if chars:
+                parts.append(str(len(data)))
+
+            if bytes_flag:
+                parts.append(str(len(data.encode())))
+
+            if len(files) > 1:
+                parts.append(file)
+
+            output[1].append(" ".join(parts))
+
         return (0, output)
 
     def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:

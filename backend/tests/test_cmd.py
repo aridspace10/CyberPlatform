@@ -134,6 +134,172 @@ def fs_ls():
     fn.get_data()
     return fs
 
+# ---------------- WC TEST FIXTURES ----------------
+
+@pytest.fixture
+def shell_emptyfile():
+    fs = FileSystem()
+    fs.add_file("empty.txt")
+    fn = fs.get_file("empty.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("")
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_one_line_no_newline():
+    fs = FileSystem()
+    fs.add_file("f1.txt")
+    fn = fs.get_file("f1.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("hello")
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_one_line_newline(): 
+    fs = FileSystem()
+    fs.add_file("f1.txt")
+    fn = fs.get_file("f1.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("hello\n")
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_blank_lines():
+    fs = FileSystem()
+    fs.add_file("blank.txt")
+    fn = fs.get_file("blank.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("\n\n\n")
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_only_newlines():
+    fs = FileSystem()
+    fs.add_file("nl.txt")
+    fn = fs.get_file("nl.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("\n\n\n\n")
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_whitespace_lines():
+    fs = FileSystem()
+    fs.add_file("white.txt")
+    fn = fs.get_file("white.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("   \n\t\nhello\n")
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_twofiles():
+    fs = FileSystem()
+
+    fs.add_file("f1.txt")
+    fn = fs.get_file("f1.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("a\nb\n")
+
+    fs.add_file("f2.txt")
+    fn = fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("1\n2\n3\n")
+
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_mixfiles():
+    fs = FileSystem()
+
+    fs.add_file("a.txt")
+    fn = fs.get_file("a.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("")
+
+    fs.add_file("b.txt")
+    fn = fs.get_file("b.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("1\n2\n3\n4\n")
+
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_largefile():
+    fs = FileSystem()
+
+    fs.add_file("huge.txt")
+    fn = fs.get_file("huge.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data(
+        "\n".join(str(i) for i in range(1000)) + "\n"
+    )
+
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_trailing_newline():
+    fs = FileSystem()
+
+    fs.add_file("t.txt")
+    fn = fs.get_file("t.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("a\nb\n")
+
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
+
+@pytest.fixture
+def shell_no_final_newline():
+    fs = FileSystem()
+
+    fs.add_file("t.txt")
+    fn = fs.get_file("t.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data("a\nb")
+
+    s = ShellState()
+    s.fs = fs
+    s.cwd = "/"
+    return s
+
 @pytest.fixture
 def shell_basic(fs_basic):
     s = ShellState()
@@ -1326,3 +1492,151 @@ def test_sed_negated_line_address(cl, shell_sed):
     assert stdout == [
       "hi cat"
     ]
+
+# ---------- BASIC ----------
+
+def test_wc_l_empty_file(cl, shell_emptyfile: ShellState):
+    stderr, stdout = cl.enter_command('wc -l empty.txt', shell_emptyfile)
+    assert stderr == []
+    assert stdout == ["0"]
+
+
+def test_wc_l_single_line_no_newline(cl, shell_one_line_no_newline: ShellState):
+    stderr, stdout = cl.enter_command('wc -l f1.txt', shell_one_line_no_newline)
+    assert stderr == []
+    assert stdout == ["0"]
+
+
+def test_wc_l_single_line_with_newline(cl, shell_one_line_newline: ShellState):
+    stderr, stdout = cl.enter_command('wc -l f1.txt', shell_one_line_newline)
+    assert stderr == []
+    assert stdout == ["1"]
+
+
+def test_wc_l_two_lines(cl, fs_sed: ShellState):
+    stderr, stdout = cl.enter_command('wc -l f1.txt', fs_sed)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+# ---------- BLANK LINES ----------
+
+def test_wc_l_blank_lines(cl, shell_blank_lines: ShellState):
+    stderr, stdout = cl.enter_command('wc -l blank.txt', shell_blank_lines)
+    assert stderr == []
+    assert stdout == ["3"]
+
+
+def test_wc_l_only_newlines(cl, shell_only_newlines: ShellState):
+    stderr, stdout = cl.enter_command('wc -l nl.txt', shell_only_newlines)
+    assert stderr == []
+    assert stdout == ["4"]
+
+
+def test_wc_l_whitespace_lines_count(cl, shell_whitespace_lines: ShellState):
+    stderr, stdout = cl.enter_command('wc -l white.txt', shell_whitespace_lines)
+    assert stderr == []
+    assert stdout == ["3"]
+
+
+# ---------- PIPE INPUT ----------
+
+def test_wc_l_pipe_cat(cl, fs_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | wc -l', fs_sed)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+def test_wc_l_pipe_empty(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command('ls | wc -l', shell_empty)
+    assert stderr == []
+    assert stdout == ["0"]
+
+
+def test_wc_l_pipe_grep(cl, fs_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | wc -l', fs_sed)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+def test_wc_l_pipe_filtered_single(cl, fs_sed: ShellState):
+    stderr, stdout = cl.enter_command(
+        'cat f1.txt | grep wolf | wc -l',
+        fs_sed
+    )
+    assert stderr == []
+    assert stdout == ["1"]
+
+
+def test_wc_l_pipe_no_matches(cl, fs_sed: ShellState):
+    stderr, stdout = cl.enter_command(
+        'cat f1.txt | grep zebra | wc -l',
+        fs_sed
+    )
+    assert stderr == []
+    assert stdout == ["0"]
+
+
+# ---------- MULTIPLE FILES ----------
+
+def test_wc_l_two_files(cl, shell_twofiles: ShellState):
+    stderr, stdout = cl.enter_command('wc -l f1.txt f2.txt', shell_twofiles)
+    assert stderr == []
+    assert stdout == [
+        "2 f1.txt",
+        "3 f2.txt",
+        "5 total"
+    ]
+
+
+def test_wc_l_multiple_files_one_empty(cl, shell_mixfiles: ShellState):
+    stderr, stdout = cl.enter_command(
+        'wc -l a.txt b.txt',
+        shell_mixfiles
+    )
+    assert stderr == []
+    assert stdout == [
+        "0 a.txt",
+        "4 b.txt",
+        "4 total"
+    ]
+
+
+# ---------- EDGE CASES ----------
+
+def test_wc_l_file_not_found(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('wc -l fake.txt', shell_basic)
+    assert stdout == []
+    assert len(stderr) > 0
+
+
+def test_wc_l_directory_error(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('wc -l d1', shell_basic)
+    assert stdout == []
+    assert len(stderr) > 0
+
+
+def test_wc_l_no_arguments(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('wc -l', shell_basic)
+    # depends whether your shell reads stdin or errors
+    assert stderr == [] or len(stderr) > 0
+
+
+# ---------- STRESS / ODDITIES ----------
+
+def test_wc_l_large_file(cl, shell_largefile: ShellState):
+    stderr, stdout = cl.enter_command('wc -l huge.txt', shell_largefile)
+    assert stderr == []
+    assert stdout == ["1000"]
+
+
+def test_wc_l_trailing_newline_matters(cl, shell_trailing_newline: ShellState):
+    stderr, stdout = cl.enter_command('wc -l t.txt', shell_trailing_newline)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+def test_wc_l_no_final_newline(cl, shell_no_final_newline: ShellState):
+    stderr, stdout = cl.enter_command('wc -l t.txt', shell_no_final_newline)
+    assert stderr == []
+    assert stdout == ["1"]
