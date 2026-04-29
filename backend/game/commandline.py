@@ -65,7 +65,8 @@ class CommandLine:
             if stdout:
                 pipe_inode = Inode(NodeType.FILE)
                 pipe_node = FileNode(None, "pipe", pipe_inode)
-                pipe_node.set_data("\n".join(stdout))
+                # + ("\n" if stdout else "") for wc
+                pipe_node.set_data("\n".join(stdout) + ("\n" if stdout else ""))
                 prev_pipe = pipe_node
             else:
                 prev_pipe = None
@@ -736,6 +737,7 @@ class CommandLine:
                 pattern = arg
                 files = args
                 break
+        print (pattern)
         if (not pattern):
             return (1, (["grep: pattern not given"], []))
         if (not len(files)):
@@ -768,7 +770,6 @@ class CommandLine:
                         tmp = line
                     if (linenum):
                         tmp = f"{idx+1}:{tmp}"
-                    print (tmp)
                     output[1].append(tmp)
                     if (filename and not linenum):
                         return

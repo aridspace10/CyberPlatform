@@ -1513,8 +1513,8 @@ def test_wc_l_single_line_with_newline(cl, shell_one_line_newline: ShellState):
     assert stdout == ["1"]
 
 
-def test_wc_l_two_lines(cl, fs_sed: ShellState):
-    stderr, stdout = cl.enter_command('wc -l f1.txt', fs_sed)
+def test_wc_l_two_lines(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('wc -l f1.txt', shell_sed)
     assert stderr == []
     assert stdout == ["2"]
 
@@ -1541,8 +1541,8 @@ def test_wc_l_whitespace_lines_count(cl, shell_whitespace_lines: ShellState):
 
 # ---------- PIPE INPUT ----------
 
-def test_wc_l_pipe_cat(cl, fs_sed: ShellState):
-    stderr, stdout = cl.enter_command('cat f1.txt | wc -l', fs_sed)
+def test_wc_l_pipe_cat(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | wc -l', shell_sed)
     assert stderr == []
     assert stdout == ["2"]
 
@@ -1553,25 +1553,25 @@ def test_wc_l_pipe_empty(cl, shell_empty: ShellState):
     assert stdout == ["0"]
 
 
-def test_wc_l_pipe_grep(cl, fs_sed: ShellState):
-    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | wc -l', fs_sed)
+def test_wc_l_pipe_grep(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | wc -l', shell_sed)
     assert stderr == []
     assert stdout == ["2"]
 
 
-def test_wc_l_pipe_filtered_single(cl, fs_sed: ShellState):
+def test_wc_l_pipe_filtered_single(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command(
         'cat f1.txt | grep wolf | wc -l',
-        fs_sed
+        shell_sed
     )
     assert stderr == []
     assert stdout == ["1"]
 
 
-def test_wc_l_pipe_no_matches(cl, fs_sed: ShellState):
+def test_wc_l_pipe_no_matches(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command(
         'cat f1.txt | grep zebra | wc -l',
-        fs_sed
+        shell_sed
     )
     assert stderr == []
     assert stdout == ["0"]
