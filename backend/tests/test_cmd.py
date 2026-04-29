@@ -1613,7 +1613,7 @@ def test_wc_l_file_not_found(cl, shell_basic: ShellState):
 def test_wc_l_directory_error(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('wc -l d1', shell_basic)
     assert stdout == []
-    assert len(stderr) > 0
+    assert stderr == ["wc: cannot perform operation on directory (d1)"]
 
 
 def test_wc_l_no_arguments(cl, shell_basic: ShellState):

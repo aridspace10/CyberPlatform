@@ -293,7 +293,10 @@ class CommandLine:
         output = ([], [])
         for file in files:
             # Get file data
-            self.filesystem.search(file)
+            if (err := self.filesystem.search(file)):
+                output[0].append(err)
+                continue
+
             old = self.filesystem.current.get_data()
 
             # Save backup if request
@@ -414,7 +417,7 @@ class CommandLine:
             self.filesystem.current = cur
         return (0, output)
 
-    def wc(self, args, input):
+    def wc(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         output = ([], [])
 
         words = bytes_flag = chars = lines = False
@@ -435,31 +438,80 @@ class CommandLine:
         if not any([words, bytes_flag, chars, lines]):
             words = bytes_flag = chars = lines = True
 
-        cur = self.filesystem.current
+        if (not len(files)):
+            files.append("-")
 
+        total_lines = 0
+        total_words = 0
+        total_chars = 0
+        total_bytes = 0
+
+        cur = self.filesystem.current
         for file in files:
-            self.filesystem.search(file)
+            if (file == "-"):
+                self.filesystem.current = input
+            else:
+                # Get filenode
+                if (err := self.filesystem.search(file)):
+                    output[0].append(err)
+                    continue
+
+                # Check for file
+                if (self.filesystem.current.get_type() == NodeType.DIRECTORY):
+                    output[0].append(f"wc: cannot perform operation on directory ({file})")
+                    continue
+
             data = self.filesystem.current.get_data()
             self.filesystem.current = cur
+
+            lcount = data.count("\n")
+            wcount = len(data.split())
+            ccount = len(data)
+            bcount = len(data.encode())
+
+            total_lines += lcount
+            total_words += wcount
+            total_chars += ccount
+            total_bytes += bcount
 
             parts = []
 
             if lines:
-                parts.append(str(data.count("\n")))
+                parts.append(str(lcount))
 
             if words:
-                parts.append(str(len(data.split())))
+                parts.append(str(wcount))
 
             if chars:
-                parts.append(str(len(data)))
+                parts.append(str(ccount))
 
             if bytes_flag:
-                parts.append(str(len(data.encode())))
+                parts.append(str(bcount))
 
             if len(files) > 1:
                 parts.append(file)
 
             output[1].append(" ".join(parts))
+
+        if len(files) > 1:
+            parts = []
+
+            if lines:
+                parts.append(str(total_lines))
+
+            if words:
+                parts.append(str(total_words))
+
+            if chars:
+                parts.append(str(total_chars))
+
+            if bytes_flag:
+                parts.append(str(total_bytes))
+
+            parts.append("total")
+
+            output[1].append(" ".join(parts))
+
 
         return (0, output)
 
