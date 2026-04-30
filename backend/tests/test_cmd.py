@@ -69,7 +69,7 @@ def fs_basic():
 def fs_sed():
     fs = FileSystem()
     fs.add_file("f1.txt")
-    fs.current.items[0].set_data("cat wolf cat\nhi cat")
+    fs.current.items[0].set_data("cat wolf cat\nhi cat\n")
     fs.add_file("f2.txt")
     fs.current.items[1].set_data("cat CaT Cat")
     fs.add_file("f3.txt")

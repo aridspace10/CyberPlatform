@@ -66,7 +66,7 @@ class CommandLine:
                 pipe_inode = Inode(NodeType.FILE)
                 pipe_node = FileNode(None, "pipe", pipe_inode)
                 # + ("\n" if stdout else "") for wc
-                pipe_node.set_data("\n".join(stdout) + ("\n" if stdout else ""))
+                pipe_node.set_data("\n".join(stdout))
                 prev_pipe = pipe_node
             else:
                 prev_pipe = None
@@ -463,6 +463,7 @@ class CommandLine:
                     continue
 
             data = self.filesystem.current.get_data()
+            print(repr(data))
             self.filesystem.current = cur
 
             lcount = data.count("\n")
