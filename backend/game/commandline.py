@@ -113,6 +113,61 @@ class CommandLine:
             self.fdout = None
         return (status, (stderr, stdout))
 
+    def contains_glob(self, s):
+        return any(c in s for c in "*?[")
+    
+    def glob(self, word: str) -> list[str]:
+        base = self.filesystem.current
+        result = []
+        parts = word.split("/")
+        if word.startswith("/"):
+            for items in self.filesystem.filehead.items:
+                result.extend(self.match(word.split("/"), items, []))
+        else:
+            for items in self.filesystem.current.items:
+                result.extend(self.match(word.split("/"), items, []))
+        return result
+    
+    def _match_str(self, s: str, p: str, si: int, pi: int):
+        while pi < len(p):
+            if p[pi] == "*":
+                while pi < len(p) and p[pi] == "*":
+                    pi += 1
+                if pi == len(p):
+                    return True
+                while si < len(s):
+                    if self._match_str(s, p, si, pi):
+                        return True
+                    si += 1
+                return False
+
+            elif p[pi] == "?":
+                if si >= len(s):
+                    return False
+                si += 1
+                pi += 1
+
+            else:
+                if si >= len(s) or s[si] != p[pi]:
+                    return False
+                si += 1
+                pi += 1
+
+        return si == len(s)
+    
+    def match(self, parts: list[str], base: FileNode, result: list[str]) -> list[str]:
+        # Check cur filenode
+        part = parts.pop(0)
+        res = self._match_str(base.name, part, 0, 0)
+        # Expand items if needed
+        if (part != [] and res):
+            for i in base.items:
+                result.extend(self.match(parts, i, result))
+        elif (res):
+            result.append(base.name)
+        # Return results
+        return result
+
     def expand_arg(self, arg):
         word = ""
         for part in arg.parts:
