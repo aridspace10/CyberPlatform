@@ -274,6 +274,14 @@ def test_cat_basic(cl, shell_basic: ShellState):
     assert stderr == []
     assert stdout == ["ERROR no", "INFO hey", "ERROR no2", "error 1"]
 
+def test_cat_multiple(cl, shell_basic: ShellState):
+    f1 = shell_basic.fs.get_file("f1.txt")
+    f2 = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(f1, FileNode) and isinstance(f2, FileNode)
+    stderr, stdout = cl.enter_command('cat f1.txt f2.txt', shell_basic)
+    assert stderr == []
+    assert stdout == f1.get_data().split("\n") + f2.get_data().split("\n")
+
 ######## HEAD ##############
 def test_head_basic(cl, shell_basic: ShellState):
     stderr, stdout = cl.enter_command('head f2.txt', shell_basic)
@@ -699,8 +707,6 @@ def test_cp_file_directory(cl, shell_fouritems: ShellState):
     assert f2 == f4
     assert f3 == f5
 
-
-
 def test_cp_errors(cl, shell_cp: ShellState):
     stderr, stdout = cl.enter_command('cp project project_backup', shell_cp)
     assert stdout == []
@@ -714,3 +720,11 @@ def test_cp_errors2(cl, shell_fouritems: ShellState):
     stderr, stdout = cl.enter_command('cp f1.txt f2.txt f12.txt', shell_fouritems)
     assert stdout == []
     assert stderr == ["cp: target 'f12.txt' is not a directory"]
+
+def test_cat_glob(cl, shell_basic: ShellState):
+    f1 = shell_basic.fs.get_file("f1.txt")
+    f2 = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(f1, FileNode) and isinstance(f2, FileNode)
+    stderr, stdout = cl.enter_command('cat *.txt', shell_basic)
+    assert stderr == []
+    assert stdout == f1.get_data().split("\n") + f2.get_data().split("\n")
