@@ -113,6 +113,33 @@ class CommandLine:
             self.fdout = None
         return (status, (stderr, stdout))
 
+    def expand_arg(self, arg):
+        word = ""
+        for part in arg.parts:
+            if isinstance(part, str):
+                word += part
+            else:
+                if part.name not in self.shell.vars:
+                    raise Exception(f'unassigned var: {part.name}')
+                word += self.shell.vars[part.name]
+        return self.expand_glob(word)
+
+    def expand_glob(self, word):
+        if not self.contains_glob(word):
+            return [word]
+    
+        matches = self.glob(word)
+    
+        if not matches:
+            if self.shell.options["failglob"]:
+                raise Exception(f"no match: {word}")
+            elif self.shell.options["nullglob"]:
+                return []
+            else:
+                return [word]
+    
+        return sorted(matches)
+
     def execute_atom(self, atom: Atom) -> CommandReturn:
         if (isinstance(atom, SimpleCommand)):
             if self.fdin is None:
@@ -124,15 +151,8 @@ class CommandLine:
                 fdin = self.fdin
             args = []
             for arg in atom.args:
-                word = ""
-                for part in arg.parts:
-                    if isinstance(part, str):
-                        word += part
-                    else:
-                        if part.name not in self.shell.vars:
-                            return (1, ([f'Var Used which is unassigned: {part.name}'], []))
-                        word += self.shell.vars[part.name]
-                args.append(word)
+                expanded = self.expand_arg(arg)
+                args.extend(expanded)
             return self.run_command(args, fdin)
         else:
             # save state
