@@ -704,18 +704,22 @@ class CommandLine:
         output = ([], [])
         if len(args) == 1 and args[0] == "--help":
             return (0, ([], self.useage("cat")))
-        while len(args) > 1:
-            arg = args[0]
-            if (arg == "--help"):
-                return (0, ([], self.useage("cat")))
-            args = args[1:]
-        filename = args[0]
-        content = self.filesystem.get_file(filename)
-        if (content == None or isinstance(content, str)):
-            return (1, ([], [f"File {filename} does not exist"]))
-        data = content.get_data()
-        for line in data.split("\n"):
-            output[1].append(line)
+        files = []
+        while len(args):
+            arg = args.pop(0)
+            if (arg.startswith("-")):
+                if (arg == "--help"):
+                    return (0, ([], self.useage("cat")))
+            else:
+                files.append(arg)
+        files.extend(args)
+        for file in files:
+            content = self.filesystem.get_file(file)
+            if (content == None or isinstance(content, str)):
+                return (1, ([], [f"File {file} does not exist"]))
+            data = content.get_data()
+            for line in data.split("\n"):
+                output[1].append(line)
         return (0, output)
 
     def head(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
