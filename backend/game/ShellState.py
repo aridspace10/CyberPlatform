@@ -7,3 +7,4 @@ class ShellState:
         self.commands = []
         self.vars = {}
         self.ls = 0
+        self.options = {}
