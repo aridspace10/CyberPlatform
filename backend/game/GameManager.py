@@ -1,3 +1,9 @@
+import random
+from .ShellState import ShellState
+
+class MiniGame:
+    def __init__(self):
+        self.player_attempts: dict[str, int] = {}
 
 class GameManager:
     def __init__(self):
@@ -8,12 +14,32 @@ class GameManager:
         self.generate_config()
 
     def generate_config(self) -> None:
-        self.gen_config = {}
+        # Get some constants
+        self.type: str = self.init_config["type"]
+        self.num_rounds: int = self.init_config["rounds"]
+        self.commands: list[str] = self.init_config["allowed_commands"]
+        max_files: int = self.init_config["fs"]["files"]
+        max_dir: int = self.init_config["fs"]["dirs"]
+        self.shell = ShellState()
+        self.minigames = []
+        #Generate rounds
+        for i in range(self.num_rounds):
+            ty = random.randint(1, 2)
+            match (ty):
+                case 1:
+                    # Basic one command
+                    cmd = random.choice(self.commands)
+                    match (cmd):
+                        case "ls":
+                            pass
+                case 2:
+                    # pipe (singular)
+                    pos = [(a, b) for a in self.commands for b in self.commands]
+                    match (pos):
+                        case (("ls", "grep")):
+                            pass
+
+        #Generate 
 
     def get_shell(self) -> dict:
-        return {
-            "environment": [],
-            "cmds": [],
-            "fs": {'lcs': 0, 'nodes': {'name': 'root', 'inode': {'id': 2, 'type': 'directory', 'data': '', 'permissions': {'user': {'r': True, 'w': True, 'x': True}, 'group': {'r': True, 'w': True, 'x': True}, 'public': {'r': True, 'w': True, 'x': True}}, 'btimes': '2026-04-05T21:29:22.356312', 'ctimes': '2026-04-05T21:29:22.356312', 'atimes': '2026-04-05T21:29:22.356312', 'mtimes': '2026-04-05T21:29:22.356312'}, 'items': []}} ,
-            "vars": [],
-        }
+        return self.shell.
