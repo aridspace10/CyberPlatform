@@ -10,6 +10,7 @@ class FileNode:
         self.depth = 0
         self.items: list[FileNode] = []
         self.inode: Inode = inode
+        self.needed = False
 
     def to_dict(self) -> dict:
         return {
