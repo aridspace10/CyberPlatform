@@ -7,3 +7,10 @@ class ShellState:
         self.commands = []
         self.vars = {}
         self.ls = 0
+    
+    def serialize(self) -> dict:
+        return {
+            "vars": self.vars,
+            "cmds": self.commands,
+            "fs": self.fs.to_dict()
+        }

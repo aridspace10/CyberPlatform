@@ -100,6 +100,3 @@ class GameManager:
                     match (pos):
                         case (("ls", "grep")):
                             pass
-
-    def get_shell(self) -> dict:
-        return self.shell.

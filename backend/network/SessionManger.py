@@ -15,13 +15,6 @@ class Player:
         self.shell = ShellState()
         self.shell.fs = FileSystem()
 
-    def serialize(self) -> dict:
-        return {
-            "vars": self.shell.vars,
-            "cmds": self.shell.commands,
-            "fs": self.shell.fs.to_dict()
-        }
-
 class GameSession:
     def __init__(self, session_id: str):
         self.session_id = session_id
