@@ -1,6 +1,6 @@
 import random
 from .ShellState import ShellState
-from .helpers import biased_random, biased_randint
+from .helpers import biased_random, biased_randint, get_all_files, weighted_sample
 from .filenode import FileNode, NodeType
 from .inode import Inode
 
@@ -21,7 +21,30 @@ class MiniGame:
 class GrepFindFiles(MiniGame):
     def __init__(self):
         super().__init__()
-        self.occurences = random.randint(1, 5)
+        self.expected_files = []
+
+    def setup(self, shell: ShellState) -> None:
+        self.target_pattern = random.choice(["error", "secret", "TODO", "admin"])
+        
+        # Get all files (not dirs) from the FS
+        all_files = get_all_files(shell.fs.filehead)
+        
+        # Get weights using inverse bias
+        weights = [1 / (f.depth + 1) for f in all_files]
+        
+        num_matches = biased_randint(1, max(1, len(all_files) // 3))
+        match_files = weighted_sample(all_files, weights, k=num_matches)
+        
+        for f in match_files:
+            f.random_insert(f"{self.target_pattern}")
+            f.needed = True  # mark it, since you have the flag
+            self.expected_files.append(f.name)
+    
+    def check_answer(self, answer: str) -> bool:
+        lst = answer.split("\n")
+        for item in lst:
+            if (item not in self.expected_files):
+                return False
          
 
 GREP_GAMES: list[type] = [GrepFindFiles]
