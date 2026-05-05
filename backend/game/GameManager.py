@@ -5,7 +5,7 @@ from .filenode import FileNode, NodeType
 from .inode import Inode
 
 QUESTION_TYPES = ["SINGLE", "PIPE_SINGLE"]
-QUESTION_TYPES_PROBS = [0.8, 0.2]
+QUESTION_TYPES_PROBS = [1, 0]
 
 class MiniGame:
     def __init__(self):
@@ -21,6 +21,7 @@ class MiniGame:
 class GrepFindFiles(MiniGame):
     def __init__(self):
         super().__init__()
+        self.occurences = random.randint(1, 5)
          
 
 GREP_GAMES: list[type] = [GrepFindFiles]
@@ -99,4 +100,4 @@ class GameManager:
                     pos = [(a, b) for a in self.commands for b in self.commands]
                     match (pos):
                         case (("ls", "grep")):
-                            pass
+                            pass  

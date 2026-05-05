@@ -1,4 +1,6 @@
 import random
+from .filenode import FileNode
+from.inode import NodeType
 
 def determine_perms_fromstr(permissions: str) -> dict | str:
     if (len(permissions.rstrip()) != 3):
@@ -39,3 +41,31 @@ def biased_randint(min_val: int, max_val: int, std_factor: float = 6.0) -> int:
         val = random.gauss(mid, std_dev)
         if min_val <= val <= max_val:
             return round(val)
+
+def weighted_sample(population, weights, k):
+    chosen = []
+    remaining = list(zip(population, weights))
+    for _ in range(min(k, len(remaining))):
+        total = sum(w for _, w in remaining)
+        r = random.uniform(0, total)
+        cumulative = 0
+        for i, (item, w) in enumerate(remaining):
+            cumulative += w
+            if r <= cumulative:
+                chosen.append(item)
+                remaining.pop(i)
+                break
+    return chosen
+
+"""
+Put all files in list of filenode from starting directory node
+"""
+def get_all_files(self, node: FileNode = None) -> list[FileNode]:
+    node = node or self.root
+    result = []
+    for item in node.items:
+        if item.get_type() == NodeType.FILE:
+            result.append(item)
+        elif item.get_type() == NodeType.DIRECTORY:
+            result.extend(self.get_all_files(item))
+    return result
