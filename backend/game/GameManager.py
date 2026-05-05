@@ -45,7 +45,7 @@ class GrepFindFiles(MiniGame):
         for item in lst:
             if (item not in self.expected_files):
                 return False
-         
+        return True
 
 GREP_GAMES: list[type] = [GrepFindFiles]
 SINGLECMD_GAMES: dict[str, list[type]] = {

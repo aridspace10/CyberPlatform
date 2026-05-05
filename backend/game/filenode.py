@@ -90,7 +90,6 @@ class FileNode:
             idx = random.randint(0, len(self.get_data()) - 1)
             self.set_data(d[:idx] + data + d[idx:])
             
-
     def accumualate_depth(self) -> None:
         self.depth += 1
         if (self.parent != None):
