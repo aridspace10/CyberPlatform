@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Literal, Tuple
 import datetime
+import random
 from game.inode import Inode, NodeType
 
 class FileNode:
@@ -74,6 +75,21 @@ class FileNode:
     
     def append_data(self, data: str) -> None:
         self.inode.append_data(data)
+
+    def random_insert(self, data: str) -> None:
+        lst = data.split("\n")
+        if (len(lst) > 1): 
+            # Insert a whole line or multiple lines
+            cur = self.get_data().split("\n")
+            if (lst[1] == ""):
+                cur.insert(random.randint(0, len(cur) - 1), data[0])
+            self.set_data("\n".join(cur))
+            # Will implement multiple lines if needed
+        else:
+            d = self.get_data()
+            idx = random.randint(0, len(self.get_data()) - 1)
+            self.set_data(d[:idx] + data + d[idx:])
+            
 
     def accumualate_depth(self) -> None:
         self.depth += 1
