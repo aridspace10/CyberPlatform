@@ -26,21 +26,25 @@ class GrepFindFiles(MiniGame):
     def setup(self, shell: ShellState) -> None:
         self.options = []
         self.target_pattern = random.choice(["error", "secret", "TODO", "admin"])
-        
+        self.starting_dir = "."
+
         # Get all files (not dirs) from the FS and Get weights using inverse bias
         all_files = get_all_files(shell.fs.filehead)
         weights = [1 / (f.depth + 1) for f in all_files]
-
-        self.starting_dir = "."
         
         # Get the number of matches we doing for this game and the files we inserting into
         num_matches = biased_randint(1, max(1, len(all_files) // 3))
         match_files = weighted_sample(all_files, weights, k=num_matches)
         
+        # Insert all the expected output files
         for f in match_files:
-            f.random_insert(f"{self.target_pattern}")
-            f.needed = True  # mark it, since you have the flag
+            f.random_insert(self.target_pattern)
+            f.needed = True
             self.expected_files.append(f.name)
+
+        # Insert all the decoy output files
+        for f in decoy_files:
+            
         
         self.expected_command = f"grep -{"".join(sorted(self.options))} {self.target_pattern} {self.starting_dir}"
     
