@@ -1013,7 +1013,68 @@ class CommandLine:
         return (0, output)
 
     def tail(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
-        return (0, ([], []))
+        if "--help" in args:
+            return (0, ([], self.useage("tail")))
+        output = ([], [])
+        lines = -1
+        byte = -1
+        ahead = False
+        outputType = 0
+        while len(args) and args[0][0] == "-":
+            arg = args.pop(0)
+            if (arg == "-c" or arg.startswith("--bytes=")):
+                if (arg == "-c"):
+                    num = args.pop(0)
+                else:
+                    num = arg.split("=")[1]
+                if (num[0] == "+"):
+                    ahead = True
+                    byte = int(num[1:])
+                else:
+                    lines = int(num)
+            elif (arg == "-n" or arg.startswith("--lines=")):
+                if (arg == "-n"):
+                    num = args.pop(0)
+                else:
+                    num = arg.split("=")[1]
+                if (num[0] == "+"):
+                    ahead = True
+                    lines = int(num[1:])
+                else:
+                    lines = int(num)
+            elif (arg == "-q" or arg == "--quiet" or arg == "--silent"):
+                outputType = -1
+            elif (arg == "-v" or arg == "--verbose"):
+                outputType = 1
+        files = args
+        for file in files:
+            # Create header if needed
+            if ((len(files) > 1 and outputType != -1) or (len(files) == 1 and outputType == 1)):
+                output[1].append(f"==> {file} <==")
+            
+            # Get filenode
+            saved_current = self.filesystem.current
+            if (file == "-"):
+                content = input
+                ty = content.get_type()
+            else: 
+                ty = self.filesystem.search_withaccess(file)
+                content = self.filesystem.current
+                self.filesystem.current = saved_current
+
+            # Check is file
+            if (ty == NodeType.DIRECTORY):
+                output[0].append(f"tail: ${file} is a directory")
+                continue
+            
+            # Get data
+            data = content.get_data()
+            if (data == ''):
+                return (0, ([], []))
+            
+            
+        
+        return (0, output)
 
     def rm(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         recurse, verbose = False, False
