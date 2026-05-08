@@ -11,8 +11,6 @@ from ..game.helpers import determine_perms_fromstr
 import os
 import time
 
-from tests.cmd_tests.shells import *
-
 @pytest.fixture
 def cl():
     return CommandLine()
