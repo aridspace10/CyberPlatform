@@ -6,16 +6,6 @@ from game.filesystem import FileSystem
 from game.filenode import FileNode, Inode, NodeType
 import time
 
-LS_FILES = ["xms.bin", "silly.c", "sigma.dat", "crap.js", 
-             "sheet.xsl", "nope.csv", "nothing.log", "cool.png",
-             "record.ods", "stuff.sql", "annoying.java", "yikes.py"
-        ]
-random.shuffle(LS_FILES)
-
-f = random.sample(LS_FILES, 10)
-sizes = f[0:5]
-atimes = f[5:]
-
 # Basic helpers to create a filesystem with one file
 @pytest.fixture
 def fs_empty():
