@@ -3,8 +3,13 @@ import datetime
 import random
 from game.ShellState import ShellState
 from game.filesystem import FileSystem
+from game.commandline import CommandLine
 from game.filenode import FileNode, Inode, NodeType
 import time
+
+@pytest.fixture
+def cl():
+    return CommandLine()
 
 # Basic helpers to create a filesystem with one file
 @pytest.fixture
