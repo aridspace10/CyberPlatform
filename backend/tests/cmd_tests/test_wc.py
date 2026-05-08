@@ -7,7 +7,7 @@ from game.ShellState import ShellState
 from game.filesystem import FileSystem
 from game.filenode import FileNode, Inode, NodeType
 from wonderwords import RandomWord
-from ..game.helpers import determine_perms_fromstr
+from game.helpers import determine_perms_fromstr
 import os
 import time
 
