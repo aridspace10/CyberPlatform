@@ -3,6 +3,7 @@ import pytest
 from game.filesystem import FileSystem
 from game.ShellState import ShellState
 from game.filenode import FileNode
+from game.commandline import CommandLine
 
 @pytest.fixture
 def cl():
