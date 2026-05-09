@@ -1015,6 +1015,7 @@ class CommandLine:
     def tail(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if "--help" in args:
             return (0, ([], self.useage("tail")))
+        print (input.get_data())
         output = ([], [])
         lines = -1
         byte = -1
@@ -1024,29 +1025,47 @@ class CommandLine:
             arg = args.pop(0)
             if (arg == "-c" or arg.startswith("--bytes=")):
                 if (arg == "-c"):
+                    if (not len(args)):
+                        return (1, (["tail: argument required for -c"], []))
                     num = args.pop(0)
                 else:
                     num = arg.split("=")[1]
-                if (num[0] == "+"):
-                    ahead = True
-                    byte = int(num[1:])
-                else:
-                    lines = int(num)
+                try:
+                    if (num[0] == "+"):
+                        ahead = True
+                        byte = int(num[1:])
+                    else:
+                        lines = int(num)
+                except (ValueError):
+                    return (1, (["tail: argument for -c must be an integar with a possible + prefix"], []))
+
             elif (arg == "-n" or arg.startswith("--lines=")):
                 if (arg == "-n"):
+                    if (not len(args)):
+                        return (1, (["tail: argument required for -n"], []))
                     num = args.pop(0)
                 else:
                     num = arg.split("=")[1]
-                if (num[0] == "+"):
-                    ahead = True
-                    lines = int(num[1:])
-                else:
-                    lines = int(num)
+                try:
+                    if (num[0] == "+"):
+                        ahead = True
+                        lines = int(num[1:])
+                    else:
+                        lines = int(num)
+                except (ValueError):
+                    return (1, (["tail: argument for -c must be an integar with a possible + prefix"], []))
+
             elif (arg == "-q" or arg == "--quiet" or arg == "--silent"):
                 outputType = -1
             elif (arg == "-v" or arg == "--verbose"):
                 outputType = 1
+            elif arg[1:].isdigit():
+                lines = int(arg[1:])
+            else:
+                return (1, ([f"tail: unknown argument given {arg}"], []))
         files = args
+        if (len(files) == 0):
+            files = ["-"]
         for file in files:
             # Create header if needed
             if ((len(files) > 1 and outputType != -1) or (len(files) == 1 and outputType == 1)):
@@ -1075,7 +1094,7 @@ class CommandLine:
             data = content.get_data()
             if (data == ''):
                 continue
-            lst = data.split("\n")
+            lst = data.splitlines()
 
             if (lines == -1 and byte == -1):
                 lines = 10
