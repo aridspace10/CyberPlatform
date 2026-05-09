@@ -66,13 +66,13 @@ class FileNode:
                 result.extend(item.update_permissions(updated, recurse))
         return result
 
-    def get_data(self) -> str:
+    def get_data(self) -> list[str]:
         return self.inode.get_data()
     
-    def set_data(self, data: str) -> None:
+    def set_data(self, data: list[str]) -> None:
         self.inode.set_data(data)
     
-    def append_data(self, data: str) -> None:
+    def append_data(self, data: list[str]) -> None:
         self.inode.append_data(data)
 
     def accumualate_depth(self) -> None:

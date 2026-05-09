@@ -20,36 +20,38 @@ def shell_tail():
     fs.add_file("f1.txt")
     fn = fs.get_file("f1.txt")
     assert isinstance(fn, FileNode)
-    fn.set_data(
-        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12"
-    )
+    fn.set_data([
+        "1", "2", "3", "4", "5", "6",
+        "7", "8", "9", "10", "11", "12"
+    ])
 
     fs.add_file("small.txt")
     fn = fs.get_file("small.txt")
     assert isinstance(fn, FileNode)
-    fn.set_data("a\nb\nc")
+    fn.set_data(["a", "b", "c"])
 
     fs.add_file("empty.txt")
     fn = fs.get_file("empty.txt")
     assert isinstance(fn, FileNode)
-    fn.set_data("")
+    fn.set_data([])
 
     fs.add_file("single.txt")
     fn = fs.get_file("single.txt")
     assert isinstance(fn, FileNode)
-    fn.set_data("hello")
+    fn.set_data(["hello"])
 
     fs.add_file("newline.txt")
     fn = fs.get_file("newline.txt")
     assert isinstance(fn, FileNode)
-    fn.set_data("a\nb\nc\n")
+    fn.set_data(["a", "b", "c", ""])
 
     fs.add_file("mixed.txt")
     fn = fs.get_file("mixed.txt")
     assert isinstance(fn, FileNode)
-    fn.set_data(
-        "apple\nbanana\ncarrot\ndog\nelephant\nfrog\ngrape"
-    )
+    fn.set_data([
+        "apple", "banana", "carrot",
+        "dog", "elephant", "frog", "grape"
+    ])
 
     s = ShellState()
     s.fs = fs
@@ -65,7 +67,7 @@ def shell_one_line_no_newline():
     fs.add_file("f1.txt")
     fn = fs.get_file("f1.txt")
     assert isinstance(fn, FileNode)
-    fn.set_data("hello")
+    fn.set_data(["hello"])
 
     s = ShellState()
     s.fs = fs

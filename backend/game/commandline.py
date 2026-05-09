@@ -23,7 +23,7 @@ class CommandLine:
         for idx, item in enumerate(self.filesystem.current.items):
             if item.name == lst[-1]:
                 if (removing):
-                    item.set_data("")
+                    item.set_data([])
                 self.filesystem.current = saved_current
                 return item
         inode = Inode(NodeType.FILE)
@@ -66,7 +66,7 @@ class CommandLine:
                 pipe_inode = Inode(NodeType.FILE)
                 pipe_node = FileNode(None, "pipe", pipe_inode)
                 # + ("\n" if stdout else "") for wc
-                pipe_node.set_data("\n".join(stdout))
+                pipe_node.set_data(stdout)
                 prev_pipe = pipe_node
             else:
                 prev_pipe = None
@@ -107,7 +107,7 @@ class CommandLine:
         status, (stderr, stdout) = self.execute_atom(command.atom)
         if command.pre_redirs or command.post_redirs:
             if isinstance(self.fdout, FileNode):
-                self.fdout.append_data("\n".join(stdout))
+                self.fdout.append_data(stdout)
                 stdout = []
         else:
             # No redirection → leave stdout alone
@@ -118,7 +118,7 @@ class CommandLine:
         if (isinstance(atom, SimpleCommand)):
             if self.fdin is None:
                 fdin = FileNode(None, "stdin", Inode(NodeType.FILE))
-                fdin.set_data("")
+                fdin.set_data([])
             elif isinstance(self.fdin, str):
                 return (1, ([], ["Admin Error: AAA113"]))
             else:
@@ -308,7 +308,7 @@ class CommandLine:
                 self.filesystem.current.parent.add_child(backup.replace("-i", self.filesystem.current.name, 1), inode)
 
             # Apply commands to line
-            new = old.split("\n")
+            new = old.copy()
             for expression in expressions:
                 # Setup 
                 l = len(expression)
@@ -412,7 +412,7 @@ class CommandLine:
                 else:
                     raise SyntaxError("Unknown Expression Given")
             if (backup):
-                self.filesystem.current.set_data("\n".join(new))
+                self.filesystem.current.set_data(new)
             else:
                 output[1].extend(new)
             self.filesystem.current = cur
@@ -463,13 +463,12 @@ class CommandLine:
                     continue
 
             data = self.filesystem.current.get_data()
-            print(repr(data))
             self.filesystem.current = cur
 
-            lcount = data.count("\n")
-            wcount = len(data.split())
-            ccount = len(data)
-            bcount = len(data.encode())
+            lcount = len(data)
+            wcount = len(" ".join(data).split())
+            ccount = len("\n".join(data))
+            bcount = len("\n".join(data).encode())
 
             total_lines += lcount
             total_words += wcount
@@ -753,7 +752,7 @@ class CommandLine:
             match_cond_func = lambda line, pat: pat in line
 
         def search_file(item: FileNode) -> None:
-            lst = item.get_data().split("\n")
+            lst = item.get_data()
             for idx, line in enumerate(lst):
                 if case_insentive:
                     line_cmp = line.lower()
@@ -931,7 +930,7 @@ class CommandLine:
         if (content == None or isinstance(content, str)):
             return (1, ([], [f"File {filename} does not exist"]))
         data = content.get_data()
-        for line in data.split("\n"):
+        for line in data:
             output[1].append(line)
         return (0, output)
 
@@ -992,11 +991,16 @@ class CommandLine:
             if (data == ''):
                 return (0, ([], []))
             if rev and b != -1:
-                trimmed = data.encode("utf-8")[:b]  # b is negative, slices off last abs(b) bytes
-                for line in trimmed.decode("utf-8").split("\n"):
+                raw = "\n".join(data)
+                encoded = raw.encode("utf-8")
+                trimmed = encoded[:b]  # or [-b:] depending on mode
+
+                decoded = trimmed.decode("utf-8", errors="ignore")
+
+                for line in decoded.split("\n"):
                     output[1].append(line)
             else:
-                for line in data.split("\n"):
+                for line in data:
                     line_bytes = len(line.encode("utf-8")) + 1
                     if b != -1 and curb + line_bytes > b:
                         # output partial line if there are remaining bytes
@@ -1092,9 +1096,8 @@ class CommandLine:
             
             # Get data
             data = content.get_data()
-            if (data == ''):
+            if (data == []):
                 continue
-            lst = data.splitlines()
 
             if (lines == -1 and byte == -1):
                 lines = 10
@@ -1102,9 +1105,10 @@ class CommandLine:
             # modify data for return
             if (ahead):
                 if (lines != -1):
-                    output[1].extend(lst[lines-1:] if lines > 0 else lst)
+                    output[1].extend(data[lines-1:] if lines > 0 else data)
                 else:
-                    encoded = data.encode("utf-8")
+                    raw = "\n".join(data)
+                    encoded = raw.encode("utf-8")
                     trimmed = encoded[byte - 1:]
                     decoded = trimmed.decode("utf-8", errors="ignore")
                     for line in decoded.split("\n"):
@@ -1113,9 +1117,10 @@ class CommandLine:
                 if (lines != -1):
                     if (lines == 0):
                         continue
-                    output[1].extend(lst[-lines:])
+                    output[1].extend(data[-lines:])
                 else:
-                    encoded = data.encode("utf-8")
+                    raw = "\n".join(data)
+                    encoded = raw.encode("utf-8")
                     trimmed = encoded[-byte:]
                     decoded = trimmed.decode("utf-8", errors="ignore")
                     for line in decoded.split("\n"):
@@ -1306,7 +1311,7 @@ class CommandLine:
             self.filesystem.current.inode.link_count += 1
         else:
             inode = Inode(NodeType.SYMLINK)
-            inode.data = target
+            inode.set_data(target.splitlines())
             self.filesystem.current.inode = inode
         self.filesystem.current = saved_current
         return (1, ([],[]))
@@ -1335,7 +1340,7 @@ class CommandLine:
         if (file != ""):
             self.filesystem.search_withaccess(file)
             input = self.filesystem.current
-        data = input.get_data().split("\n")
+        data = input.get_data()
         output = list(dict.fromkeys(data))
         return (0, ([], output))
 
@@ -1383,11 +1388,11 @@ class CommandLine:
             else:
                 file = arg
         if (file == "" or file == "-"):
-            content = input.get_data().split("\n") 
+            content = input.get_data()
         else:
             saved_current = self.filesystem.current
             self.filesystem.search(file)
-            content = self.filesystem.current.get_data().split("\n")
+            content = self.filesystem.current.get_data()
             self.filesystem.current = saved_current
         for idx, line in enumerate(content):
             if igblanks:
@@ -1430,7 +1435,7 @@ class CommandLine:
             if (self.filesystem.search(output) != ""):
                 self.filesystem.add_file(output)
                 self.filesystem.search(output)
-            self.filesystem.current.set_data("\n".join(modified))
+            self.filesystem.current.set_data(modified)
             self.filesystem.current = saved_current
             return (0, ([], []))
         return (0, ([], modified))

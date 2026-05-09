@@ -221,13 +221,13 @@ def test_redirection_rewrites_file(cl, shell_basic: ShellState, fs_basic: FileSy
     cl.enter_command('echo hi >> f1.txt', shell_basic)
     fs_basic.search('f1.txt')
     fnode = fs_basic.current
-    assert fnode.get_data().strip() == "ERROR no\nINFO hey\nERROR no2\nerror 1\nhi"
+    assert fnode.get_data() == ["ERROR no","INFO hey", "ERROR no2", "error 1","hi"]
 
 def test_redirection_writes_newfile(cl, shell_basic: ShellState, fs_basic: FileSystem):
     cl.enter_command('echo hi >> f3.txt', shell_basic)
     fs_basic.search('f3.txt')
     fnode = fs_basic.current
-    assert fnode.get_data().strip() == "hi"
+    assert fnode.get_data() == ["hi"]
 
 ########### RM #################
 def test_rm_basic(cl, shell_fouritems: ShellState):
@@ -578,7 +578,7 @@ def setup_names(s: ShellState, name: str) -> list[str]:
     for _ in range(0, amount):
         names.append(r.word())
     s.fs.search(name)
-    s.fs.current.set_data('\n'.join(names))
+    s.fs.current.set_data(names)
     s.fs.current = s.fs.filehead
     names.sort()
     return names
@@ -596,7 +596,7 @@ def test_sort_random(cl, shell_basic: ShellState):
     names.append(name)
     fn = shell_basic.fs.get_file("f2.txt")
     assert isinstance(fn, FileNode)
-    fn.append_data(name)
+    fn.append_data([name])
     stderr, stdout = cl.enter_command('sort -R f2.txt', shell_basic)
     assert stderr == []
     for i in range(0, len(names)-1):
@@ -610,7 +610,7 @@ def test_sort_dups(cl, shell_basic: ShellState):
     name = random.choice(names)
     fn = shell_basic.fs.get_file("f2.txt")
     assert isinstance(fn, FileNode)
-    fn.append_data(name)
+    fn.append_data([name])
     stderr, stdout = cl.enter_command('sort -u f2.txt', shell_basic)
     assert stderr == []
     assert len(stdout) == len(names)
@@ -621,7 +621,7 @@ def test_sort_output(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     stderr, stdout = cl.enter_command('sort -o f1.txt f2.txt', shell_basic)
     shell_basic.fs.search("f1.txt")
-    data = shell_basic.fs.current.get_data().split("\n")
+    data = shell_basic.fs.current.get_data()
     shell_basic.fs.current = shell_basic.fs.filehead
     assert stderr == []
     assert stdout == []
@@ -632,7 +632,7 @@ def test_sort_sorted(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     stderr, stdout = cl.enter_command('sort -o s1.txt f2.txt', shell_basic)
     shell_basic.fs.search("s1.txt")
-    data = shell_basic.fs.current.get_data().split("\n")
+    data = shell_basic.fs.current.get_data()
     shell_basic.fs.current = shell_basic.fs.filehead
     assert stderr == []
     assert stdout == []
@@ -673,7 +673,7 @@ def test_pipes_sortuniq(cl, shell_basic: ShellState):
     name = random.choice(names)
     fn = shell_basic.fs.get_file("f2.txt")
     assert isinstance(fn, FileNode)
-    fn.append_data(name)
+    fn.append_data([name])
     stderr, stdout = cl.enter_command('sort f2.txt | uniq', shell_basic)
     assert stderr == []
     assert len(stdout) == len(names)
