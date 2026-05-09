@@ -73,7 +73,6 @@ def shell_one_line_no_newline():
 
     return s
 
-
 # =========================================================
 # Basic Behaviour
 # =========================================================
@@ -86,7 +85,8 @@ def test_tail_default(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "3\n4\n5\n6\n7\n8\n9\n10\n11\n12"
+        "3", "4", "5", "6", "7",
+        "8", "9", "10", "11", "12"
     ]
 
 
@@ -98,7 +98,7 @@ def test_tail_small_file(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "a\nb\nc"
+        "a", "b", "c"
     ]
 
 
@@ -121,7 +121,7 @@ def test_tail_empty_file(cl, shell_tail):
     )
 
     assert stderr == []
-    assert stdout == [""]
+    assert stdout == []
 
 
 def test_tail_one_line_no_newline(cl, shell_one_line_no_newline):
@@ -158,7 +158,7 @@ def test_tail_n_3(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "10\n11\n12"
+        "10", "11", "12"
     ]
 
 
@@ -170,7 +170,8 @@ def test_tail_n_equal_file_size(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12"
+        "1", "2", "3", "4", "5", "6",
+        "7", "8", "9", "10", "11", "12"
     ]
 
 
@@ -182,7 +183,8 @@ def test_tail_n_larger_than_file(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12"
+        "1", "2", "3", "4", "5", "6",
+        "7", "8", "9", "10", "11", "12"
     ]
 
 
@@ -193,7 +195,7 @@ def test_tail_n_zero(cl, shell_tail):
     )
 
     assert stderr == []
-    assert stdout == [""]
+    assert stdout == []
 
 
 # =========================================================
@@ -208,7 +210,7 @@ def test_tail_short_numeric(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "10\n11\n12"
+        "10", "11", "12"
     ]
 
 
@@ -236,7 +238,8 @@ def test_tail_plus_mode(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "3\n4\n5\n6\n7\n8\n9\n10\n11\n12"
+        "3", "4", "5", "6", "7", "8",
+        "9", "10", "11", "12"
     ]
 
 
@@ -248,7 +251,8 @@ def test_tail_plus_one(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12"
+        "1", "2", "3", "4", "5", "6",
+        "7", "8", "9", "10", "11", "12"
     ]
 
 
@@ -271,8 +275,8 @@ def test_tail_plus_past_end(cl, shell_tail):
     )
 
     assert stderr == []
-    assert stdout == [""]
-    
+    assert stdout == []
+
 
 # =========================================================
 # Newline Edge Cases
@@ -286,7 +290,7 @@ def test_tail_file_with_trailing_newline(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "a\nb\nc"
+        "a", "b", "c"
     ]
 
 
@@ -356,7 +360,7 @@ def test_tail_pipe_cat(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "11\n12"
+        "11", "12"
     ]
 
 
@@ -368,7 +372,7 @@ def test_tail_pipe_grep(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "11\n12"
+        "11", "12"
     ]
 
 
@@ -392,7 +396,7 @@ def test_tail_pipe_only(cl, shell_tail):
 
     assert stderr == []
     assert stdout == [
-        "c\nd"
+        "c", "d"
     ]
 
 

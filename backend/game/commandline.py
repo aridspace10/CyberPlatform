@@ -1066,14 +1066,41 @@ class CommandLine:
             if (ty == NodeType.DIRECTORY):
                 output[0].append(f"tail: ${file} is a directory")
                 continue
+
+            if ty is None:
+                output[0].append(f"tail: cannot open '{file}'")
+                continue
             
             # Get data
             data = content.get_data()
             if (data == ''):
-                return (0, ([], []))
-            
-            
-        
+                continue
+            lst = data.split("\n")
+
+            if (lines == -1 and byte == -1):
+                lines = 10
+
+            # modify data for return
+            if (ahead):
+                if (lines != -1):
+                    output[1].extend(lst[lines-1:] if lines > 0 else lst)
+                else:
+                    encoded = data.encode("utf-8")
+                    trimmed = encoded[byte - 1:]
+                    decoded = trimmed.decode("utf-8", errors="ignore")
+                    for line in decoded.split("\n"):
+                        output[1].append(line)
+            else:
+                if (lines != -1):
+                    if (lines == 0):
+                        continue
+                    output[1].extend(lst[-lines:])
+                else:
+                    encoded = data.encode("utf-8")
+                    trimmed = encoded[-byte:]
+                    decoded = trimmed.decode("utf-8", errors="ignore")
+                    for line in decoded.split("\n"):
+                        output[1].append(line)
         return (0, output)
 
     def rm(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:

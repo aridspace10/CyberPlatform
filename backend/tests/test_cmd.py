@@ -19,6 +19,7 @@ LS_FILES = ["xms.bin", "silly.c", "sigma.dat", "crap.js",
              "sheet.xsl", "nope.csv", "nothing.log", "cool.png",
              "record.ods", "stuff.sql", "annoying.java", "yikes.py"
         ]
+
 random.shuffle(LS_FILES)
 
 f = random.sample(LS_FILES, 10)
