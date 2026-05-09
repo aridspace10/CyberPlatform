@@ -43,7 +43,7 @@ def shell_tail():
     fs.add_file("newline.txt")
     fn = fs.get_file("newline.txt")
     assert isinstance(fn, FileNode)
-    fn.set_data(["a", "b", "c", ""])
+    fn.set_data(["a", "b", "c"])
 
     fs.add_file("mixed.txt")
     fn = fs.get_file("mixed.txt")

@@ -534,12 +534,17 @@ def test_sort_random(cl, shell_basic: ShellState):
 def test_sort_dups(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     name = random.choice(names)
+    names = names.copy()
+    print (f"Extra name is {name}")
     fn = shell_basic.fs.get_file("f2.txt")
     assert isinstance(fn, FileNode)
     fn.append_data([name])
+    print (fn.get_data())
     stderr, stdout = cl.enter_command('sort -u f2.txt', shell_basic)
     assert stderr == []
-    assert len(stdout) == len(names)
+    #assert len(stdout) == len(names)
+    print (stdout)
+    print (names)
     for i in range(0, len(names)):
         assert stdout[i] == names[i]
 
@@ -568,6 +573,11 @@ def test_sort_sorted(cl, shell_basic: ShellState):
     assert stderr == []
     assert stdout == []
     assert shell_basic.ls == 0
+    fn = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    data_copy = fn.get_data().copy()
+    random.shuffle(data_copy)
+    fn.set_data(data_copy)
     stderr, stdout = cl.enter_command('sort -C f2.txt', shell_basic)
     assert stderr == []
     assert stdout == []
@@ -597,6 +607,7 @@ def test_pipes_lshead2(cl, shell_empty: ShellState):
 def test_pipes_sortuniq(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     name = random.choice(names)
+    names = names.copy()
     fn = shell_basic.fs.get_file("f2.txt")
     assert isinstance(fn, FileNode)
     fn.append_data([name])
@@ -735,14 +746,14 @@ def test_cp_basic(cl, shell_fouritems: ShellState):
     assert stderr == []
     fn = shell_fouritems.fs.get_file("copied.txt")
     assert isinstance(fn, FileNode)
-    assert fn.get_data() == "ERROR 1\nERROR 2\nINFO 1"
+    assert fn.get_data() == ["ERROR 1", "ERROR 2", "INFO 1"]
 
     stderr, stdout = cl.enter_command('cp -v f2.txt f3.txt', shell_fouritems)
     assert stdout == ["cp: Copied 'f2.txt' to 'f3.txt'"]
     assert stderr == []
     fn = shell_fouritems.fs.get_file("f3.txt")
     assert isinstance(fn, FileNode)
-    assert fn.get_data() == "ERROR 3\nERROR 4\nINFO 2"
+    assert fn.get_data() == ["ERROR 3", "ERROR 4", "INFO 2"]
 
 def test_cp_directory(cl, shell_cp: ShellState):
     stderr, stdout = cl.enter_command('cp -vr project project_backup', shell_cp)

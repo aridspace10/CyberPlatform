@@ -146,9 +146,7 @@ def test_sed_case_insensitive_single(cl, shell_sed):
 
 def test_sed_delete_blank_lines(cl, shell_sed):
     shell_sed.fs.add_file("blank.txt")
-    shell_sed.fs.current.items[0].set_data(
-      "a\n\nb\n\nc"
-    )
+    shell_sed.fs.current.items[0].set_data(["a", "", "b", "", "c"])
 
     stderr, stdout = cl.enter_command(
       r"sed '/^$/d' blank.txt",
@@ -162,9 +160,7 @@ def test_sed_delete_blank_lines(cl, shell_sed):
 
 def test_sed_path_delimiters(cl, shell_sed):
     shell_sed.fs.add_file("path.txt")
-    shell_sed.fs.current.items[0].set_data(
-      "/usr/bin"
-    )
+    shell_sed.fs.current.items[0].set_data(["/usr/bin"])
 
     stderr, stdout = cl.enter_command(
       "sed 's|/usr/bin|/opt/bin|' path.txt",
@@ -231,11 +227,11 @@ def test_sed_inplace_backup(cl, shell_sed):
     assert fn.get_data() == old
     new = shell_sed.fs.get_file("f1.txt")
     assert isinstance(new, FileNode)
-    assert new.get_data() == "dog wolf dog\nhi dog"
+    assert new.get_data() == ["dog wolf dog","hi dog"]
     
 
 def test_sed_overlapping(cl, shell_sed):
-    shell_sed.fs.current.items[0].set_data("aaaa")
+    shell_sed.fs.current.items[0].set_data(["aaaa"])
 
     stderr, stdout = cl.enter_command(
       "sed 's/aa/b/g' f1.txt",

@@ -20,6 +20,7 @@ class Inode:
         self.type: NodeType = type
         self.link_count = 1
         self.data: list[str] = []
+        self.has_trailing_newline: bool = False
 
         self.permissions = {
             "user": {"r": True, "w": True, "x": True},
@@ -66,6 +67,7 @@ class Inode:
     def set_data(self, data: list[str]) -> None:
         self.mtime = datetime.now()
         self.data = data
+        self.has_trailing_newline = True
     
     def append_data(self, data: list[str]) -> None:
         self.mtime = datetime.now()

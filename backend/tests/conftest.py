@@ -155,6 +155,7 @@ def shell_one_line_no_newline():
     fn = fs.get_file("f1.txt")
     assert isinstance(fn, FileNode)
     fn.set_data(["hello"])
+    fn.inode.has_trailing_newline = False
     s = ShellState()
     s.fs = fs
     s.cwd = "/"
@@ -276,6 +277,7 @@ def shell_trailing_newline():
     fn = fs.get_file("t.txt")
     assert isinstance(fn, FileNode)
     fn.set_data(["a", "b"])
+    fn.inode.has_trailing_newline = True
 
     s = ShellState()
     s.fs = fs
@@ -291,6 +293,7 @@ def shell_no_final_newline():
     fn = fs.get_file("t.txt")
     assert isinstance(fn, FileNode)
     fn.set_data(["a", "b"])
+    fn.inode.has_trailing_newline = False
 
     s = ShellState()
     s.fs = fs

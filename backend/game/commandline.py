@@ -308,7 +308,7 @@ class CommandLine:
                 self.filesystem.current.parent.add_child(backup.replace("-i", self.filesystem.current.name, 1), inode)
 
             # Apply commands to line
-            new = old.copy()
+            new = old
             for expression in expressions:
                 # Setup 
                 l = len(expression)
@@ -461,11 +461,14 @@ class CommandLine:
                 if (self.filesystem.current.get_type() == NodeType.DIRECTORY):
                     output[0].append(f"wc: cannot perform operation on directory ({file})")
                     continue
-
-            data = self.filesystem.current.get_data()
+            
+            node = self.filesystem.current
+            data = node.get_data()
             self.filesystem.current = cur
 
             lcount = len(data)
+            if data and not node.inode.has_trailing_newline:
+                lcount -= 1
             wcount = len(" ".join(data).split())
             ccount = len("\n".join(data))
             bcount = len("\n".join(data).encode())
@@ -849,7 +852,7 @@ class CommandLine:
         output = " ".join(args)
         if (output == "$?"):
             return (0, ([], [(str(self.filesystem.lcs))]))
-        return (0, ([], [(" ".join(args))]))
+        return (0, ([], " ".join(args).split("\n")))
 
     def touch(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if "--help" in args:
@@ -1341,6 +1344,7 @@ class CommandLine:
             self.filesystem.search_withaccess(file)
             input = self.filesystem.current
         data = input.get_data()
+        print (data)
         output = list(dict.fromkeys(data))
         return (0, ([], output))
 
