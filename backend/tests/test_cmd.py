@@ -17,7 +17,7 @@ def cl():
 
 ######## HELPS #################
 def test_cmd_helps(cl, shell_empty):
-    cmds = ['mkdir', 'cat', 'chmod', 'grep', 'head', 'ln', 'ls', 'mv', 'sort', 'touch', "rm"]
+    cmds = ['mkdir', 'cat', 'chmod', 'grep', 'head', 'ln', 'ls', 'mv', 'sort', 'touch', "rm", "sed"]
     for cmd in cmds:
         stderr, stdout = cl.enter_command(f'{cmd} --help', shell_empty)
         with open(f"../static/help/{cmd}.txt") as f:

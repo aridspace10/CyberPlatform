@@ -64,6 +64,8 @@ def fs_sed():
     fs.current.items[1].set_data(["cat CaT Cat"])
     fs.add_file("f3.txt")
     fs.current.items[2].set_data(["cat wolf cat", "hi cat", " whats up", " the cat", " test cat here"])
+    fs.add_file("many.txt")
+    fs.current.items[-1].set_data(["cat cat cat cat"])
     return fs
 
 @pytest.fixture

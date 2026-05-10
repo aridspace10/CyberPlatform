@@ -31,18 +31,23 @@ def test_sed_malformed4(cl, shell_basic: ShellState):
     assert stderr == ["sed: unknown option given - a"]
     assert stdout == []
 
+def test_sed_malformed5(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command("sed 's/foo/bar/' not_exist.txt", shell_basic)
+    assert stderr == ["sed: No directory named not_exist.txt"]
+    assert stdout == []
+
 def test_sed_basic(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed 's/cat/dog/' f1.txt", shell_sed)
     assert stdout == ["dog wolf cat", "hi dog"]
     assert stderr == []
 
 def test_sed_global(cl, shell_sed: ShellState):
-    stderr, stdout = cl.enter_command("sed 's/cat/dog/g' f1.txt", shell_sed)
+    stderr, stdout = cl.enter_command("sed -f f1.txt 's/cat/dog/g'", shell_sed)
     assert stdout == ["dog wolf dog", "hi dog"]
     assert stderr == []
 
 def test_sed_nochange(cl, shell_sed: ShellState):
-    stderr, stdout = cl.enter_command("sed 's/not/exist/' f1.txt", shell_sed)
+    stderr, stdout = cl.enter_command("sed --file=f1.txt 's/not/exist/'", shell_sed)
     assert stderr == []
     assert stdout == ["cat wolf cat", "hi cat"]
 
@@ -60,6 +65,17 @@ def test_sed_noccurences(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed 's/cat/dog/2' f1.txt", shell_sed)
     assert stderr == []
     assert stdout == ["cat wolf dog", "hi cat"]
+
+def test_sed_second_occurrence_global_multiple(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        r"sed 's/cat/dog/2g' many.txt",
+        shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+        "cat dog dog dog"
+    ]
 
 def test_sed_cinsentive(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed 's/cat/dog/Ig' f2.txt", shell_sed)
@@ -94,7 +110,7 @@ def test_sed_delete(cl, shell_sed: ShellState):
     assert stderr == []
 
 def test_sed_multexpr(cl, shell_sed: ShellState):
-    stderr, stdout = cl.enter_command("sed -e 's/cat/dog/' -e 's/wolf/howl/' f1.txt", shell_sed)
+    stderr, stdout = cl.enter_command("sed --expression=s/cat/dog/ -e 's/wolf/howl/' f1.txt", shell_sed)
     assert stdout == ["dog howl cat", "hi dog"]
     assert stderr == []
 
@@ -249,4 +265,73 @@ def test_sed_negated_line_address(cl, shell_sed):
     assert stderr == []
     assert stdout == [
       "hi cat"
+    ]
+
+def test_sed_print_command(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        r"sed -n 'p' f1.txt",
+        shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+        "cat wolf cat",
+        "hi cat"
+    ]
+
+def test_sed_print_single_line(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        r"sed -n '2p' f1.txt",
+        shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+        "hi cat"
+    ]
+
+def test_sed_print_range(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        r"sed -n '2,4p' f3.txt",
+        shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+        "hi cat",
+        " whats up",
+        " the cat"
+    ]
+
+def test_sed_print_regex(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        r"sed -n '/wolf/p' f1.txt",
+        shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+        "cat wolf cat"
+    ]
+
+def test_sed_print_last_line(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        r"sed -n '$p' f3.txt",
+        shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+        " test cat here"
+    ]
+
+def test_sed_print_negated_line(cl, shell_sed):
+    stderr, stdout = cl.enter_command(
+        r"sed -n '2!p' f1.txt",
+        shell_sed
+    )
+
+    assert stderr == []
+    assert stdout == [
+        "cat wolf cat"
     ]

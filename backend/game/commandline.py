@@ -298,7 +298,7 @@ class CommandLine:
         for file in files:
             # Get file data
             if (err := self.filesystem.search(file)):
-                output[0].append(err)
+                output[0].append(f"sed: {err}")
                 continue
 
             old = self.filesystem.current.get_data()
@@ -504,7 +504,7 @@ class CommandLine:
                         if should_print:
                             printed.append(line)
                 else:
-                    raise SyntaxError("Unknown Expression Given")
+                    return (1, (["sed: unknown expression given"], []))
             if (backup):
                 self.filesystem.current.set_data(new)
             elif (suppress_print):
