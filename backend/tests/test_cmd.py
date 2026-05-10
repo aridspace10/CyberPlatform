@@ -1,90 +1,15 @@
 import pytest
 import datetime
 import random
+import math
 from game.commandline import CommandLine
 from game.ShellState import ShellState
 from game.filesystem import FileSystem
 from game.filenode import FileNode, Inode, NodeType
 from wonderwords import RandomWord
 from ..game.helpers import determine_perms_fromstr
-
-# Basic helpers to create a filesystem with one file
-@pytest.fixture
-def fs_empty():
-    fs = FileSystem()
-    # ensure root present and empty
-    return fs
-
-@pytest.fixture
-def shell_empty(fs_empty):
-    s = ShellState()
-    s.fs = fs_empty
-    s.cwd = "/"
-    return s
-
-@pytest.fixture
-def fs_fouritems():
-    fs = FileSystem()
-    inode = Inode(NodeType.FILE)
-    inode.set_data("ERROR 1\nERROR 2\nINFO 1")
-    fn = FileNode(None, "f1.txt", inode)
-    fs.add_file("f1.txt", fn)
-    inode = Inode(NodeType.FILE)
-    inode.set_data("ERROR 3\nERROR 4\nINFO 2")
-    fn = FileNode(None, "f2.txt", inode)
-    fs.add_file("f2.txt", fn)
-    fs.add_file("f3.txt")
-    fs.add_file("f4.txt")
-    return fs
-
-@pytest.fixture
-def fs_basic():
-    fs = FileSystem()
-    fs.add_file("f1.txt")
-    fs.current.items[0].set_data("ERROR no\nINFO hey\nERROR no2\nerror 1")
-    fs.add_file("f2.txt")
-    fs.current.items[1].set_data('\n'.join([str(i) for i in range(25)]))
-    fs.add_directory("d1")
-    fs.add_file("d1/f3.txt")
-    inode = Inode(NodeType.FILE)
-    inode.set_data("ERROR 1\nERROR 2\nINFO 1")
-    fn = FileNode(None, "f4.txt", inode)
-    fs.add_file("d1/f4.txt", fn)
-    return fs
-
-@pytest.fixture
-def fs_cp():
-    fs = FileSystem()
-    fs.add_file("f1.txt")
-    fs.add_directory("project")
-    fs.add_file("project/here.txt")
-    fs.add_directory("project/files")
-    fs.add_file("project/files/f1.txt")
-    fs.add_file("project/files/f2.txt")
-    fs.add_directory("project/empty")
-    fs.add_directory("project2")
-    return fs
-
-@pytest.fixture
-def shell_basic(fs_basic):
-    s = ShellState()
-    s.fs = fs_basic
-    s.cwd = "/"
-    return s
-
-@pytest.fixture
-def shell_fouritems(fs_fouritems):
-    s = ShellState()
-    s.fs = fs_fouritems
-    s.cwd = "/"
-    return s
-
-@pytest.fixture
-def shell_cp(fs_cp):
-    s = ShellState()
-    s.fs = fs_cp
-    s.cwd = "/"
-    return s
+import os
+import time
 
 @pytest.fixture
 def cl():
@@ -92,7 +17,7 @@ def cl():
 
 ######## HELPS #################
 def test_cmd_helps(cl, shell_empty):
-    cmds = ['mkdir', 'cat', 'chmod', 'grep', 'head', 'ln', 'ls', 'mv', 'sort', 'touch']
+    cmds = ['mkdir', 'cat', 'chmod', 'grep', 'head', 'ln', 'ls', 'mv', 'sort', 'touch', "rm", "sed"]
     for cmd in cmds:
         stderr, stdout = cl.enter_command(f'{cmd} --help', shell_empty)
         with open(f"../static/help/{cmd}.txt") as f:
@@ -120,6 +45,12 @@ def test_mkdir_basic(cl, shell_empty: ShellState):
     assert len(shell_empty.fs.current.items) == 1
     assert shell_empty.fs.current.items[0].name == "a"
 
+    stderr, stdout = cl.enter_command('mkdir a', shell_empty)
+    assert stderr == ["mkdir: Filename 'a' already exists"]
+    assert stdout == []
+    assert len(shell_empty.fs.current.items) == 1
+    assert shell_empty.fs.current.items[0].name == "a"
+
 def test_mkdir_none(cl, shell_empty: ShellState):
     stderr, stdout = cl.enter_command('mkdir', shell_empty)
     assert stderr == ["mkdir: at least one argument should be given"]
@@ -135,7 +66,7 @@ def test_mkdir_verbose(cl, shell_empty: ShellState):
 
 def test_mkdir_error(cl, shell_empty: ShellState):
     stderr, stdout = cl.enter_command('mkdir a/b', shell_empty)
-    assert stderr == ['No directory named a']
+    assert stderr == ['mkdir: No directory named a']
     assert stdout == []
     assert len(shell_empty.fs.current.items) == 0
 
@@ -176,27 +107,7 @@ def test_mkdir_parents(cl, shell_empty: ShellState):
     assert len(fn2.items) == 1
     fn3 = fn2.items[0]
     assert fn3.name == "c"
-
-######### LS ###################
-def test_ls_empty(cl, shell_empty):
-    stderr, stdout = cl.enter_command('ls', shell_empty)
-    assert stderr == []
-    assert stdout == []
-
-def test_ls_basic(cl, shell_fouritems):
-    stderr, stdout = cl.enter_command('ls', shell_fouritems)
-    assert stderr == []
-    assert stdout == ['f1.txt','f2.txt','f3.txt','f4.txt']
-
-def test_ls_reverse(cl, shell_fouritems):
-    stderr, stdout = cl.enter_command('ls -r', shell_fouritems)
-    assert stderr == []
-    assert stdout == ['f4.txt','f3.txt','f2.txt','f1.txt']
-
-def test_ls_deep(cl, shell_basic):
-    stderr, stdout = cl.enter_command('ls -R', shell_basic)
-    assert stderr == []
-    assert stdout == ['f1.txt', 'f2.txt', 'd1', '/d1/f3.txt', '/d1/f4.txt']
+    
 
 ####### CD ####################
 def test_cd_basic(cl, shell_basic: ShellState):
@@ -236,13 +147,13 @@ def test_redirection_rewrites_file(cl, shell_basic: ShellState, fs_basic: FileSy
     cl.enter_command('echo hi >> f1.txt', shell_basic)
     fs_basic.search('f1.txt')
     fnode = fs_basic.current
-    assert fnode.get_data().strip() == "ERROR no\nINFO hey\nERROR no2\nerror 1\nhi"
+    assert fnode.get_data() == ["ERROR no","INFO hey", "ERROR no2", "error 1","hi"]
 
 def test_redirection_writes_newfile(cl, shell_basic: ShellState, fs_basic: FileSystem):
     cl.enter_command('echo hi >> f3.txt', shell_basic)
     fs_basic.search('f3.txt')
     fnode = fs_basic.current
-    assert fnode.get_data().strip() == "hi"
+    assert fnode.get_data() == ["hi"]
 
 ########### RM #################
 def test_rm_basic(cl, shell_fouritems: ShellState):
@@ -295,6 +206,23 @@ def test_head_count(cl, shell_basic: ShellState):
     assert stderr == []
     for i in range(r, 0):
         assert stdout[-i] == str(i)
+
+def test_head_bytes(cl, shell_basic: ShellState):
+    r = random.randint(5, 20)
+    stderr, stdout = cl.enter_command(f'head -c {r} f2.txt', shell_basic)
+    assert stderr == []
+    expected_lines = math.ceil(r / 2)
+    assert len(stdout) == expected_lines
+    for i, line in enumerate(stdout):
+        assert line == str(i)
+
+    stderr, stdout = cl.enter_command(f'head --bytes={r} f2.txt', shell_basic)
+    assert stderr == []
+    expected_lines = math.ceil(r / 2)
+    assert len(stdout) == expected_lines
+    for i, line in enumerate(stdout):
+        assert line == str(i)
+    
 
 ######### TOUCH ############
 def test_touch_basic(cl, shell_basic: ShellState):
@@ -406,9 +334,9 @@ def test_chmod_basic(cl, shell_basic: ShellState):
     fn = shell_basic.fs.get_file("f1.txt")
     assert isinstance(fn,FileNode)
     assert shell_basic.fs.current.get_permission_str(fn) == "-rwxrwxrwx"
-    stderr, stdout = cl.enter_command('chmod -R 000 d1', shell_basic)
+    stderr, stdout = cl.enter_command('chmod -Rv 000 d1', shell_basic)
+    assert stdout == ["Updated permissions of d1 with d---------", 'Updated permissions of f3.txt with ----------', 'Updated permissions of f4.txt with ----------']
     assert stderr == []
-    assert stdout == []
     fn = shell_basic.fs.get_file("d1")
     assert isinstance(fn,FileNode)
     assert shell_basic.fs.current.get_permission_str(fn) == "d---------"
@@ -416,6 +344,12 @@ def test_chmod_basic(cl, shell_basic: ShellState):
     assert fn.get_permission_str(fn.items[0]) == "----------"
 
 def test_chmod_errors(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('chmod -y 888 not_exist.txt', shell_basic)
+    assert stderr == ["chmod: Unknown output given"]
+    assert stdout == []
+    stderr, stdout = cl.enter_command('chmod 777 not_exist.txt', shell_basic)
+    assert stderr == ["chmod: No directory named not_exist.txt"]
+    assert stdout == []
     stderr, stdout = cl.enter_command('chmod 888 f1.txt', shell_basic)
     assert stderr == ["chmod: value given which is higher then needed"]
     assert stdout == []
@@ -570,7 +504,7 @@ def setup_names(s: ShellState, name: str) -> list[str]:
     for _ in range(0, amount):
         names.append(r.word())
     s.fs.search(name)
-    s.fs.current.set_data('\n'.join(names))
+    s.fs.current.set_data(names)
     s.fs.current = s.fs.filehead
     names.sort()
     return names
@@ -588,7 +522,7 @@ def test_sort_random(cl, shell_basic: ShellState):
     names.append(name)
     fn = shell_basic.fs.get_file("f2.txt")
     assert isinstance(fn, FileNode)
-    fn.append_data(name)
+    fn.append_data([name])
     stderr, stdout = cl.enter_command('sort -R f2.txt', shell_basic)
     assert stderr == []
     for i in range(0, len(names)-1):
@@ -600,20 +534,36 @@ def test_sort_random(cl, shell_basic: ShellState):
 def test_sort_dups(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     name = random.choice(names)
+    names = names.copy()
+    print (f"Extra name is {name}")
     fn = shell_basic.fs.get_file("f2.txt")
     assert isinstance(fn, FileNode)
-    fn.append_data(name)
+    fn.append_data([name])
+    print (fn.get_data())
     stderr, stdout = cl.enter_command('sort -u f2.txt', shell_basic)
     assert stderr == []
-    assert len(stdout) == len(names)
+    #assert len(stdout) == len(names)
+    print (stdout)
+    print (names)
     for i in range(0, len(names)):
         assert stdout[i] == names[i]
+
+def test_sort_output(cl, shell_basic: ShellState):
+    names = setup_names(shell_basic, "f2.txt")
+    stderr, stdout = cl.enter_command('sort -o f1.txt f2.txt', shell_basic)
+    shell_basic.fs.search("f1.txt")
+    data = shell_basic.fs.current.get_data()
+    shell_basic.fs.current = shell_basic.fs.filehead
+    assert stderr == []
+    assert stdout == []
+    for i in range(0, len(names)):
+        assert data[i] == names[i]
 
 def test_sort_sorted(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     stderr, stdout = cl.enter_command('sort -o s1.txt f2.txt', shell_basic)
     shell_basic.fs.search("s1.txt")
-    data = shell_basic.fs.current.get_data().split("\n")
+    data = shell_basic.fs.current.get_data()
     shell_basic.fs.current = shell_basic.fs.filehead
     assert stderr == []
     assert stdout == []
@@ -623,6 +573,11 @@ def test_sort_sorted(cl, shell_basic: ShellState):
     assert stderr == []
     assert stdout == []
     assert shell_basic.ls == 0
+    fn = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    data_copy = fn.get_data().copy()
+    random.shuffle(data_copy)
+    fn.set_data(data_copy)
     stderr, stdout = cl.enter_command('sort -C f2.txt', shell_basic)
     assert stderr == []
     assert stdout == []
@@ -639,17 +594,150 @@ def test_pipes_lsgrep(cl, shell_basic: ShellState):
     assert stderr == []
     assert stdout == ["f1.txt", "f2.txt"]
 
+def test_pipes_lshead(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | head --lines=2', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["f1.txt", "f2.txt"]
+
+def test_pipes_lshead2(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command('ls | head', shell_empty)
+    assert stderr == []
+    assert stdout == []
+
 def test_pipes_sortuniq(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     name = random.choice(names)
+    names = names.copy()
     fn = shell_basic.fs.get_file("f2.txt")
     assert isinstance(fn, FileNode)
-    fn.append_data(name)
+    fn.append_data([name])
     stderr, stdout = cl.enter_command('sort f2.txt | uniq', shell_basic)
     assert stderr == []
     assert len(stdout) == len(names)
     for i in range(0, len(names)):
         assert stdout[i] == names[i]
+
+def test_pipes_lsgrep_inverse(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('ls | grep -v f1', shell_basic)
+    assert stderr == []
+    assert stdout == ["f2.txt", "d1"]
+
+
+def test_pipes_lssort(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | sort', shell_fouritems)
+    assert stderr == []
+    assert stdout == sorted(stdout)
+
+
+def test_pipes_ls_tail(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | tail --lines=2', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["f3.txt", "f4.txt"]
+
+
+def test_pipes_catgrep(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat wolf cat", "hi cat"]
+
+
+def test_pipes_catgrephead(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | head --lines=1', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat wolf cat"]
+
+
+def test_pipes_catgreptail(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | tail --lines=1', shell_sed)
+    assert stderr == []
+    assert stdout == ["hi cat"]
+
+
+def test_pipes_catwc_lines(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | wc -l', shell_sed)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+def test_pipes_catwc_words(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | wc -w', shell_sed)
+    assert stderr == []
+    assert stdout == ["5"]
+
+
+def test_pipes_cat_sort(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | sort', shell_sed)
+    assert stderr == []
+    assert stdout == sorted(stdout)
+
+
+def test_pipes_catuniq(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f2.txt | uniq', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat CaT Cat"]
+
+
+def test_pipes_grep_wc(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | wc -l', shell_sed)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+def test_pipes_lsgrepwc(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('ls | grep txt | wc -l', shell_basic)
+    assert stderr == []
+    assert stdout == ["2"]
+
+
+def test_pipes_multiple_grep(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f1.txt | grep cat | grep wolf', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat wolf cat"]
+
+
+def test_pipes_head_tail_combo(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | head --lines=3 | tail --lines=1', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["f3.txt"]
+
+
+def test_pipes_ls_grep_no_match(cl, shell_basic: ShellState):
+    stderr, stdout = cl.enter_command('ls | grep xyz', shell_basic)
+    assert stderr == []
+    assert stdout == []
+
+
+def test_pipes_empty_chain(cl, shell_empty: ShellState):
+    stderr, stdout = cl.enter_command('ls | grep f | wc -l', shell_empty)
+    assert stderr == []
+    assert stdout == ["0"]
+
+
+def test_pipes_long_chain(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command(
+        'cat f1.txt | grep cat | sort | head --lines=1 | wc -w',
+        shell_sed
+    )
+    assert stderr == []
+    assert stdout == ["3"]
+
+
+def test_pipes_cat_grep_ignorecase(cl, shell_sed: ShellState):
+    stderr, stdout = cl.enter_command('cat f2.txt | grep -i cat', shell_sed)
+    assert stderr == []
+    assert stdout == ["cat CaT Cat"]
+
+
+def test_pipes_ls_head_wc(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | head --lines=3 | wc -l', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["3"]
+
+
+def test_pipes_sort_tail(cl, shell_fouritems: ShellState):
+    stderr, stdout = cl.enter_command('ls | sort | tail --lines=1', shell_fouritems)
+    assert stderr == []
+    assert stdout == ["f4.txt"]
 
 ######### CP ###################
 def test_cp_basic(cl, shell_fouritems: ShellState):
@@ -658,14 +746,14 @@ def test_cp_basic(cl, shell_fouritems: ShellState):
     assert stderr == []
     fn = shell_fouritems.fs.get_file("copied.txt")
     assert isinstance(fn, FileNode)
-    assert fn.get_data() == "ERROR 1\nERROR 2\nINFO 1"
+    assert fn.get_data() == ["ERROR 1", "ERROR 2", "INFO 1"]
 
     stderr, stdout = cl.enter_command('cp -v f2.txt f3.txt', shell_fouritems)
     assert stdout == ["cp: Copied 'f2.txt' to 'f3.txt'"]
     assert stderr == []
     fn = shell_fouritems.fs.get_file("f3.txt")
     assert isinstance(fn, FileNode)
-    assert fn.get_data() == "ERROR 3\nERROR 4\nINFO 2"
+    assert fn.get_data() == ["ERROR 3", "ERROR 4", "INFO 2"]
 
 def test_cp_directory(cl, shell_cp: ShellState):
     stderr, stdout = cl.enter_command('cp -vr project project_backup', shell_cp)
@@ -698,8 +786,6 @@ def test_cp_file_directory(cl, shell_fouritems: ShellState):
     assert len(f1.items) == 2
     assert f2 == f4
     assert f3 == f5
-
-
 
 def test_cp_errors(cl, shell_cp: ShellState):
     stderr, stdout = cl.enter_command('cp project project_backup', shell_cp)

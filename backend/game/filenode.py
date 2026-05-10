@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import Literal, Tuple
+from typing import Literal, Tuple, List
 import datetime
 from game.inode import Inode, NodeType
+from game.Parser import Node, NotNode, OrNode, AndNode, FilterNode, ExecNode
+import fnmatch
 
 class FileNode:
     def __init__(self, parent: FileNode | None, name: str, inode: Inode):
@@ -55,23 +57,22 @@ class FileNode:
                 permission += key if value else "-"
         return permission
     
-    def update_permissions(self, updated: dict, recurse: bool, verbose: list[str]) -> list[str]:
+    def update_permissions(self, updated: dict, recurse: bool) -> list[str]:
         self.ctime = datetime.datetime.now()
         self.inode.permissions = updated
-
-        verbose.append(f"Updated permissions of ${self.name} with ${self.get_permission_str(self)}")
-        if (recurse):
+        result = [f"Updated permissions of {self.name} with {self.get_permission_str(self)}"]
+        if recurse:
             for item in self.items:
-                verbose.extend(item.update_permissions(updated, recurse, verbose))
-        return verbose
+                result.extend(item.update_permissions(updated, recurse))
+        return result
 
-    def get_data(self) -> str:
+    def get_data(self) -> list[str]:
         return self.inode.get_data()
     
-    def set_data(self, data: str) -> None:
+    def set_data(self, data: list[str]) -> None:
         self.inode.set_data(data)
     
-    def append_data(self, data: str) -> None:
+    def append_data(self, data: list[str]) -> None:
         self.inode.append_data(data)
 
     def accumualate_depth(self) -> None:
@@ -79,27 +80,18 @@ class FileNode:
         if (self.parent != None):
             self.parent.accumualate_depth()
     
-    def preorder_traversal(self, content: list[Tuple[int, str]], move: int) -> list[Tuple[int, str]]:
-        if (self.items):
-            mid = len(self.items) // 2
-            for idx, item in enumerate(self.items):
-                if (idx == mid):
-                    content.append((move, self.name + "-|"))
-                content = (item.preorder_traversal(content, move + 1))
-        else:
-            content.append((move, "--"))
-            move += 1
-            content.append((move, self.name))
-        return content
-
-    def add_child(self, name: str, inode: Inode) -> FileNode:
+    def add_child(self, name: str, inode: Inode) -> str:
+        """ Adds a child to the filenode """
+        for file in self.items:
+            if file.name == name:
+                return f"Filename '{name}' already exists"
         file = FileNode(self, name, inode)
         if (not len(self.items)):
             self.depth = 1
             if (self.parent is not None):
                 self.parent.accumualate_depth()
         self.items.append(file)
-        return file
+        return ""
     
     def search(self, name: str) -> NodeType | None:
         for item in self.items:
@@ -120,14 +112,105 @@ class FileNode:
                     return "dir"
                 return self.items.pop(idx)
         return ""
+    
+    def _evalNode(self, node: Node, actions: list[str]) -> Tuple[bool, list[str]]:
+        print (node)
+        if (isinstance(node, OrNode)):
+            return self._evalOrFindNode(node, actions)
+        elif (isinstance(node, AndNode)):
+            return self._evalAndNode(node, actions)
+        elif (isinstance(node, NotNode)):
+            val, actions = self._evalNode(node.node, actions)
+            return (not val, actions)
+        elif (isinstance(node, FilterNode)):
+            return (self._evalFilterNode(node), actions)
+        elif (isinstance(node, ExecNode)):
+            if (node.mode == "+"):
+                pass
+            else: #mode == ;
+                for i, part in enumerate(node.command):
+                    if ("{}" in part):
+                        node.command[i] = part.replace("{}", self.current_path)
+                actions.append(" ".join(node.command))
+        return (False, actions)
+    
+    def _evalOrFindNode(self, node: OrNode, actions: list[str]) -> Tuple[bool, list[str]]:
+        val, actions = self._evalNode(node.left, actions)
+        if (not val):
+            return self._evalNode(node.right, actions)
+        return (True, actions)
+
+    def _evalAndNode(self, node: AndNode, actions: list[str]) -> Tuple[bool, list[str]]:
+        val, actions = self._evalNode(node.left, actions)
+        if (val):
+            return self._evalNode(node.right, actions)
+        return (False, actions)
+    
+    def _evalFindType(self, val: str):
+        match (val):
+            case ("f"):
+                return self.get_type() == NodeType.FILE
+            case ("d"):
+                return self.get_type() == NodeType.DIRECTORY
+            case ("s"):
+                return self.get_type() == NodeType.SYMLINK
+            case _:
+                raise SyntaxError(f"Value for -type not allowed: ${val}") 
+
+    def _evalFilterNode(self, node: FilterNode) -> bool:
+        match (node.type):
+            case ("-type"):
+                return self._evalFindType(node.value)
+            case ("-name"):
+                return fnmatch.fnmatch(self.name, node.value)
+            case ("-true"):
+                return True
+            case (""): # the empty find
+                return True
+            case _:
+                raise SyntaxError("-type not found")
+    
+    def _join(self, past: str) -> str:
+        if (self.parent == None):
+            return "."
+        if past == ".":
+            return f"./{self.name}"
+        return f"{past}/{self.name}"
+    
+    def find(self, filter: Node, past: str) -> Tuple[List[str], List[str]]:
+        output = []
+        self.current_path = "." if past == "." and self.name == "" else self._join(past)
+        (passed, actions) = self._evalNode(filter, [])
+        print (passed)
+        if passed:
+            output.append(self.current_path)
+
+        for item in self.items:
+            toprint, execs = item.find(filter, self.current_path)
+            output.extend(toprint)
+            actions.extend(execs)
+        return (output, actions)
                 
     def len(self) -> int:
         return len(self.items)
 
     def list_content(self, prev: str, deep: int = 0, detail: int = 0, extras: dict[str, bool | str] = {}) -> list:
         content: list[list] = []
-        for item in self.items:
-            itemname = prev + "/" + item.name if prev else item.name
+        items = self.items
+        if "showhiddenall" in extras:
+            items.append(self) 
+            if self.parent is not None:
+                items.append(self.parent)
+
+        for item in items:
+            if ((item.name[0] == ".") and ("showhiddenall" not in extras or "showhidden" not in extras)):
+                continue
+            if (item == self):
+                itemname = "."
+            elif (item == self.parent):
+                itemname = ".."
+            else:
+                itemname = prev + "/" + item.name if prev else item.name
             tmp = []
 
             if "inode" in extras:
@@ -140,7 +223,7 @@ class FileNode:
 
             content.append(tmp)
 
-            if item.get_type() == NodeType.DIRECTORY and deep:
+            if item.get_type() == NodeType.DIRECTORY and deep and itemname not in [".", ".."]:
                 deep -= 1
                 content.extend(item.list_content(prev + "/" + item.name, deep))
         
@@ -165,22 +248,22 @@ class FileNode:
                         return ""
                     return item.inode.size
 
-                content = sorted(content, key=size_sort, reverse=rev)
+                content = sorted(content, key=size_sort, reverse=not rev)
             else:
                 def time_sort(val):
-                    itemname = val[-1]
+                    itemname = val[-1].split("/")[-1]
                     item = self.access(itemname)
                     if item == None:
-                        return ""
+                        return 0
                     if method == "mod":
                         return item.inode.mtime
                     elif method == "atime":
                         return item.inode.atime
                     elif method == "ctime":
                         return item.inode.ctime
-                    return ""
+                    return 0
 
-                content = sorted(content, key=time_sort, reverse=rev)
+                content = sorted(content, key=time_sort, reverse=not rev)
         else:
             if ("reverse" in extras):
                 content = content[::-1]
