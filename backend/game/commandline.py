@@ -264,6 +264,7 @@ class CommandLine:
         files = []
         expressions = []
         backup = ""
+        suppress_print = False
         while (len(args) and args[0][0] == "-"):
             arg = args.pop(0)
             if (arg.startswith("--file=")):
@@ -281,6 +282,8 @@ class CommandLine:
                             expressions.append(args.pop(0))
                         case ("i"):
                             backup = "-i"
+                        case ("n"):
+                            suppress_print = True
                         case _:
                             return (1, ([f"sed: unknown option given - {option}"], []))
 
@@ -310,6 +313,7 @@ class CommandLine:
 
             # Apply commands to line
             new = old
+            printed = []
             for expression in expressions:
                 # Setup 
                 l = len(expression)
@@ -321,11 +325,12 @@ class CommandLine:
                 sprint = False
                 occur = 1
                 csensentive = True
+                print_after_sub = False
                 write = True
 
                 # Parse Expression
                 index = 0
-                while index < l and expression[index] not in ["s", "d"]:
+                while index < l and expression[index] not in ["s", "d", "p"]:
                     before_s += expression[index]
                     index += 1
 
@@ -381,6 +386,8 @@ class CommandLine:
                                 csensentive = False
                             case "w":
                                 write = True
+                            case "p":
+                                print_after_sub = True
                             case _:
                                 return (1, ([f"sed: unknown expression flag - {expression[index]}"],[]))
                         index += 1
@@ -395,13 +402,19 @@ class CommandLine:
                                 break # give up we out of range
                         flags = 0 if csensentive else re.IGNORECASE
                         count = 0 if glob else 1
-                        new[i] = re.sub(
+                        new_line, subs = re.subn(
                             pattern,
                             replacement,
                             line,
                             count=count,
                             flags=flags
                         )
+
+                        new[i] = new_line
+
+                        if print_after_sub and subs > 0:
+                            printed.append(new_line)
+
                 elif (expression[index] == "d"):
                     tmp = []
                     for i, line in enumerate(new):
@@ -421,10 +434,36 @@ class CommandLine:
                         if not delete_line:
                             tmp.append(line)
                     new = tmp
+                elif (expression[index] == "p"):
+                    for i, line in enumerate(new):
+                        should_print = False
+
+                        if single is not None:
+                            if single == -1:
+                                should_print = (i == len(new) - 1)
+                            elif rev_single:
+                                should_print = (i != single)
+                            else:
+                                should_print = (i == single)
+
+                        elif between != []:
+                            should_print = between[0] <= i <= between[1]
+
+                        elif regex_addr is not None:
+                            if re.search(regex_addr, line):
+                                should_print = True
+
+                        else:
+                            should_print = True
+
+                        if should_print:
+                            printed.append(line)
                 else:
                     raise SyntaxError("Unknown Expression Given")
             if (backup):
                 self.filesystem.current.set_data(new)
+            elif (suppress_print):
+                output[1].extend(printed)
             else:
                 output[1].extend(new)
             self.filesystem.current = cur
