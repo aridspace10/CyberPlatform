@@ -114,12 +114,14 @@ class FileNode:
         return ""
     
     def _evalNode(self, node: Node, actions: list[str]) -> Tuple[bool, list[str]]:
+        print (node)
         if (isinstance(node, OrNode)):
             return self._evalOrFindNode(node, actions)
         elif (isinstance(node, AndNode)):
             return self._evalAndNode(node, actions)
         elif (isinstance(node, NotNode)):
-            return (not self._evalNode(node.node, actions), actions)
+            val, actions = self._evalNode(node.node, actions)
+            return (not val, actions)
         elif (isinstance(node, FilterNode)):
             return (self._evalFilterNode(node), actions)
         elif (isinstance(node, ExecNode)):
@@ -179,6 +181,7 @@ class FileNode:
         output = []
         self.current_path = "." if past == "." and self.name == "" else self._join(past)
         (passed, actions) = self._evalNode(filter, [])
+        print (passed)
         if passed:
             output.append(self.current_path)
 

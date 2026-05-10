@@ -9,6 +9,7 @@ from .helpers import determine_perms_fromstr
 from game.Parser import CommandParser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse, FindParser, AndNode, OrNode, NotNode, FilterNode
 from game.ShellState import ShellState
 import copy
+import re
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
@@ -331,27 +332,29 @@ class CommandLine:
                 single = None
                 rev_single = False
                 between = []
-                if (len(before_s)):
-                    sp = before_s.split(",")
-                    if (len(sp) == 2):
-                        try:
-                            between = [int(sp[0]) - 1, int(sp[1]) - 1]
-                        except:
-                            return (1, ([f"sed: expected int, got {before_s}"], []))
+                regex_addr = None
+                if len(before_s):
+                    if before_s.startswith("/") and before_s.endswith("/"):
+                        regex_addr = before_s[1:-1]
                     else:
-                        single = None
-                        rev_single = False
-                        try:
-                            if (before_s[-1] == "!"):
-                                single = int(before_s[:-1])
-                                rev_single = True
-                            elif (before_s == "$"):
-                                single = -1
-                            else:
-                                single = int(before_s)
-                        except:
-                            return (1, ([f"sed: expected int, got {before_s}"], []))
-                        single = single - 1 if single != -1 else single
+                        sp = before_s.split(",")
+                        if len(sp) == 2:
+                            try:
+                                between = [int(sp[0]) - 1, int(sp[1]) - 1]
+                            except:
+                                return (1, ([f"sed: expected int, got {before_s}"], []))
+                        else:
+                            try:
+                                if before_s[-1] == "!":
+                                    single = int(before_s[:-1])
+                                    rev_single = True
+                                elif before_s == "$":
+                                    single = -1
+                                else:
+                                    single = int(before_s)
+                            except:
+                                return (1, ([f"sed: expected int, got {before_s}"], []))
+                            single = single - 1 if single != -1 else single
                 # Substituion
                 if (expression[index] == "s"):
                     index += 1
@@ -381,7 +384,6 @@ class CommandLine:
                             case _:
                                 return (1, ([f"sed: unknown expression flag - {expression[index]}"],[]))
                         index += 1
-                    # Check each line
                     for i, line in enumerate(new):
                         if (single is not None):
                             if (not rev_single and single != i) or (rev_single and single == i):
@@ -391,23 +393,33 @@ class CommandLine:
                                 continue # go to next line
                             if between[1] < i:
                                 break # give up we out of range
-                        new[i] = line.replace(pattern, replacement, -1 if glob else 1)
+                        flags = 0 if csensentive else re.IGNORECASE
+                        count = 0 if glob else 1
+                        new[i] = re.sub(
+                            pattern,
+                            replacement,
+                            line,
+                            count=count,
+                            flags=flags
+                        )
                 elif (expression[index] == "d"):
-                    if (single == -1):
-                        print ("hehe")
-                        new.pop()
-                        continue
                     tmp = []
                     for i, line in enumerate(new):
-                        if (single is not None):
-                            if (rev_single and single == i) or (not rev_single and single != i):
-                                # no Delete time
-                                tmp.append(line)
-                        else:
-                            print (between)
-                            if (between[0] > i or between[1] < i):
-                                # no Delete time
-                                tmp.append(line)
+                        delete_line = False
+                        if regex_addr is not None:
+                            if re.search(regex_addr, line):
+                                delete_line = True
+                        elif single is not None:
+                            if single == -1:
+                                delete_line = (i == len(new) - 1)
+                            elif rev_single:
+                                delete_line = (i != single)
+                            else:
+                                delete_line = (i == single)
+                        elif between != []:
+                            delete_line = between[0] <= i <= between[1]
+                        if not delete_line:
+                            tmp.append(line)
                     new = tmp
                 else:
                     raise SyntaxError("Unknown Expression Given")

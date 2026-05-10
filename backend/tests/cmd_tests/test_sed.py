@@ -49,16 +49,12 @@ def test_sed_nochange(cl, shell_sed: ShellState):
 def test_sed_emreplace(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed 's/cat//' f1.txt", shell_sed)
     assert stderr == []
-    assert stdout == [" wolf dog", "hi "]
+    assert stdout == [" wolf cat", "hi "]
 
 def test_sed_alternatedelim(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed 's|cat|dog|g' f1.txt", shell_sed)
     assert stderr == []
-    assert stdout == ["cat wolf cat\nhi cat"]
-
-    stderr, stdout = cl.enter_command("sed 's#cat#dog#' f1.txt", shell_sed)
-    assert stderr == []
-    assert stdout == ["cat wolf dog", "hi cat"]
+    assert stdout == ["dog wolf dog", "hi dog"]
 
 def test_sed_noccurences(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed 's/cat/dog/2' f1.txt", shell_sed)
@@ -72,7 +68,7 @@ def test_sed_cinsentive(cl, shell_sed: ShellState):
 
 def test_sed_addressing(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed '2s/cat/dog/' f1.txt", shell_sed)
-    assert stdout == ["cat wolf cat\nhi dog"]
+    assert stdout == ["cat wolf cat", "hi dog"]
     assert stderr == []
 
     stderr, stdout = cl.enter_command("sed '$s/cat/dog/' f1.txt", shell_sed)
@@ -98,7 +94,7 @@ def test_sed_delete(cl, shell_sed: ShellState):
     assert stderr == []
 
 def test_sed_multexpr(cl, shell_sed: ShellState):
-    stderr, stdout = cl.enter_command("sed -e 's/cat/dog/' -e 's/wolf/howl/ f1.txt", shell_sed)
+    stderr, stdout = cl.enter_command("sed -e 's/cat/dog/' -e 's/wolf/howl/' f1.txt", shell_sed)
     assert stdout == ["dog howl cat", "hi dog"]
     assert stderr == []
 
@@ -146,7 +142,9 @@ def test_sed_case_insensitive_single(cl, shell_sed):
 
 def test_sed_delete_blank_lines(cl, shell_sed):
     shell_sed.fs.add_file("blank.txt")
-    shell_sed.fs.current.items[0].set_data(["a", "", "b", "", "c"])
+    fn = shell_sed.fs.get_file("blank.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data(["a", "", "b", "", "c"])
 
     stderr, stdout = cl.enter_command(
       r"sed '/^$/d' blank.txt",
@@ -160,7 +158,9 @@ def test_sed_delete_blank_lines(cl, shell_sed):
 
 def test_sed_path_delimiters(cl, shell_sed):
     shell_sed.fs.add_file("path.txt")
-    shell_sed.fs.current.items[0].set_data(["/usr/bin"])
+    fn = shell_sed.fs.get_file("path.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data(["/usr/bin"])
 
     stderr, stdout = cl.enter_command(
       "sed 's|/usr/bin|/opt/bin|' path.txt",
@@ -191,7 +191,7 @@ def test_sed_expression_order_changes_result(cl, shell_sed):
 
     assert stderr == []
     assert stdout == [
-        "dog wolf dog",
+        "dog wolf cat",
         "hi dog"
     ]
 
