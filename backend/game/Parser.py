@@ -3,6 +3,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+
+############ COMMAND LINE CLASSES ############
 @dataclass
 class Token:
     type: str
@@ -60,6 +62,39 @@ class Subshell:
 
 Atom = SimpleCommand | Subshell | VarDeclaration
 
+############ FIND CLASSES ############
+class Node:
+    def eval(self, f) -> bool:
+        raise NotImplementedError
+
+@dataclass
+class OrNode(Node):
+    left: Node
+    right: Node
+
+@dataclass
+class AndNode(Node):
+    left: Node
+    right: Node
+
+@dataclass
+class NotNode(Node):
+    node: Node
+
+@dataclass
+class FilterNode(Node):
+    type: str
+    value: str
+
+@dataclass
+class ExecNode(Node):
+    command: list[str]
+    mode: Literal[";", "+"]
+
+@dataclass
+class DeleteNode(Node):
+    pass
+
 OPERATORS = {
     "&&": "AND",
     "||": "OR",
@@ -79,15 +114,17 @@ def lex(text: str) -> list[Token]:
     tokens = []
     i = 0
     n = len(text)
-
     while i < n:
         c = text[i]
-
         # skip whitespace
         if c.isspace():
             i += 1
             continue
-
+        # handle escape globally
+        if c == "\\" and i + 1 < n:
+            tokens.append(Token("WORD", text[i+1]))
+            i += 2
+            continue
         # check 2-char operators
         if i + 1 < n:
             two = text[i:i+2]
@@ -95,20 +132,17 @@ def lex(text: str) -> list[Token]:
                 tokens.append(Token(OPERATORS[two], two))
                 i += 2
                 continue
-
         # check 1-char operators
         if c in OPERATORS:
             tokens.append(Token(OPERATORS[c], c))
             i += 1
             continue
-
         # quoted strings
         if c == '"' or c == "'":
             quote = c
             i += 1
             start = i
             buf = ""
-
             while i < n:
                 if text[i] == quote:
                     break
@@ -118,27 +152,29 @@ def lex(text: str) -> list[Token]:
                 else:
                     buf += text[i]
                 i += 1
-
             if i >= n:
                 raise SyntaxError("Unterminated quote")
-
             tokens.append(Token("WORD", buf))
             i += 1
             continue
-
         # normal word
-        start = i
-        while (
-            i < n
-            and not text[i].isspace()
-            and text[i] not in "|&;()<>$\"'"
-        ):
+        buf = ""
+        while i < n:
+            c = text[i]
+            # stop if unescaped operator or whitespace
+            if c.isspace() or c in "|&;()<>$\"'":
+                break
+            # handle escape
+            if c == "\\" and i + 1 < n:
+                i += 1
+                buf += text[i]
+            else:
+                buf += c
             i += 1
-
-        tokens.append(Token("WORD", text[start:i]))
+        tokens.append(Token("WORD", buf))
     return tokens
 
-class Parser:
+class CommandParser:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
@@ -281,9 +317,82 @@ class Parser:
         self.consume("RPAREN")
         return Subshell(node)
 
-text = "echo $x"
-tokens = lex(text)
-parser = Parser(tokens)
-ast = parser.parse()
-print (tokens)
-print(ast)
+class FindParser():
+    def __init__(self, tokens) -> None:
+        self.tokens = tokens
+        self.pos = 0
+
+    def peek(self) -> str | None:
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else None
+
+    def consume(self, expected_type=None) -> str | None:
+        tok = self.peek()
+        self.pos += 1
+        return tok
+
+    # entry point
+    def parse(self):
+        return self.parse_or()
+    
+    def parse_or(self):
+        node = self.parse_and()
+
+        while self.peek() and self.peek() == "-o":
+            self.consume()
+            right = self.parse_and()
+            node = OrNode(node, right)
+
+        return node
+    
+    def parse_and(self):
+        node = self.parse_factor()
+
+        while True:
+            tok = self.peek()
+            if not tok or tok in [")", "-o"]:
+                break
+
+            right = self.parse_factor()
+            node = AndNode(node, right)
+
+        return node
+    
+    def parse_factor(self) -> Node:
+        tok = self.peek()
+        if tok == None: 
+            raise SyntaxError()
+
+        if tok == "!":
+            self.consume()
+            return NotNode(self.parse_factor())
+
+        if tok == "(":
+            self.consume()
+            node = self.parse_or()
+            if self.consume() != ")":
+                raise SyntaxError("Missing )")
+            return node
+
+        filt = self.consume()
+        if (filt == None):
+            return FilterNode("", "")
+        if (filt in ["-true", "-false", "-empty", "-delete"]): # Singular 
+            return FilterNode(filt, "")
+        if (filt == "-exec"):
+            cmd = []
+            while (tok := self.peek()) is not None and tok not in (";", "+"):
+                cmd.append(self.consume())
+            mode = self.consume()
+            if (mode == None or mode != ";" or mode != "+"):
+                raise SyntaxError("Expected ; or +")
+            return ExecNode(cmd, mode)
+        val = self.consume()
+        if (val == None):
+            raise SyntaxError(f"No value for given for: {filt}")
+        return FilterNode(filt, val)
+
+if __name__ == "__main__":
+    text = ["(", "-name", "*.txt", "-o", "-true", ")", "-exec", "cat", "{}", ";"]
+    parser = FindParser(text)
+    ast = parser.parse()
+    print(ast)

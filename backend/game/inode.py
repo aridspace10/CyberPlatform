@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Literal, Tuple
 from datetime import datetime
+import sys
 
 from enum import Enum
 
@@ -18,7 +19,8 @@ class Inode:
 
         self.type: NodeType = type
         self.link_count = 1
-        self.data: str = ""
+        self.data: list[str] = []
+        self.has_trailing_newline: bool = False
 
         self.permissions = {
             "user": {"r": True, "w": True, "x": True},
@@ -53,26 +55,20 @@ class Inode:
         self.ctime = datetime.fromisoformat(i["ctimes"])
         self.atime = datetime.fromisoformat(i["atimes"])
         self.mtime = datetime.fromisoformat(i["mtimes"])
-
+    
     @property
     def size(self):
-        if isinstance(self.data, bytes):
-            return len(self.data)
-        return len(self.data.encode("utf-8"))
+        return sum(len(line) for line in self.data)
     
-    def get_data(self) -> str:
+    def get_data(self) -> list[str]:
         self.atime = datetime.now()
         return self.data
     
-    def set_data(self, data: str) -> None:
+    def set_data(self, data: list[str]) -> None:
         self.mtime = datetime.now()
         self.data = data
+        self.has_trailing_newline = True
     
-    def append_data(self, data: str) -> None:
+    def append_data(self, data: list[str]) -> None:
         self.mtime = datetime.now()
-        if (data == ""):
-            self.data = ""
-        elif (self.data == ""):
-            self.data = data
-        else:
-            self.data += "\n" + data
+        self.data.extend(data)

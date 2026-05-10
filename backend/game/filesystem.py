@@ -26,23 +26,6 @@ class FileSystem:
         except:
             raise Exception("Syncronization failure")
 
-    def setup_system(self, textfile):
-        with open(textfile) as f:
-            for line in f:
-                self.current = self.filehead
-                if ("*" in line):
-                    line = line[0:line.index("*")]
-                    with open(f"filesystems/{line}") as f:
-                        data = f.read()
-                else:
-                    data = ""
-                if (err := self.add(line.strip())):
-                    print(err)
-                    raise Exception("Administrator Error, Code AAA123")
-                if (data):
-                    self.current.set_data(data)
-        self.current = self.filehead
-
     def get_file(self, path: str) -> FileNode | str | None:
         saved_current = self.current
         lst = path.split("/")
@@ -52,30 +35,7 @@ class FileSystem:
         tmp = self.current
         self.current = saved_current
         return tmp.access(lst[-1])
-
-    def tree(self, path: str = "."):
-        if (error := self.search(path)) != "":
-            return error
-        lx = self.current.depth * 4
-        nodes = self.current.preorder_traversal([], 0)
-        print (nodes)
-        output = [[' ' for _ in range(lx)] for _ in range(len(nodes))]
-        idx = 0
-        for node in nodes:
-            output[idx][node[0]] = node[1]
-            if (len(node[1]) > 2):
-                idx += 1
-        print (output)
-        for col in range(0, lx):
-            biggest = 0
-            for row in range(len(nodes)):
-                if (new := len(output[row][col])) > biggest:
-                    biggest = new
-            print (biggest)
-            for row in range(len(nodes)):
-                output[row][col] = output[row][col] + " " * (biggest - len(output[row][col]))
-        return output
-
+    
     def list_files(self, path: str, deep: int = 0, detail: int = 0, extras: dict[str, bool | str] = {}) -> list[list[str]] | str:
         if (path != ""):
             if (error := self.search(path)) != "":
@@ -134,6 +94,7 @@ class FileSystem:
             return self.add_directory(path)
 
     def add_directory(self, path: str, creating: bool = False, permissions: dict = {}) -> str:
+        error = ""
         saved_current = self.current
         lst = path.split("/")
         if (error := self.search("/".join(lst[0:-1]), creating)) != "":
@@ -141,9 +102,9 @@ class FileSystem:
             return error
         inode = Inode(NodeType.DIRECTORY)
         inode.permissions = permissions
-        self.current = self.current.add_child(lst[-1], inode)
+        error = self.current.add_child(lst[-1], inode)
         self.current = saved_current
-        return ""
+        return error
 
     def add_file(self, path: str, fn: FileNode | None = None):
         saved_current = self.current
@@ -153,9 +114,9 @@ class FileSystem:
             return error
         if fn is None:
             inode = Inode(NodeType.FILE)
-            self.current = self.current.add_child(lst[-1], inode)
+            self.current.add_child(lst[-1], inode)
         else:
-            self.current = self.current.add_child(fn.name, fn.inode)
+            self.current.add_child(fn.name, fn.inode)
         self.current = saved_current
         return ""
 
