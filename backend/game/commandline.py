@@ -165,7 +165,6 @@ class CommandLine:
         return last_status, (stdout, stderr)
  
     def run_command(self, args: list[str], fdin: FileNode) -> CommandReturn:
-        print (args)
         if (not (len(args))):
             return (0, ([], []))
         match args[0]:
