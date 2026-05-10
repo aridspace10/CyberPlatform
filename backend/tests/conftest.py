@@ -7,17 +7,6 @@ from game.commandline import CommandLine
 from game.filenode import FileNode, Inode, NodeType
 import time
 
-LS_FILES = ["xms.bin", "silly.c", "sigma.dat", "crap.js", 
-             "sheet.xsl", "nope.csv", "nothing.log", "cool.png",
-             "record.ods", "stuff.sql", "annoying.java", "yikes.py"
-        ]
-
-random.shuffle(LS_FILES)
-
-f = random.sample(LS_FILES, 10)
-sizes = f[0:5]
-atimes = f[5:]
-
 @pytest.fixture
 def cl():
     return CommandLine()
@@ -88,49 +77,6 @@ def fs_cp():
     fs.add_file("project/files/f2.txt")
     fs.add_directory("project/empty")
     fs.add_directory("project2")
-    return fs
-
-@pytest.fixture
-def fs_ls():
-    fs = FileSystem()
-    for file in LS_FILES:
-        time.sleep(0.1)
-        fs.add_file(file)
-    time.sleep(0.5)
-    fn = fs.get_file(sizes[0])
-    assert isinstance(fn, FileNode)
-    fn.set_data(["123456789" * 1000])
-    fn = fs.get_file(atimes[0])
-    assert isinstance(fn, FileNode)
-    fn.get_data()
-    time.sleep(0.1)
-    fn = fs.get_file(sizes[1])
-    assert isinstance(fn, FileNode)
-    fn.set_data(["123456789" * 100])
-    fn = fs.get_file(atimes[1])
-    assert isinstance(fn, FileNode)
-    fn.get_data()
-    time.sleep(0.1)
-    fn = fs.get_file(sizes[2])
-    assert isinstance(fn, FileNode)
-    fn.set_data(["123456789" * 50])
-    fn = fs.get_file(atimes[2])
-    assert isinstance(fn, FileNode)
-    fn.get_data()
-    time.sleep(0.1)
-    fn = fs.get_file(sizes[3])
-    assert isinstance(fn, FileNode)
-    fn.set_data(["123456789" * 10])
-    fn = fs.get_file(atimes[3])
-    assert isinstance(fn, FileNode)
-    fn.get_data()
-    time.sleep(0.1)
-    fn = fs.get_file(sizes[4])
-    assert isinstance(fn, FileNode)
-    fn.set_data(["123456789" * 1])
-    fn = fs.get_file(atimes[4])
-    assert isinstance(fn, FileNode)
-    fn.get_data()
     return fs
 
 # ---------------- WC TEST FIXTURES ----------------
@@ -318,13 +264,6 @@ def shell_fouritems(fs_fouritems):
 def shell_cp(fs_cp):
     s = ShellState()
     s.fs = fs_cp
-    s.cwd = "/"
-    return s
-
-@pytest.fixture
-def shell_ls(fs_ls):
-    s = ShellState()
-    s.fs = fs_ls
     s.cwd = "/"
     return s
 

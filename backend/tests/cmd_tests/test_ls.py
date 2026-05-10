@@ -6,6 +6,7 @@ from game.filenode import FileNode
 from game.commandline import CommandLine
 import random
 import os
+import time
 
 LS_FILES = ["xms.bin", "silly.c", "sigma.dat", "crap.js", 
              "sheet.xsl", "nope.csv", "nothing.log", "cool.png",
@@ -17,6 +18,56 @@ random.shuffle(LS_FILES)
 f = random.sample(LS_FILES, 10)
 sizes = f[0:5]
 atimes = f[5:]
+
+@pytest.fixture
+def fs_ls():
+    fs = FileSystem()
+    for file in LS_FILES:
+        time.sleep(0.1)
+        fs.add_file(file)
+    time.sleep(0.5)
+    fn = fs.get_file(sizes[0])
+    assert isinstance(fn, FileNode)
+    fn.set_data(["123456789" * 1000])
+    fn = fs.get_file(atimes[0])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
+    time.sleep(0.1)
+    fn = fs.get_file(sizes[1])
+    assert isinstance(fn, FileNode)
+    fn.set_data(["123456789" * 100])
+    fn = fs.get_file(atimes[1])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
+    time.sleep(0.1)
+    fn = fs.get_file(sizes[2])
+    assert isinstance(fn, FileNode)
+    fn.set_data(["123456789" * 50])
+    fn = fs.get_file(atimes[2])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
+    time.sleep(0.1)
+    fn = fs.get_file(sizes[3])
+    assert isinstance(fn, FileNode)
+    fn.set_data(["123456789" * 10])
+    fn = fs.get_file(atimes[3])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
+    time.sleep(0.1)
+    fn = fs.get_file(sizes[4])
+    assert isinstance(fn, FileNode)
+    fn.set_data(["123456789" * 1])
+    fn = fs.get_file(atimes[4])
+    assert isinstance(fn, FileNode)
+    fn.get_data()
+    return fs
+
+@pytest.fixture
+def shell_ls(fs_ls):
+    s = ShellState()
+    s.fs = fs_ls
+    s.cwd = "/"
+    return s
 
 def test_ls_empty(cl, shell_empty):
     stderr, stdout = cl.enter_command('ls', shell_empty)
@@ -51,6 +102,7 @@ def test_ls_deep(cl, shell_basic):
 def test_ls_organisation(cl, shell_ls: ShellState):
     stderr, stdout = cl.enter_command('ls -X', shell_ls)
     files = LS_FILES.copy()
+    print (files)
     assert stderr == []
     sorted_files = sorted(files, key=lambda f: os.path.splitext(f)[1])
     assert stdout == sorted_files
@@ -74,8 +126,6 @@ def test_ls_organisation(cl, shell_ls: ShellState):
         assert stdout[i] == atimes[i]
 
     stderr, stdout = cl.enter_command('ls -c', shell_ls)
-    print (stdout)
-    print (LS_FILES)
     assert stderr == []
     for i in range(0, 5):
         assert stdout[i] == LS_FILES[-(i+1)]

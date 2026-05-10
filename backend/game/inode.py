@@ -57,8 +57,8 @@ class Inode:
         self.mtime = datetime.fromisoformat(i["mtimes"])
     
     @property
-    def size(self): 
-        return (sys.getsizeof(self.data))
+    def size(self):
+        return sum(len(line) for line in self.data)
     
     def get_data(self) -> list[str]:
         self.atime = datetime.now()
