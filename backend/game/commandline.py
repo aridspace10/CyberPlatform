@@ -378,6 +378,7 @@ class CommandLine:
                     if (index == l and expression[index - 1] != delim):
                         return (1, (["sed: expected terminating delim"], []))
                     index += 1
+                    noccurences = 0
                     while index < l:
                         match (expression[index]):
                             case "g":
@@ -389,8 +390,17 @@ class CommandLine:
                             case "p":
                                 print_after_sub = True
                             case _:
-                                return (1, ([f"sed: unknown expression flag - {expression[index]}"],[]))
+                                if expression[index].isdigit():
+                                    num = ""
+                                    while index < l and expression[index].isdigit():
+                                        num += expression[index]
+                                        index += 1
+                                    noccurences = int(num)
+                                    continue
+                                else:
+                                    return (1, ([f"sed: unknown expression flag - {expression[index]}"],[]))
                         index += 1
+                    count = 1
                     for i, line in enumerate(new):
                         if (single is not None):
                             if (not rev_single and single != i) or (rev_single and single == i):
@@ -401,20 +411,56 @@ class CommandLine:
                             if between[1] < i:
                                 break # give up we out of range
                         flags = 0 if csensentive else re.IGNORECASE
-                        count = 0 if glob else 1
-                        new_line, subs = re.subn(
-                            pattern,
-                            replacement,
-                            line,
-                            count=count,
-                            flags=flags
-                        )
+                        if glob:
+                            if noccurences != 0:
+                                matches_seen = 0
+                                def repl(match):
+                                    nonlocal matches_seen
+                                    matches_seen += 1
 
+                                    if matches_seen >= noccurences:
+                                        return replacement
+                                    return match.group(0)
+                                new_line, subs = re.subn(
+                                    pattern,
+                                    repl,
+                                    line,
+                                    flags=flags
+                                )
+                            else:
+                                new_line, subs = re.subn(
+                                    pattern,
+                                    replacement,
+                                    line,
+                                    flags=flags
+                                )
+                        elif noccurences != 0:
+                            matches_seen = 0
+                            def repl(match):
+                                nonlocal matches_seen
+                                matches_seen += 1
+
+                                if matches_seen == noccurences:
+                                    return replacement
+
+                                return match.group(0)
+                            new_line, subs = re.subn(
+                                pattern,
+                                repl,
+                                line,
+                                flags=flags
+                            )
+                        else:
+                            new_line, subs = re.subn(
+                                pattern,
+                                replacement,
+                                line,
+                                count=1,
+                                flags=flags
+                            )
                         new[i] = new_line
-
                         if print_after_sub and subs > 0:
                             printed.append(new_line)
-
                 elif (expression[index] == "d"):
                     tmp = []
                     for i, line in enumerate(new):

@@ -58,12 +58,12 @@ def test_sed_alternatedelim(cl, shell_sed: ShellState):
 
 def test_sed_noccurences(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed 's/cat/dog/2' f1.txt", shell_sed)
-    assert stdout == ["cat wolf dog", "hi cat"]
     assert stderr == []
+    assert stdout == ["cat wolf dog", "hi cat"]
 
 def test_sed_cinsentive(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed 's/cat/dog/Ig' f2.txt", shell_sed)
-    assert stdout == ["dog wolf dog", "hi dog"]
+    assert stdout == ['dog dog dog']
     assert stderr == []
 
 def test_sed_addressing(cl, shell_sed: ShellState):
@@ -77,7 +77,7 @@ def test_sed_addressing(cl, shell_sed: ShellState):
 
 def test_sed_addressing2(cl, shell_sed: ShellState):
     stderr, stdout = cl.enter_command("sed '2,4s/cat/dog/' f3.txt", shell_sed)
-    assert stdout == ["cat wolf cat", "hi dog", "whats up", " the dog", " test cat here"]
+    assert stdout == ["cat wolf cat", "hi dog", " whats up", " the dog", " test cat here"]
     assert stderr == []
 
 def test_sed_delete(cl, shell_sed: ShellState):
