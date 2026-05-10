@@ -836,7 +836,6 @@ class CommandLine:
                 pattern = arg
                 files = args
                 break
-        print (pattern)
         if (not pattern):
             return (1, (["grep: pattern not given"], []))
         if (not len(files)):
@@ -877,7 +876,6 @@ class CommandLine:
             saved_current = self.filesystem.current
             if (file == "-"):
                 ty = input.inode.type
-                print (f"data: {input.inode.data}")
                 self.filesystem.current = input
             else:
                 err = self.filesystem.search(file)
@@ -1079,7 +1077,6 @@ class CommandLine:
             else: 
                 ty = self.filesystem.search_withaccess(file)
                 content = self.filesystem.current
-            print(f"content: {content.inode.data}")
             if (ty == NodeType.DIRECTORY):
                 output[0].append(f"head: ${file} is a directory")
                 continue
@@ -1118,7 +1115,6 @@ class CommandLine:
     def tail(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         if "--help" in args:
             return (0, ([], self.useage("tail")))
-        print (input.get_data())
         output = ([], [])
         lines = -1
         byte = -1
@@ -1369,7 +1365,6 @@ class CommandLine:
         self.filesystem.current = saved_current
         for line in lines: 
             output[1].append(" ".join(line))
-        print (output)
         return (0, output)
     
     def cd(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
@@ -1440,7 +1435,6 @@ class CommandLine:
             self.filesystem.search_withaccess(file)
             input = self.filesystem.current
         data = input.get_data()
-        print (data)
         output = list(dict.fromkeys(data))
         return (0, ([], output))
 
