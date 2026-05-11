@@ -1,0 +1,180 @@
+/* ── Page ── */
+.session-create-page {
+    min-height: 100vh;
+    background: #0f1117;
+    color: #e8eaf0;
+    font-family: 'Courier New', monospace;
+    padding: 48px 40px;
+    box-sizing: border-box;
+}
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #c8f04a;
+    margin: 0 0 36px 0;
+    border-bottom: 1px solid #2a2d38;
+    padding-bottom: 16px;
+}
+
+/* ── Layout ── */
+.session-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 40px;
+    align-items: start;
+}
+
+@media (max-width: 700px) {
+    .session-layout { grid-template-columns: 1fr; }
+}
+
+/* ── Section titles ── */
+.section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin: 0 0 20px 0;
+}
+
+/* ── Left side ── */
+.create-left-side {
+    background: #16191f;
+    border: 1px solid #2a2d38;
+    border-radius: 8px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.field-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-top: 12px;
+}
+
+.text-input,
+.select-input {
+    width: 100%;
+    background: #0f1117;
+    border: 1px solid #2a2d38;
+    border-radius: 5px;
+    color: #e8eaf0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    padding: 9px 12px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.text-input:focus,
+.select-input:focus {
+    border-color: #c8f04a;
+}
+
+.select-input {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+
+/* ── Submit ── */
+.submit-btn {
+    margin-top: 20px;
+    background: #c8f04a;
+    color: #0f1117;
+    border: none;
+    border-radius: 5px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 11px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+}
+
+.submit-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+.submit-btn:active { transform: translateY(0); }
+
+/* ── Right side ── */
+.create-right-side {
+    background: #16191f;
+    border: 1px solid #2a2d38;
+    border-radius: 8px;
+    padding: 24px;
+}
+
+.right-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.right-header .section-title { margin: 0; }
+
+.bulk-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.ghost-btn {
+    background: transparent;
+    border: 1px solid #2a2d38;
+    border-radius: 4px;
+    color: #6b7280;
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.ghost-btn:hover {
+    border-color: #c8f04a;
+    color: #c8f04a;
+}
+
+/* ── Options list ── */
+.command-options-list {
+    background: #13161c;
+    border-top: 1px solid #2a2d38;
+    padding: 8px 0;
+}
+
+.option-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #9ca3af;
+    transition: background 0.1s, color 0.1s;
+}
+
+.option-row:hover {
+    background: #1a1d24;
+    color: #e8eaf0;
+}
+
+.option-row input[type="checkbox"] {
+    accent-color: #c8f04a;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
