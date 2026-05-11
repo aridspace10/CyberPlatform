@@ -1,3 +1,5 @@
+import './Switch.css'
+
 export default function Switch({ on, onChange }) {
   return (
     <div
