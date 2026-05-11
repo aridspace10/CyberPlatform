@@ -1,0 +1,62 @@
+/* ── Command blocks ── */
+.commands-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.command-block {
+    border: 1px solid #2a2d38;
+    border-radius: 6px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+
+.command-block.expanded {
+    border-color: #3a3d48;
+}
+
+.command-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 13px 16px;
+    cursor: pointer;
+    background: #0f1117;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.command-header:hover {
+    background: #13161c;
+}
+
+.command-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #c8f04a;
+    letter-spacing: 0.05em;
+}
+
+.command-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.command-count {
+    font-size: 0.7rem;
+    color: #6b7280;
+    letter-spacing: 0.05em;
+}
+
+.chevron {
+    color: #6b7280;
+    font-size: 0.75rem;
+    display: inline-block;
+    transition: transform 0.2s;
+}
+
+.chevron.open {
+    transform: rotate(90deg);
+}
