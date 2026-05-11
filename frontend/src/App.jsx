@@ -8,6 +8,7 @@ import ProtectedRoute from "./auth/ProtectedRoute";
 import { AuthProvider } from "./auth/AuthContext";
 import Login from "./pages/Login/LoginPage";
 import Signup from "./pages/Login/SignupPage";
+import SessionCreation from "./pages/Session/SessionCreation";
 
 export default function App() {
     return (
@@ -24,6 +25,7 @@ export default function App() {
                             <Game />
                         </ProtectedRoute>
                     } />
+                    <Route path="/session-create" element={<SessionCreation/>} /> 
                     {/* Dev pathways */}
                     <Route path="/terminal" element={<Terminal />} />
                     <Route path="/users" element={<UserManager />} />

@@ -16,6 +16,10 @@
     border-color: #3a3d48;
 }
 
+.command-block.command-active {
+    border-color: #c8f04a44;
+}
+
 .command-header {
     display: flex;
     justify-content: space-between;
@@ -31,11 +35,50 @@
     background: #13161c;
 }
 
+.command-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.command-checkbox {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 1px solid #3a3d48;
+    background: #16191f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.command-checkbox:hover {
+    border-color: #c8f04a;
+}
+
+.command-checkbox.checked {
+    background: #c8f04a;
+    border-color: #c8f04a;
+}
+
+.checkmark {
+    font-size: 11px;
+    color: #0f1117;
+    font-weight: 800;
+    line-height: 1;
+}
+
 .command-name {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #c8f04a;
+    color: #e8eaf0;
     letter-spacing: 0.05em;
+}
+
+.command-active .command-name {
+    color: #c8f04a;
 }
 
 .command-header-right {
@@ -59,4 +102,49 @@
 
 .chevron.open {
     transform: rotate(90deg);
+}
+
+/* ── Options list ── */
+.command-options-list {
+    background: #13161c;
+    border-top: 1px solid #2a2d38;
+    padding: 8px 0;
+}
+
+.option-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px 8px 46px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #9ca3af;
+    transition: background 0.1s, color 0.1s;
+}
+
+.option-row:hover {
+    background: #1a1d24;
+    color: #e8eaf0;
+}
+
+.option-row.option-disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.option-row.option-disabled:hover {
+    background: transparent;
+    color: #9ca3af;
+}
+
+.option-row input[type="checkbox"] {
+    accent-color: #c8f04a;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.option-row.option-disabled input[type="checkbox"] {
+    cursor: not-allowed;
 }

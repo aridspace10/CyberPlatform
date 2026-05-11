@@ -41,11 +41,7 @@ class GrepFindFiles(MiniGame):
             f.random_insert(self.target_pattern)
             f.needed = True
             self.expected_files.append(f.name)
-
-        # Insert all the decoy output files
-        for f in decoy_files:
             
-        
         self.expected_command = f"grep -{"".join(sorted(self.options))} {self.target_pattern} {self.starting_dir}"
     
     def check_answer(self, answer: str) -> bool:

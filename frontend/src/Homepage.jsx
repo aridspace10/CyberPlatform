@@ -10,8 +10,7 @@ export default function Homepage() {
     const nextId = useRef(123);
     const { user, logout } = useAuth();
     const handleSessionCreation = () => {
-        const id = nextId.current++;
-        navigate(`/game`, {state: {sessionId: id}});
+        navigate("/session-create")
     }
 
     const handleEnterSandbox = async () => {
