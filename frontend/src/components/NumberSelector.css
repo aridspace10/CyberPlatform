@@ -1,0 +1,79 @@
+.number-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 0;
+    width: 160px;
+}
+
+.number-selector-control {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+}
+
+.num-btn {
+    width: 36px;
+    height: 36px;
+    background: #0f1117;
+    border: 1px solid #2a2d38;
+    color: #9ca3af;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    flex-shrink: 0;
+    line-height: 1;
+    font-family: 'Courier New', monospace;
+}
+
+.num-btn:first-child {
+    border-radius: 5px 0 0 5px;
+}
+
+.num-btn:last-child {
+    border-radius: 0 5px 5px 0;
+}
+
+.num-btn:hover:not(:disabled) {
+    color: #c8f04a;
+    border-color: #c8f04a;
+    background: #1a1d24;
+}
+
+.num-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.num-input {
+    flex: 1;
+    height: 36px;
+    background: #0f1117;
+    border: 1px solid #2a2d38;
+    border-left: none;
+    border-right: none;
+    color: #e8eaf0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.95rem;
+    text-align: center;
+    outline: none;
+    transition: border-color 0.15s;
+    /* hide browser arrows */
+    -moz-appearance: textfield;
+}
+
+.num-input:focus {
+    border-color: #c8f04a;
+    /* extend focus border to adjacent buttons visually */
+    box-shadow: 0 0 0 1px #c8f04a inset;
+}
+
+.num-input::-webkit-outer-spin-button,
+.num-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
