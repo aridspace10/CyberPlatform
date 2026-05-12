@@ -63,14 +63,18 @@
 /* Allow Pipes label + switch on same row */
 .inline-field {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 14px;
-    gap: 12px;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 0;
 }
 
 .inline-field .field-label {
     margin-top: 0;
+}
+
+.inline-field .switch-row {
+    margin-top: 0;
+    height: 36px;
 }
 
 .text-input,
@@ -127,16 +131,35 @@
     border: 1px solid #2a2d38;
     border-radius: 8px;
     padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
 
 .right-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .right-header .section-title { margin: 0; }
+
+/* Divider between sections on the right */
+.section-divider {
+    border: none;
+    border-top: 1px solid #2a2d38;
+    margin: 20px 0;
+}
+
+/* Rules section — compact natural width */
+.rules-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px 32px;
+    align-items: flex-end;
+    margin-bottom: 4px;
+}
 
 .bulk-actions {
     display: flex;

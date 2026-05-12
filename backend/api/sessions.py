@@ -40,6 +40,10 @@ def list_sessions():
         ]
     }
 
+@router.post("/session_create")
+def session_create():
+    
+
 @router.get("/session/{session_id}/join/{user_id}")
 def session_join(session_id: str, user_id: str, db: Session = Depends(get_db)):
     session = session_manager.get_session(session_id)
