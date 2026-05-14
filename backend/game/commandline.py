@@ -1381,6 +1381,8 @@ class CommandLine:
         linkty = "hard"
         if (len(args) == 1 and args[0] == "--help"):
             return (0, ([], self.useage("ln")))
+        if len(args) < 2:
+            return (2, (["Invalid number of arguments"], []))
         while len(args) > 2:
             arg = args.pop(0)
             if (arg[0] == "-"):
@@ -1394,21 +1396,34 @@ class CommandLine:
         target = args[0]
         destination = args[1]
         saved_current = self.filesystem.current
-        if (err := self.filesystem.search(target)) != "":
+        if (err := self.filesystem.search(target)) != "" and linkty == "hard":
             return (1, ([err], []))
         target_inode = self.filesystem.current.inode
+        # Check cause inode of dir is nothing
+        if self.filesystem.current.inode.type == NodeType.DIRECTORY and linkty == "hard":
+            self.filesystem.current = saved_current
+            return (1, (["Cannot hard link directory"], []))
+        # Reset Pointer
+        self.filesystem.current = saved_current
+        # Search for the destination and check it doesn't exist
+        if self.filesystem.search(destination) == "":
+            self.filesystem.current = saved_current
+            return (1, ([f"ln: {destination}: File exists"], []))
+        # Reset pointer after search
         self.filesystem.current = saved_current
         self.filesystem.add_file(destination)
-        self.filesystem.search(destination)
+        new_file = self.filesystem.get_file(destination)
+        if new_file is None or isinstance(new_file, str):
+            return (1, (["Could not create link"], []))
         if (linkty == "hard"):
-            self.filesystem.current.inode = target_inode
-            self.filesystem.current.inode.link_count += 1
+            new_file.inode = target_inode
+            target_inode.link_count += 1
         else:
             inode = Inode(NodeType.SYMLINK)
-            inode.set_data(target.splitlines())
-            self.filesystem.current.inode = inode
+            inode.set_data([target])
+            new_file.inode = inode
         self.filesystem.current = saved_current
-        return (1, ([],[]))
+        return (0, ([],[]))
     
     def uniq(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
         count = False
