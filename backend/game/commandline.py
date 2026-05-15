@@ -1134,7 +1134,7 @@ class CommandLine:
                         ahead = True
                         byte = int(num[1:])
                     else:
-                        lines = int(num)
+                        byte = int(num)
                 except (ValueError):
                     return (1, (["tail: argument for -c must be an integar with a possible + prefix"], []))
 

@@ -199,6 +199,173 @@ def test_tail_n_zero(cl, shell_tail):
     assert stderr == []
     assert stdout == []
 
+# =========================================================
+# -c / Bytes Tests
+# =========================================================
+
+def test_tail_c_1(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 1 f1.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+    assert stdout == ["12"]
+
+
+def test_tail_c_2(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 2 f1.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+
+    # Last 2 lines/items
+    assert stdout == ["11", "12"]
+
+
+def test_tail_c_5(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 5 f1.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+
+    assert stdout == [
+        "8", "9", "10", "11", "12"
+    ]
+
+
+def test_tail_c_equal_file_size(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 12 f1.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+
+    assert stdout == [
+        "1", "2", "3", "4", "5", "6",
+        "7", "8", "9", "10", "11", "12"
+    ]
+
+
+def test_tail_c_larger_than_file(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 999 f1.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+
+    assert stdout == [
+        "1", "2", "3", "4", "5", "6",
+        "7", "8", "9", "10", "11", "12"
+    ]
+
+
+def test_tail_c_zero(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 0 f1.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+    assert stdout == []
+
+
+def test_tail_c_small_file(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 2 small.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+
+    assert stdout == ["b", "c"]
+
+
+def test_tail_c_single_line(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 1 single.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+
+    assert stdout == ["hello"]
+
+
+def test_tail_c_empty_file(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 5 empty.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+
+    assert stdout == []
+
+
+def test_tail_c_mixed_file(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c 3 mixed.txt",
+        shell_tail
+    )
+
+    assert stderr == []
+
+    assert stdout == [
+        "elephant",
+        "frog",
+        "grape"
+    ]
+
+
+def test_tail_c_missing_argument(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c",
+        shell_tail
+    )
+
+    assert stderr != []
+    assert stdout == []
+
+
+def test_tail_c_invalid_number(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c abc f1.txt",
+        shell_tail
+    )
+
+    assert stderr != []
+    assert stdout == []
+
+
+def test_tail_c_negative_number(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        "tail -c -5 f1.txt",
+        shell_tail
+    )
+
+    assert stderr != []
+    assert stdout == []
+
+
+def test_tail_c_with_pipe_input(cl, shell_tail):
+    stderr, stdout = cl.enter_command(
+        'cat f1.txt | tail -c 3',
+        shell_tail
+    )
+
+    assert stderr == []
+
+    assert stdout == [
+        "10", "11", "12"
+    ]
+
 
 # =========================================================
 # Short Numeric Form
