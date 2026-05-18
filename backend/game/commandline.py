@@ -12,6 +12,8 @@ from game.ShellState import ShellState
 import copy
 import re
 
+CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
+
 @dataclass
 class CommandResult:
     status: int = 0
@@ -147,7 +149,11 @@ class CommandLine:
                             return CommandResult(1, [], [f'Var Used which is unassigned: {part.name}'], 'text', None)
                         word += self.shell.vars[part.name]
                 args.append(word)
-            return self.run_command(args, fdin)
+            result = self.run_command(args, fdin)
+            if not isinstance(result, CommandResult):
+                status, (stdout, stderr) = result
+                result = CommandResult(status, stdout, stderr, 'text', None)
+            return result
         else:
             # save state
             saved_cwd = self.shell.cwd
@@ -180,7 +186,7 @@ class CommandLine:
         
         return cmd_result
  
-    def run_command(self, args: list[str], fdin: FileNode) -> CommandResult:
+    def run_command(self, args: list[str], fdin: FileNode) -> CommandResult | CommandReturn:
         if (not (len(args))):
             return CommandResult(0, [], [], 'text', None)
         match args[0]:
@@ -240,7 +246,7 @@ class CommandLine:
                 output.append(line)
         return output
     
-    def find(self, args: list[str], input: FileNode) -> CommandResult:
+    def find(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         if (len(args) < 1):
             return (1, (["find: atleast one argument needs to be given"], []))
         while (len(args) and args[0][0] == "-"):
@@ -271,7 +277,7 @@ class CommandLine:
             output[1].extend(toprints)
         return (0, output)
     
-    def sed(self, args: list[str], input: FileNode) -> CommandResult:
+    def sed(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         if "--help" in args:
             return (0, ([], self.useage("sed")))
         if (len(args) < 1):
@@ -530,7 +536,7 @@ class CommandLine:
             self.filesystem.current = cur
         return (0, output)
 
-    def wc(self, args: list[str], input: FileNode) -> CommandResult:
+    def wc(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         output = ([], [])
 
         words = bytes_flag = chars = lines = False
@@ -631,7 +637,7 @@ class CommandLine:
 
         return (0, output)
 
-    def cp(self, args: list[str], input: FileNode) -> CommandResult:
+    def cp(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         verbose = False
         interactive = False
         clobbar = True
@@ -733,7 +739,7 @@ class CommandLine:
         self.filesystem.current = tmp
         return (1, output)
     
-    def mv(self, args: list[str], input: FileNode) -> CommandResult:
+    def mv(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         verbose = False
         clobber = False
         output = ([], [])
@@ -797,7 +803,7 @@ class CommandLine:
             self.filesystem.current = tmp
         return (0, output)
     
-    def grep(self, args: list[str], input: FileNode) -> CommandResult:
+    def grep(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         case_insentive = False
         invert = False
         linenum = False
@@ -921,7 +927,7 @@ class CommandLine:
         else:
             return (0, output)
     
-    def chmod(self, args: list[str], input: FileNode) -> CommandResult:
+    def chmod(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         recurse = False
         verbose = False
         output = ([], [])
@@ -958,13 +964,13 @@ class CommandLine:
         self.filesystem.current = saved_current
         return (0, output)
     
-    def echo(self, args: list[str], input: FileNode) -> CommandResult:
+    def echo(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         output = " ".join(args)
         if (output == "$?"):
             return (0, ([], [(str(self.filesystem.lcs))]))
         return (0, ([], " ".join(args).split("\n")))
 
-    def touch(self, args: list[str], input: FileNode) -> CommandResult:
+    def touch(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         if "--help" in args:
             return (0, ([], self.useage("touch")))
         if (not len(args)):
@@ -1029,7 +1035,7 @@ class CommandLine:
                 fn.inode.mtime = date
         return (0, output)
 
-    def cat(self, args: list[str], input: FileNode) -> CommandResult:
+    def cat(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         output = ([], [])
         if len(args) == 1 and args[0] == "--help":
             return (0, ([], self.useage("cat")))
@@ -1047,7 +1053,7 @@ class CommandLine:
             output[1].append(line)
         return (0, output)
 
-    def head(self, args: list[str], input: FileNode) -> CommandResult:
+    def head(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         lines = 10
         b = -1
         curb = 0
@@ -1128,7 +1134,7 @@ class CommandLine:
             self.filesystem.current = saved_current
         return (0, output)
 
-    def tail(self, args: list[str], input: FileNode) -> CommandResult:
+    def tail(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         if "--help" in args:
             return (0, ([], self.useage("tail")))
         output = ([], [])
@@ -1238,7 +1244,7 @@ class CommandLine:
                         output[1].append(line)
         return (0, output)
 
-    def rm(self, args: list[str], input: FileNode) -> CommandResult:
+    def rm(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         recurse, verbose = False, False
         output = ([], [])
         if ("--help" in args):
@@ -1264,7 +1270,7 @@ class CommandLine:
             output[1].append("rm: File sucessfully deleted")
         return (0, output)
 
-    def pwd(self, args: list[str], input: FileNode) -> CommandResult:
+    def pwd(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         ty = "l"
         while len(args) > 1:
             arg = args[0]
@@ -1285,7 +1291,7 @@ class CommandLine:
             pointer = pointer.parent
         return (0, ([], [direct]))
         
-    def mkdir(self, args: list[str], input: FileNode) -> CommandResult:
+    def mkdir(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         perms = {"user": {"r": True, "w": True, "x": True},
             "group": {"r": True, "w": False, "x": True},
             "public": {"r": True, "w": False, "x": True}}
@@ -1326,7 +1332,7 @@ class CommandLine:
             return (0, ([], [f"mkdir: sucessfully created {name}"]))
         return (1, ([], []))
 
-    def ls(self, args: list[str], input: FileNode) -> CommandResult:
+    def ls(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         deep, detail = False, 0
         extra: dict[str, bool | str] = {}
         oneline = False
@@ -1383,7 +1389,7 @@ class CommandLine:
             output[1].append(" ".join(line))
         return (0, output)
     
-    def cd(self, args: list[str], input: FileNode) -> CommandResult:
+    def cd(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         if (not args):
             return (1, (["cd: must give argument"], []))
         arg = args[0]
@@ -1393,7 +1399,7 @@ class CommandLine:
         self.filesystem.cwd += "/" + arg
         return (0, ([],[]))
     
-    def ln(self, args: list[str], input: FileNode) -> CommandResult:
+    def ln(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         linkty = "hard"
         if (len(args) == 1 and args[0] == "--help"):
             return (0, ([], self.useage("ln")))
@@ -1426,7 +1432,7 @@ class CommandLine:
         self.filesystem.current = saved_current
         return (1, ([],[]))
     
-    def uniq(self, args: list[str], input: FileNode) -> CommandResult:
+    def uniq(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         count = False
         repeated = False
         printdup = False
@@ -1454,7 +1460,7 @@ class CommandLine:
         output = list(dict.fromkeys(data))
         return (0, ([], output))
 
-    def sort(self, args: list[str], input: FileNode) -> CommandResult:
+    def sort(self, args: list[str], input: FileNode) -> CommandResult | CommandReturn:
         if "--help" in args:
             return (0, ([], self.useage("sort")))
         file = ""
