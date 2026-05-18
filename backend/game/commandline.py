@@ -1,7 +1,8 @@
 from game.filenode import FileNode
 from game.filesystem import FileSystem
 from collections import deque
-from typing import Literal, Tuple
+from dataclasses import dataclass, field
+from typing import Literal, Tuple, Any
 from game.inode import Inode, NodeType
 import random
 import datetime
@@ -11,7 +12,13 @@ from game.ShellState import ShellState
 import copy
 import re
 
-CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
+@dataclass
+class CommandResult:
+    status: int = 0
+    stdout: list[str] = field(default_factory=list)
+    stderr: list[str] = field(default_factory=list)
+    kind: Literal["text", "app"] = "text"
+    payload: dict[str, Any] | None = None
 
 class CommandLine:
     def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
@@ -49,7 +56,7 @@ class CommandLine:
         else:
             return ([], ["Admin Error: Code AAA112"]) 
 
-    def execute_pipe(self, parts: list[AndOr]) -> CommandReturn:
+    def execute_pipe(self, parts: list[AndOr]) -> CommandResult:
         status = 0
         stderr, stdout = [], []
 
@@ -76,7 +83,7 @@ class CommandLine:
         self.fdout = None
         return (status, (stderr, stdout))
     
-    def execute_andor(self, elem: AndOr) -> CommandReturn:
+    def execute_andor(self, elem: AndOr) -> CommandResult:
         status, (stderr, stdout) = self.execute_command(elem.first)
         for (op, cmd) in elem.rest:
             if ((op == "&&" and not status) or (op == "||" and status)):
@@ -87,7 +94,7 @@ class CommandLine:
                 break
         return (status, (stderr, stdout))
 
-    def execute_command(self, command: Command) -> CommandReturn:
+    def execute_command(self, command: Command) -> CommandResult:
         redirs = command.pre_redirs + command.post_redirs
         for assign in command.assignments:
             self.shell.vars[assign.name] = assign.value.parts[0]
@@ -115,7 +122,7 @@ class CommandLine:
             self.fdout = None
         return (status, (stderr, stdout))
 
-    def execute_atom(self, atom: Atom) -> CommandReturn:
+    def execute_atom(self, atom: Atom) -> CommandResult:
         if (isinstance(atom, SimpleCommand)):
             if self.fdin is None:
                 fdin = FileNode(None, "stdin", Inode(NodeType.FILE))
@@ -155,7 +162,7 @@ class CommandLine:
             self.fdout = saved_fdout
             return (status, (stderr, stdout))
 
-    def execute_sequence(self, parts: list[Pipe]) -> CommandReturn:
+    def execute_sequence(self, parts: list[Pipe]) -> CommandResult:
         last_status = 0
         stdout, stderr = [], []
 
@@ -164,7 +171,7 @@ class CommandLine:
 
         return last_status, (stdout, stderr)
  
-    def run_command(self, args: list[str], fdin: FileNode) -> CommandReturn:
+    def run_command(self, args: list[str], fdin: FileNode) -> CommandResult:
         if (not (len(args))):
             return (0, ([], []))
         match args[0]:
@@ -224,7 +231,7 @@ class CommandLine:
                 output.append(line)
         return output
     
-    def find(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def find(self, args: list[str], input: FileNode) -> CommandResult:
         if (len(args) < 1):
             return (1, (["find: atleast one argument needs to be given"], []))
         while (len(args) and args[0][0] == "-"):
@@ -255,7 +262,7 @@ class CommandLine:
             output[1].extend(toprints)
         return (0, output)
     
-    def sed(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def sed(self, args: list[str], input: FileNode) -> CommandResult:
         if "--help" in args:
             return (0, ([], self.useage("sed")))
         if (len(args) < 1):
@@ -514,7 +521,7 @@ class CommandLine:
             self.filesystem.current = cur
         return (0, output)
 
-    def wc(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def wc(self, args: list[str], input: FileNode) -> CommandResult:
         output = ([], [])
 
         words = bytes_flag = chars = lines = False
@@ -615,7 +622,7 @@ class CommandLine:
 
         return (0, output)
 
-    def cp(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def cp(self, args: list[str], input: FileNode) -> CommandResult:
         verbose = False
         interactive = False
         clobbar = True
@@ -717,7 +724,7 @@ class CommandLine:
         self.filesystem.current = tmp
         return (1, output)
     
-    def mv(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def mv(self, args: list[str], input: FileNode) -> CommandResult:
         verbose = False
         clobber = False
         output = ([], [])
@@ -781,7 +788,7 @@ class CommandLine:
             self.filesystem.current = tmp
         return (0, output)
     
-    def grep(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def grep(self, args: list[str], input: FileNode) -> CommandResult:
         case_insentive = False
         invert = False
         linenum = False
@@ -905,7 +912,7 @@ class CommandLine:
         else:
             return (0, output)
     
-    def chmod(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def chmod(self, args: list[str], input: FileNode) -> CommandResult:
         recurse = False
         verbose = False
         output = ([], [])
@@ -942,13 +949,13 @@ class CommandLine:
         self.filesystem.current = saved_current
         return (0, output)
     
-    def echo(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def echo(self, args: list[str], input: FileNode) -> CommandResult:
         output = " ".join(args)
         if (output == "$?"):
             return (0, ([], [(str(self.filesystem.lcs))]))
         return (0, ([], " ".join(args).split("\n")))
 
-    def touch(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def touch(self, args: list[str], input: FileNode) -> CommandResult:
         if "--help" in args:
             return (0, ([], self.useage("touch")))
         if (not len(args)):
@@ -1013,7 +1020,7 @@ class CommandLine:
                 fn.inode.mtime = date
         return (0, output)
 
-    def cat(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def cat(self, args: list[str], input: FileNode) -> CommandResult:
         output = ([], [])
         if len(args) == 1 and args[0] == "--help":
             return (0, ([], self.useage("cat")))
@@ -1031,7 +1038,7 @@ class CommandLine:
             output[1].append(line)
         return (0, output)
 
-    def head(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def head(self, args: list[str], input: FileNode) -> CommandResult:
         lines = 10
         b = -1
         curb = 0
@@ -1112,7 +1119,7 @@ class CommandLine:
             self.filesystem.current = saved_current
         return (0, output)
 
-    def tail(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def tail(self, args: list[str], input: FileNode) -> CommandResult:
         if "--help" in args:
             return (0, ([], self.useage("tail")))
         output = ([], [])
@@ -1222,7 +1229,7 @@ class CommandLine:
                         output[1].append(line)
         return (0, output)
 
-    def rm(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def rm(self, args: list[str], input: FileNode) -> CommandResult:
         recurse, verbose = False, False
         output = ([], [])
         if ("--help" in args):
@@ -1248,7 +1255,7 @@ class CommandLine:
             output[1].append("rm: File sucessfully deleted")
         return (0, output)
 
-    def pwd(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def pwd(self, args: list[str], input: FileNode) -> CommandResult:
         ty = "l"
         while len(args) > 1:
             arg = args[0]
@@ -1269,7 +1276,7 @@ class CommandLine:
             pointer = pointer.parent
         return (0, ([], [direct]))
         
-    def mkdir(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def mkdir(self, args: list[str], input: FileNode) -> CommandResult:
         perms = {"user": {"r": True, "w": True, "x": True},
             "group": {"r": True, "w": False, "x": True},
             "public": {"r": True, "w": False, "x": True}}
@@ -1310,7 +1317,7 @@ class CommandLine:
             return (0, ([], [f"mkdir: sucessfully created {name}"]))
         return (1, ([], []))
 
-    def ls(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def ls(self, args: list[str], input: FileNode) -> CommandResult:
         deep, detail = False, 0
         extra: dict[str, bool | str] = {}
         oneline = False
@@ -1367,7 +1374,7 @@ class CommandLine:
             output[1].append(" ".join(line))
         return (0, output)
     
-    def cd(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def cd(self, args: list[str], input: FileNode) -> CommandResult:
         if (not args):
             return (1, (["cd: must give argument"], []))
         arg = args[0]
@@ -1377,7 +1384,7 @@ class CommandLine:
         self.filesystem.cwd += "/" + arg
         return (0, ([],[]))
     
-    def ln(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def ln(self, args: list[str], input: FileNode) -> CommandResult:
         linkty = "hard"
         if (len(args) == 1 and args[0] == "--help"):
             return (0, ([], self.useage("ln")))
@@ -1410,7 +1417,7 @@ class CommandLine:
         self.filesystem.current = saved_current
         return (1, ([],[]))
     
-    def uniq(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def uniq(self, args: list[str], input: FileNode) -> CommandResult:
         count = False
         repeated = False
         printdup = False
@@ -1438,7 +1445,7 @@ class CommandLine:
         output = list(dict.fromkeys(data))
         return (0, ([], output))
 
-    def sort(self, args: list[str], input: FileNode) -> Tuple[int, Tuple[list[str], list[str]]]:
+    def sort(self, args: list[str], input: FileNode) -> CommandResult:
         if "--help" in args:
             return (0, ([], self.useage("sort")))
         file = ""
