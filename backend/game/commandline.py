@@ -105,24 +105,27 @@ class CommandLine:
             if (redir.op == "<"):
                 self.fdin = self.get_fd(redir.target)
                 if (isinstance(self.fdin, str)):
-                    return (1, ([self.fdin], []))
+                    cmd_result = CommandResult(1, [], [self.fdin], 'text', None)
+                    return cmd_result
             elif (redir.op == ">"):
                 self.fdout = self.get_fd(redir.target, True)
                 if (isinstance(self.fdout, str)):
-                    return (1, ([self.fdout], []))
+                    cmd_result = CommandResult(1, [], [self.fdout], 'text', None)
+                    return cmd_result
             elif (redir.op == ">>"):
                 self.fdout = self.get_fd(redir.target)
                 if (isinstance(self.fdout, str)):
-                    return (1, ([self.fdout], []))
-        status, (stderr, stdout) = self.execute_atom(command.atom)
+                    cmd_result = CommandResult(1, [], [self.fdout], 'text', None)
+                    return cmd_result
+        cmd_result = self.execute_atom(command.atom)
         if command.pre_redirs or command.post_redirs:
             if isinstance(self.fdout, FileNode):
-                self.fdout.append_data(stdout)
-                stdout = []
+                self.fdout.append_data(cmd_result.stdout)
+                cmd_result.stdout = []
         else:
             # No redirection → leave stdout alone
             self.fdout = None
-        return (status, (stderr, stdout))
+        return cmd_result
 
     def execute_atom(self, atom: Atom) -> CommandResult:
         if (isinstance(atom, SimpleCommand)):
@@ -130,7 +133,7 @@ class CommandLine:
                 fdin = FileNode(None, "stdin", Inode(NodeType.FILE))
                 fdin.set_data([])
             elif isinstance(self.fdin, str):
-                return (1, ([], ["Admin Error: AAA113"]))
+                raise Exception("Look here")
             else:
                 fdin = self.fdin
             args = []
@@ -141,7 +144,7 @@ class CommandLine:
                         word += part
                     else:
                         if part.name not in self.shell.vars:
-                            return (1, ([f'Var Used which is unassigned: {part.name}'], []))
+                            return CommandResult(1, [], [f'Var Used which is unassigned: {part.name}'], 'text', None)
                         word += self.shell.vars[part.name]
                 args.append(word)
             return self.run_command(args, fdin)
@@ -154,7 +157,7 @@ class CommandLine:
             saved_fdin = self.fdin
             saved_fdout = self.fdout
             #execute
-            status, (stderr, stdout) = self.execute_sequence(atom.sequence.parts)
+            cmd_result = self.execute_sequence(atom.sequence.parts)
             #restore state
             self.shell.cwd = saved_cwd
             self.shell.vars = saved_env
@@ -162,20 +165,24 @@ class CommandLine:
             self.filesystem.cwd = saved_fs_cwd
             self.fdin = saved_fdin
             self.fdout = saved_fdout
-            return (status, (stderr, stdout))
+            return cmd_result
 
     def execute_sequence(self, parts: list[Pipe]) -> CommandResult:
         last_status = 0
         stdout, stderr = [], []
+        cmd_result = None
 
         for part in parts:
-            last_status, (stdout, stderr) = self.execute_pipe(part.parts)
+            cmd_result = self.execute_pipe(part.parts)
 
-        return last_status, (stdout, stderr)
+        if (cmd_result == None):
+            raise Exception("cmd being empty")
+        
+        return cmd_result
  
     def run_command(self, args: list[str], fdin: FileNode) -> CommandResult:
         if (not (len(args))):
-            return (0, ([], []))
+            return CommandResult(0, [], [], 'text', None)
         match args[0]:
             case "ls":
                 return self.ls(args[1:], fdin)
@@ -218,7 +225,7 @@ class CommandLine:
             case "wc":
                 return self.wc(args[1:], fdin)
             case _:
-                return (1, (["Unknown command given"], []))
+                return CommandResult(1, [], ["Unknown command given"], 'text', None)
 
     # def get_past_command(self) -> None:
     #     r = self.history[self.hpoint]
