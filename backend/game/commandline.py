@@ -41,7 +41,7 @@ class CommandLine:
         self.filesystem.current = saved_current
         return result
     
-    def enter_command(self, raw: str, shell: ShellState) -> Tuple[list[str], list[str]]:
+    def enter_command(self, raw: str, shell: ShellState) -> CommandResult:
         self.filesystem = shell.fs
         if (self.filesystem.cwd != shell.cwd):
             self.filesystem.search(shell.cwd)
@@ -51,15 +51,14 @@ class CommandLine:
         parser = CommandParser(tokens)
         ast = parser.parse()
         if isinstance(ast, Sequence):
-            shell.ls, (stderr, stdout) = self.execute_sequence(ast.parts)
-            return (stderr, stdout)
+            return self.execute_sequence(ast.parts)
         else:
-            return ([], ["Admin Error: Code AAA112"]) 
+            raise Exception("Enter command given no sequence object")
 
     def execute_pipe(self, parts: list[AndOr]) -> CommandResult:
         status = 0
         stderr, stdout = [], []
-
+        cmd_result = None
         prev_pipe = None  # holds virtual pipe between commands
 
         for part in parts:
@@ -67,10 +66,10 @@ class CommandLine:
             self.fdin = prev_pipe
             self.fdout = None
 
-            status, (stderr, stdout) = self.execute_andor(part)
+            cmd_result = self.execute_andor(part)
 
             # create a new pipe from stdout for next command
-            if stdout:
+            if cmd_result.stdout:
                 pipe_inode = Inode(NodeType.FILE)
                 pipe_node = FileNode(None, "pipe", pipe_inode)
                 # + ("\n" if stdout else "") for wc
@@ -81,18 +80,21 @@ class CommandLine:
 
         self.fdin = None
         self.fdout = None
-        return (status, (stderr, stdout))
+        if (cmd_result == None):
+            raise Exception("No Cmd Result given")
+        return cmd_result
     
     def execute_andor(self, elem: AndOr) -> CommandResult:
-        status, (stderr, stdout) = self.execute_command(elem.first)
+        cmd_result = self.execute_command(elem.first)
         for (op, cmd) in elem.rest:
-            if ((op == "&&" and not status) or (op == "||" and status)):
-                status, (tmperr, tmpout) = self.execute_command(cmd)
-                stderr.extend(tmperr)
-                stdout.extend(tmpout)
+            if ((op == "&&" and not cmd_result.status) or (op == "||" and cmd_result.status)):
+                tmp_result = self.execute_command(cmd)
+                cmd_result.stderr.extend(tmp_result.stderr)
+                cmd_result.stdout.extend(tmp_result.stdout)
+                cmd_result.status = tmp_result.status
             else:
                 break
-        return (status, (stderr, stdout))
+        return cmd_result
 
     def execute_command(self, command: Command) -> CommandResult:
         redirs = command.pre_redirs + command.post_redirs
