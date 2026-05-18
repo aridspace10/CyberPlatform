@@ -70,62 +70,62 @@ def shell_ls(fs_ls):
     return s
 
 def test_ls_empty(cl, shell_empty):
-    stderr, stdout = cl.enter_command('ls', shell_empty)
-    assert stderr == []
-    assert stdout == []
+    CmdResult = cl.enter_command('ls', shell_empty)
+    assert CmdResult.stderr == []
+    assert CmdResult.stdout == []
 
 def test_ls_error(cl, shell_empty):
-    stderr, stdout = cl.enter_command('ls -y', shell_empty)
-    assert stderr == ["ls: unknown argument given"]
-    assert stdout == []
+    CmdResult = cl.enter_command('ls -y', shell_empty)
+    assert CmdResult.stderr == ["ls: unknown argument given"]
+    assert CmdResult.stdout == []
 
 def test_ls_target(cl, shell_basic):
-    stderr, stdout = cl.enter_command('ls d1', shell_basic)
-    assert stderr == []
-    assert stdout == ["f3.txt", "f4.txt"]
+    CmdResult = cl.enter_command('ls d1', shell_basic)
+    assert CmdResult.stderr == []
+    assert CmdResult.stdout == ["f3.txt", "f4.txt"]
 
 def test_ls_basic(cl, shell_fouritems):
-    stderr, stdout = cl.enter_command('ls', shell_fouritems)
-    assert stderr == []
-    assert stdout == ['f1.txt','f2.txt','f3.txt','f4.txt']
+    CmdResult = cl.enter_command('ls', shell_fouritems)
+    assert CmdResult.stderr == []
+    assert CmdResult.stdout == ['f1.txt','f2.txt','f3.txt','f4.txt']
 
 def test_ls_reverse(cl, shell_fouritems):
-    stderr, stdout = cl.enter_command('ls -r', shell_fouritems)
-    assert stderr == []
-    assert stdout == ['f4.txt','f3.txt','f2.txt','f1.txt']
+    CmdResult = cl.enter_command('ls -r', shell_fouritems)
+    assert CmdResult.stderr == []
+    assert CmdResult.stdout == ['f4.txt','f3.txt','f2.txt','f1.txt']
 
 def test_ls_deep(cl, shell_basic):
-    stderr, stdout = cl.enter_command('ls -R', shell_basic)
-    assert stderr == []
-    assert stdout == ['f1.txt', 'f2.txt', 'd1', '/d1/f3.txt', '/d1/f4.txt']
+    CmdResult = cl.enter_command('ls -R', shell_basic)
+    assert CmdResult.stderr == []
+    assert CmdResult.stdout == ['f1.txt', 'f2.txt', 'd1', '/d1/f3.txt', '/d1/f4.txt']
 
 def test_ls_organisation(cl, shell_ls: ShellState):
-    stderr, stdout = cl.enter_command('ls -X', shell_ls)
+    CmdResult = cl.enter_command('ls -X', shell_ls)
     files = LS_FILES.copy()
     print (files)
-    assert stderr == []
+    assert CmdResult.stderr == []
     sorted_files = sorted(files, key=lambda f: os.path.splitext(f)[1])
-    assert stdout == sorted_files
+    assert CmdResult.stdout == sorted_files
 
-    stderr, stdout = cl.enter_command('ls -S', shell_ls)
-    assert stderr == []
+    CmdResult = cl.enter_command('ls -S', shell_ls)
+    assert CmdResult.stderr == []
     for i in range(0, 5):
-        assert stdout[i] == sizes[i]
+        assert CmdResult.stdout[i] == sizes[i]
 
-    stderr, stdout = cl.enter_command('ls -t', shell_ls)
+    CmdResult = cl.enter_command('ls -t', shell_ls)
     times = sizes.copy()
     times.reverse()
-    assert stderr == []
+    assert CmdResult.stderr == []
     for i in range(0, 5):
-        assert stdout[i] == times[i]
+        assert CmdResult.stdout[i] == times[i]
 
-    stderr, stdout = cl.enter_command('ls -u', shell_ls)
+    CmdResult = cl.enter_command('ls -u', shell_ls)
     atimes.reverse()
-    assert stderr == []
+    assert CmdResult.stderr == []
     for i in range(0, 5):
-        assert stdout[i] == atimes[i]
+        assert CmdResult.stdout[i] == atimes[i]
 
-    stderr, stdout = cl.enter_command('ls -c', shell_ls)
-    assert stderr == []
+    CmdResult = cl.enter_command('ls -c', shell_ls)
+    assert CmdResult.stderr == []
     for i in range(0, 5):
-        assert stdout[i] == LS_FILES[-(i+1)]
+        assert CmdResult.stdout[i] == LS_FILES[-(i+1)]
