@@ -210,7 +210,10 @@ def test_tail_c_1(cl, shell_tail):
     )
 
     assert stderr == []
-    assert stdout == ["12"]
+
+    # Raw stream ends with "...11\n12"
+    # Last byte is "2"
+    assert stdout == ["2"]
 
 
 def test_tail_c_2(cl, shell_tail):
@@ -221,8 +224,8 @@ def test_tail_c_2(cl, shell_tail):
 
     assert stderr == []
 
-    # Last 2 lines/items
-    assert stdout == ["11", "12"]
+    # Last two bytes are "12"
+    assert stdout == ["12"]
 
 
 def test_tail_c_5(cl, shell_tail):
@@ -232,20 +235,18 @@ def test_tail_c_5(cl, shell_tail):
     )
 
     assert stderr == []
-
-    assert stdout == [
-        "8", "9", "10", "11", "12"
-    ]
+    assert stdout == ["11", "12"]
 
 
 def test_tail_c_equal_file_size(cl, shell_tail):
     stderr, stdout = cl.enter_command(
-        "tail -c 12 f1.txt",
+        "tail -c 26 f1.txt",
         shell_tail
     )
 
     assert stderr == []
 
+    # Entire file stream
     assert stdout == [
         "1", "2", "3", "4", "5", "6",
         "7", "8", "9", "10", "11", "12"
@@ -273,6 +274,8 @@ def test_tail_c_zero(cl, shell_tail):
     )
 
     assert stderr == []
+
+    # Real tail -c 0 outputs nothing
     assert stdout == []
 
 
@@ -284,7 +287,8 @@ def test_tail_c_small_file(cl, shell_tail):
 
     assert stderr == []
 
-    assert stdout == ["b", "c"]
+    # "a\nb\nc" -> last 2 bytes = "\nc"
+    assert stdout == ["", "c"]
 
 
 def test_tail_c_single_line(cl, shell_tail):
@@ -295,7 +299,8 @@ def test_tail_c_single_line(cl, shell_tail):
 
     assert stderr == []
 
-    assert stdout == ["hello"]
+    # "hello" -> "o"
+    assert stdout == ["o"]
 
 
 def test_tail_c_empty_file(cl, shell_tail):
@@ -305,7 +310,6 @@ def test_tail_c_empty_file(cl, shell_tail):
     )
 
     assert stderr == []
-
     assert stdout == []
 
 
@@ -317,11 +321,9 @@ def test_tail_c_mixed_file(cl, shell_tail):
 
     assert stderr == []
 
-    assert stdout == [
-        "elephant",
-        "frog",
-        "grape"
-    ]
+    # Stream ends with "...frog\ngrape"
+    # Last 3 bytes are "ape"
+    assert stdout == ["ape"]
 
 
 def test_tail_c_missing_argument(cl, shell_tail):
@@ -350,7 +352,8 @@ def test_tail_c_negative_number(cl, shell_tail):
         shell_tail
     )
 
-    assert stderr != []
+    # GNU tail rejects negative byte counts
+    assert stderr == ["tail: invalid number of bytes"]
     assert stdout == []
 
 
@@ -362,9 +365,8 @@ def test_tail_c_with_pipe_input(cl, shell_tail):
 
     assert stderr == []
 
-    assert stdout == [
-        "10", "11", "12"
-    ]
+    # Last 3 bytes are "\n12"
+    assert stdout == ["", "12"]
 
 
 # =========================================================

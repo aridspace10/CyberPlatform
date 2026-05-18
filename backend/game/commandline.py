@@ -64,11 +64,9 @@ class CommandLine:
 
             # create a new pipe from stdout for next command
             if stdout:
-                pipe_inode = Inode(NodeType.FILE)
-                pipe_node = FileNode(None, "pipe", pipe_inode)
-                # + ("\n" if stdout else "") for wc
-                pipe_node.set_data(stdout)
-                prev_pipe = pipe_node
+                prev_pipe = FileNode(None, "pipe", Inode(NodeType.FILE))
+                prev_pipe.inode.data = stdout
+                prev_pipe.inode.has_trailing_newline = True
             else:
                 prev_pipe = None
 
@@ -520,6 +518,10 @@ class CommandLine:
         words = bytes_flag = chars = lines = False
         files = []
 
+        print("NODE ID:", input.inode.id)
+        print("HAS NL:", input.inode.has_trailing_newline)
+        print("DATA:", input.get_data())
+
         for arg in args:
             if arg in ("-c","--bytes"):
                 bytes_flag = True
@@ -537,6 +539,7 @@ class CommandLine:
 
         if (not len(files)):
             files.append("-")
+        print("WC FLAGS: lines=%s words=%s chars=%s bytes=%s files=%s" % (lines, words, chars, bytes_flag, files))
 
         total_lines = 0
         total_words = 0
@@ -559,15 +562,16 @@ class CommandLine:
                     continue
             
             node = self.filesystem.current
+            print("FILE NODE INODE ID:", node.inode.id, "HAS_NL:", node.inode.has_trailing_newline, "DATA:", node.inode.data)
             data = node.get_data()
             self.filesystem.current = cur
 
-            lcount = len(data)
-            if data and not node.inode.has_trailing_newline:
-                lcount -= 1
+            stream = node.inode.to_stream()
+            print("LOOP STREAM:", repr(stream), "HAS_NL:", node.inode.has_trailing_newline)
+            lcount = stream.count("\n")
             wcount = len(" ".join(data).split())
-            ccount = len("\n".join(data))
-            bcount = len("\n".join(data).encode())
+            ccount = len(stream)
+            bcount = len(stream.encode())
 
             total_lines += lcount
             total_words += wcount
@@ -588,9 +592,10 @@ class CommandLine:
             if bytes_flag:
                 parts.append(str(bcount))
 
-            if len(files) > 1:
+            if file != "-":
                 parts.append(file)
 
+            print("PARTS BEFORE APPEND:", parts)
             output[1].append(" ".join(parts))
 
         if len(files) > 1:
@@ -611,7 +616,6 @@ class CommandLine:
             parts.append("total")
 
             output[1].append(" ".join(parts))
-
 
         return (0, output)
 
@@ -1135,6 +1139,8 @@ class CommandLine:
                         byte = int(num[1:])
                     else:
                         byte = int(num)
+                        if byte < 0:
+                            return (1, (["tail: invalid number of bytes"], []))
                 except (ValueError):
                     return (1, (["tail: argument for -c must be an integar with a possible + prefix"], []))
 
@@ -1165,6 +1171,10 @@ class CommandLine:
         files = args
         if (len(files) == 0):
             files = ["-"]
+
+        if byte == 0 or lines == 0:
+            return (0, ([], []))
+
         for file in files:
             # Create header if needed
             if ((len(files) > 1 and outputType != -1) or (len(files) == 1 and outputType == 1)):
@@ -1206,7 +1216,7 @@ class CommandLine:
                     encoded = raw.encode("utf-8")
                     trimmed = encoded[byte - 1:]
                     decoded = trimmed.decode("utf-8", errors="ignore")
-                    for line in decoded.split("\n"):
+                    for line in decoded.splitlines():
                         output[1].append(line)
             else:
                 if (lines != -1):
@@ -1218,7 +1228,7 @@ class CommandLine:
                     encoded = raw.encode("utf-8")
                     trimmed = encoded[-byte:]
                     decoded = trimmed.decode("utf-8", errors="ignore")
-                    for line in decoded.split("\n"):
+                    for line in decoded.splitlines():
                         output[1].append(line)
         return (0, output)
 

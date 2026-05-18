@@ -55,10 +55,20 @@ class Inode:
         self.ctime = datetime.fromisoformat(i["ctimes"])
         self.atime = datetime.fromisoformat(i["atimes"])
         self.mtime = datetime.fromisoformat(i["mtimes"])
-    
+
+    def to_stream(self) -> str:
+        if not self.data:
+            return ""
+        stream = "\n".join(self.data)
+        if self.has_trailing_newline:
+            stream += "\n"
+        if getattr(self, "_pipe_eof_newline", False):
+            stream += "\n"
+        return stream
+
     @property
     def size(self):
-        return sum(len(line) for line in self.data)
+        return len(self.to_stream())
     
     def get_data(self) -> list[str]:
         self.atime = datetime.now()
