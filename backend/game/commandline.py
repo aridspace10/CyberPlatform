@@ -74,8 +74,8 @@ class CommandLine:
             if cmd_result.stdout:
                 pipe_inode = Inode(NodeType.FILE)
                 pipe_node = FileNode(None, "pipe", pipe_inode)
-                # + ("\n" if stdout else "") for wc
                 pipe_node.set_data(cmd_result.stdout)
+                pipe_inode.has_trailing_newline = True
                 prev_pipe = pipe_node
             else:
                 prev_pipe = None
@@ -541,10 +541,6 @@ class CommandLine:
         words = bytes_flag = chars = lines = False
         files = []
 
-        print("NODE ID:", input.inode.id)
-        print("HAS NL:", input.inode.has_trailing_newline)
-        print("DATA:", input.get_data())
-
         for arg in args:
             if arg in ("-c","--bytes"):
                 bytes_flag = True
@@ -559,10 +555,9 @@ class CommandLine:
 
         if not any([words, bytes_flag, chars, lines]):
             words = bytes_flag = chars = lines = True
-
+        flag_count = sum([lines, words, chars, bytes_flag])
         if (not len(files)):
             files.append("-")
-        print("WC FLAGS: lines=%s words=%s chars=%s bytes=%s files=%s" % (lines, words, chars, bytes_flag, files))
 
         total_lines = 0
         total_words = 0
@@ -615,7 +610,7 @@ class CommandLine:
             if bytes_flag:
                 parts.append(str(bcount))
 
-            if file != "-":
+            if file != "-" and (len(files) > 1 or flag_count > 1):
                 parts.append(file)
 
             stdout.append(" ".join(parts))

@@ -179,7 +179,7 @@ def test_wc_l_no_final_newline(cl, shell_no_final_newline: ShellState):
 # shell_no_final_newline  ["a","b"], trailing=False       → 3 B
 # shell_largefile         [str(i) for i in range(1000)]
 #   "0"\n=2, "1"–"9"\n=9×2=18, "10"–"99"\n=90×3=270, "100"–"999"\n=900×4=3600 → 3890 B
-# shell_sed f1            ["cat wolf cat","hi cat"]       → 14+7 = 21 B
+# shell_sed f1            ["cat wolf cat","hi cat"]       → 13+7 = 20 B
 
 
 # ---------- WC -C (BYTES) — basic ----------
@@ -238,24 +238,24 @@ def test_wc_c_no_final_newline(cl, shell_no_final_newline: ShellState):
 # ---------- WC -C (BYTES) — pipe ----------
 
 def test_wc_c_pipe_cat(cl, shell_sed: ShellState):
-    # f1.txt: ["cat wolf cat", "hi cat"] → 14 + 7 = 21
+    # f1.txt: ["cat wolf cat", "hi cat"] → 13 + 7 = 20
     CommandResult = cl.enter_command('cat f1.txt | wc -c', shell_sed)
     assert CommandResult.stderr == []
-    assert CommandResult.stdout == ["21"]
+    assert CommandResult.stdout == ["20"]
 
 
 def test_wc_c_pipe_grep_all_match(cl, shell_sed: ShellState):
-    # both lines contain "cat"; piped output preserves newlines → 21 B
+    # both lines contain "cat"; piped output preserves newlines → 20 B
     CommandResult = cl.enter_command('cat f1.txt | grep cat | wc -c', shell_sed)
     assert CommandResult.stderr == []
-    assert CommandResult.stdout == ["21"]
+    assert CommandResult.stdout == ["20"]
 
 
 def test_wc_c_pipe_grep_one_match(cl, shell_sed: ShellState):
-    # only "cat wolf cat\n" matches "wolf" → 14 B
+    # only "cat wolf cat\n" matches "wolf" → 13 B
     CommandResult = cl.enter_command('cat f1.txt | grep wolf | wc -c', shell_sed)
     assert CommandResult.stderr == []
-    assert CommandResult.stdout == ["14"]
+    assert CommandResult.stdout == ["13"]
 
 
 def test_wc_c_pipe_no_match(cl, shell_sed: ShellState):
@@ -371,13 +371,13 @@ def test_wc_m_no_final_newline(cl, shell_no_final_newline: ShellState):
 def test_wc_m_pipe_cat(cl, shell_sed: ShellState):
     CommandResult = cl.enter_command('cat f1.txt | wc -m', shell_sed)
     assert CommandResult.stderr == []
-    assert CommandResult.stdout == ["21"]
+    assert CommandResult.stdout == ["20"]
 
 
 def test_wc_m_pipe_grep_one_match(cl, shell_sed: ShellState):
     CommandResult = cl.enter_command('cat f1.txt | grep wolf | wc -m', shell_sed)
     assert CommandResult.stderr == []
-    assert CommandResult.stdout == ["14"]
+    assert CommandResult.stdout == ["13"]
 
 
 def test_wc_m_pipe_no_match(cl, shell_sed: ShellState):
@@ -436,12 +436,12 @@ def test_wc_m_large_file(cl, shell_largefile: ShellState):
 # ---------- Combined flags: -lc and -lm ----------
 
 def test_wc_lc_two_lines(cl, shell_sed: ShellState):
-    # f1.txt: 2 lines, 21 bytes
+    # f1.txt: 2 lines, 20 bytes
     CommandResult = cl.enter_command('wc -l -c f1.txt', shell_sed)
     assert CommandResult.stderr == []
     parts = CommandResult.stdout[0].split()
     assert parts[0] == "2"       # line count
-    assert parts[1] == "21"      # byte count
+    assert parts[1] == "20"      # byte count
     assert parts[2] == "f1.txt"
 
 
@@ -450,7 +450,7 @@ def test_wc_lm_two_lines(cl, shell_sed: ShellState):
     assert CommandResult.stderr == []
     parts = CommandResult.stdout[0].split()
     assert parts[0] == "2"
-    assert parts[1] == "21"
+    assert parts[1] == "20"
     assert parts[2] == "f1.txt"
 
 

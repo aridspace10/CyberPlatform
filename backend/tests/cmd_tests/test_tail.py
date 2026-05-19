@@ -209,7 +209,7 @@ def test_tail_c_1(cl, shell_tail):
         shell_tail
     )
 
-    assert CommandResult.CommandResult.stderr == []
+    assert CommandResult.stderr == []
 
     # Raw stream ends with "...11\n12"
     # Last byte is "2"
