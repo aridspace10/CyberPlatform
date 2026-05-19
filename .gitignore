@@ -4,3 +4,4 @@ node_modules
 .coverage
 .coveragerc
 app.db
+**/*.coverage
