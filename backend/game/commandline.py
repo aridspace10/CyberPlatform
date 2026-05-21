@@ -185,55 +185,60 @@ class CommandLine:
     def run_command(self, args: list[str], fdin: FileNode) -> CommandResult:
         if (not (len(args))):
             return CommandResult(0, [], [], 'text', None)
-        match args[0]:
+        cmd = args.pop(0)
+        match cmd:
             case "ls":
-                return self.ls(args[1:], fdin)
+                return self.ls(args, fdin)
             case "mkdir":
-                return self.mkdir(args[1:], fdin)
+                return self.mkdir(args, fdin)
             case "cd":
-                return self.cd(args[1:], fdin)
+                return self.cd(args, fdin)
             case "pwd":
-                return self.pwd(args[1:], fdin)
+                return self.pwd(args, fdin)
             case "rm":
-                return self.rm(args[1:], fdin)
+                return self.rm(args, fdin)
             case "touch":
-                return self.touch(args[1:], fdin)
+                return self.touch(args, fdin)
             case "cat":
-                return self.cat(args[1:], fdin)
+                return self.cat(args, fdin)
             case "head":
-                return self.head(args[1:], fdin)
+                return self.head(args, fdin)
             case "tail":
-                return self.tail(args[1:], fdin)
+                return self.tail(args, fdin)
             case "echo":
-                return self.echo(args[1:], fdin)
+                return self.echo(args, fdin)
             case "chmod":
-                return self.chmod(args[1:], fdin)
+                return self.chmod(args, fdin)
             case "cp":
-                return self.cp(args[1:], fdin)
+                return self.cp(args, fdin)
             case "mv":
-                return self.mv(args[1:], fdin)
+                return self.mv(args, fdin)
             case "grep":
-                return self.grep(args[1:], fdin)
+                return self.grep(args, fdin)
             case "ln":
-                return self.ln(args[1:], fdin)
+                return self.ln(args, fdin)
             case "uniq":
-                return self.uniq(args[1:], fdin)
+                return self.uniq(args, fdin)
             case "sort":    
-                return self.sort(args[1:], fdin)
+                return self.sort(args, fdin)
             case "find":
-                return self.find(args[1:], fdin)
+                return self.find(args, fdin)
             case "sed":
-                return self.sed(args[1:], fdin)
+                return self.sed(args, fdin)
             case "wc":
-                return self.wc(args[1:], fdin)
+                return self.wc(args, fdin)
+            case "vim":
+                return self.vim(args, fdin)
             case _:
                 return CommandResult(1, [], ["Unknown command given"], 'text', None)
 
-    # def get_past_command(self) -> None:
-    #     r = self.history[self.hpoint]
-    #     if (self.hpoint < 0):
-    #         self.hpoint -= 1
-    #         return r
+    def vim(self, args: list[str], input: FileNode):
+        if (not len(args)):
+            return CommandResult(2, stderr=["vim: no filename provided"])
+        filename = args.pop(0)
+        self.filesystem.search(filename)
+        data = self.filesystem.current.get_data()
+        return CommandResult(0, kind="app", payload={"data": data})
         
     def useage(self, type: str) -> list[str]:
         output = []
