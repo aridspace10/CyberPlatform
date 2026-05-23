@@ -7,7 +7,7 @@ import Versus from "./Versus";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { getFullSessionData } from "../api/sessions";
-import { SessionContext } from "../components/SessionContext";
+import { SessionProvider } from "../components/SessionContext"
 
 export default function Game() {
     const location = useLocation();
@@ -20,6 +20,8 @@ export default function Game() {
     const hasPrompted = useRef(false);
     const [log, setLog] = useState([]);
     const [state, setState] = useState("")
+    const [view, SetView] = useState("terminal")
+    const openVimRef = useRef(null);
 
     function addLine(text) {
         setLog(prev => [...prev, text]);
@@ -70,7 +72,7 @@ export default function Game() {
             }
 
             if (data.type === "vim_open") {
-                
+                openVimRef.current?.(data.lines);
             }
         };
 
@@ -86,9 +88,9 @@ export default function Game() {
         return (<WaitingScreen players={players} />)
     } else if (state == 'running') {
         return (
-            <SessionContext.Provider value={{ sessionId, wsRef }}>
-                <Gamescreen wsRef={wsRef} log={log} addLine={addLine} />
-            </SessionContext.Provider>
+            <SessionProvider sessionId={sessionId} wsRef={wsRef}>
+                <Gamescreen wsRef={wsRef} log={log} addLine={addLine} openVimRef={openVimRef}/>
+            </SessionProvider>
     )
     } else if (state == 'starting') {
         return (<Versus players={players} />)

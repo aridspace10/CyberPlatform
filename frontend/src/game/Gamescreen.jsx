@@ -4,9 +4,17 @@ import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
 import "./Gamescreen.css"
-export default function Gamescreen({wsRef, log, addLine}) {
-  const [input, setInput] = useState("");
-  const [content, setContent] = useState(<GeneralTab />)
+import VimView from "./VimView";
+import { useSession } from "../components/SessionContext";
+
+export default function Gamescreen({ log, addLine, openVimRef }) {
+    const { vimMode, closeVim, openVim, wsRef } = useSession();
+    const [input, setInput] = useState("");
+    const [content, setContent] = useState(<GeneralTab />);
+
+    useEffect(() => {
+        openVimRef.current = openVim;
+    }, [openVim]);
 
   function handleEnter(e) {
     if (e.key === "Enter") {
@@ -35,7 +43,6 @@ export default function Gamescreen({wsRef, log, addLine}) {
   }
 
     const handleTabSwitch = (tab) => {
-        console.log("please")
         switch (tab) {
             case "General":
                 setContent(<GeneralTab />)
@@ -48,6 +55,10 @@ export default function Gamescreen({wsRef, log, addLine}) {
                 break;
         }
     }
+    
+    const VimClose = (data) => {
+        SetView("terminal")
+    }
 
   return (
     <div className="gamescreen">
@@ -59,21 +70,23 @@ export default function Gamescreen({wsRef, log, addLine}) {
             </div>
             {content}
         </div> 
-
-        <div className="terminal">
-            <div className="output">
-                {log.map((line, i) => (
-                <div key={i}>{line}</div>
-                ))}
+        {!vimMode
+            ? <div className="terminal">
+                <div className="output">
+                    {log.map((line, i) => (
+                    <div key={i}>{line}</div>
+                    ))}
+                </div>
+                <input
+                    className="prompt"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={handleEnter}
+                    autoFocus
+                />
             </div>
-            <input
-                className="prompt"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleEnter}
-                autoFocus
-            />
-        </div>
+            : <VimView onClose={closeVim}></VimView> 
+        }
     </div>
   );
 }
