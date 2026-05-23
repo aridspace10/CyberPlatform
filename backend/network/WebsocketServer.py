@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .SessionManger import session_manager, GameSession, Player
 from services.session_service import get_session, get_session_shell
+from game.commandline import CommandResult
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from db.session import get_db
@@ -63,16 +64,22 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
 
                 raw = data.get("input", "")
 
-                stdout, stderr = session.cmd.enter_command(
+                output: CommandResult = session.cmd.enter_command(
                     raw,
                     player.shell
                 )
-
-                await session.send_to(websocket, {
-                    "type": "command_output",
-                    "stdout": stdout,
-                    "stderr": stderr
-                })
+                if (output.kind == "text"):
+                    await session.send_to(websocket, {
+                        "type": "command_output",
+                        "stdout": output.stdout,
+                        "stderr": output.stderr
+                    })
+                else: #output.kind == "app":
+                    assert output.payload
+                    await session.send_to(websocket, {
+                        "type": "vim_open",
+                        "data": output.payload["data"]
+                    })
 
     except WebSocketDisconnect:
-        session.disconnect(websocket)
+        await session.disconnect(websocket)
