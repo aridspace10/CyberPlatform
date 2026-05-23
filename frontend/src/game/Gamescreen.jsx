@@ -3,7 +3,6 @@ import { useLocation } from "react-router";
 import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
-import Terminal from "./Terminal";
 import "./Gamescreen.css"
 export default function Gamescreen({wsRef, log, addLine}) {
   const [input, setInput] = useState("");

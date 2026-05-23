@@ -1,4 +1,3 @@
-import Terminal from "./game/Terminal";
 import Homepage from "./Homepage";
 import Game from "./game/Game";
 import "./app.css"
@@ -25,7 +24,6 @@ export default function App() {
                         </ProtectedRoute>
                     } />
                     {/* Dev pathways */}
-                    <Route path="/terminal" element={<Terminal />} />
                     <Route path="/users" element={<UserManager />} />
                 </Routes>
             </Router>

@@ -68,6 +68,10 @@ export default function Game() {
                 data.stdout.forEach(line => addLine(line));
                 data.stderr.forEach(line => addLine(line));
             }
+
+            if (data.type === "vim_open") {
+                
+            }
         };
 
         wsRef.current = socket;
