@@ -3,12 +3,16 @@ import { useSession } from "../components/SessionContext";
 export default function VimView({ onClose }) {
     const { vimData } = useSession();
     
-
     return (
         <div className="vim">
-            {vimData?.map((line, i) => (
-                <p key={i}>{line}</p>
-            ))}
+            <div className="lines">
+                {vimData?.map((line, i) => (
+                    <p key={i}>{line}</p>
+                ))}
+            </div>
+            <div className="vim-footer">
+                <p> FOOTER </p>
+            </div>
         </div>
     );
 }
