@@ -9,6 +9,7 @@ import datetime
 from .helpers import determine_perms_fromstr
 from game.Parser import CommandParser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse, FindParser, AndNode, OrNode, NotNode, FilterNode
 from game.ShellState import ShellState
+from game.NetworkManager import NetworkManager
 import copy
 import re
 
@@ -23,6 +24,9 @@ class CommandResult:
     payload: dict[str, Any] | None = None
 
 class CommandLine:
+    def __init__(self) -> None:
+        self.network = NetworkManager()
+
     def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
         lst = path.split("/")
         saved_current = self.filesystem.current
@@ -229,12 +233,6 @@ class CommandLine:
             case _:
                 return CommandResult(1, [], ["Unknown command given"], 'text', None)
 
-    # def get_past_command(self) -> None:
-    #     r = self.history[self.hpoint]
-    #     if (self.hpoint < 0):
-    #         self.hpoint -= 1
-    #         return r
-        
     def useage(self, type: str) -> list[str]:
         output = []
         with open(f"../static/help/{type}.txt") as f:
