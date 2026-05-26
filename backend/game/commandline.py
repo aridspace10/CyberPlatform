@@ -10,6 +10,7 @@ from .helpers import determine_perms_fromstr
 from game.Parser import CommandParser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse, FindParser, AndNode, OrNode, NotNode, FilterNode
 from game.ShellState import ShellState
 from game.NetworkManager import NetworkManager
+from game.ProcessManager import ProcessManager
 import copy
 import re
 
@@ -25,6 +26,8 @@ class CommandResult:
 
 class CommandLine:
     def __init__(self) -> None:
+        self.process_manager = ProcessManager()
+        self.process_manager.setup_system()
         self.network = NetworkManager()
 
     def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
@@ -243,7 +246,7 @@ class CommandLine:
         return output
     
     def ping(self, args: list[str], input: FileNode) -> CommandResult:
-        
+        return CommandResult()
     
     def find(self, args: list[str], input: FileNode) -> CommandResult:
         if (len(args) < 1):

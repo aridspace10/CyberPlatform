@@ -7,17 +7,26 @@ class ProcessState(StrEnum):
 
 class Process():
     _next_id = 1
-    def __init__(self, user: str, command: str = "", status: ProcessState = ProcessState.RUNNING):
+    def __init__(self, name: str, parent: int, command: str = "", status: ProcessState = ProcessState.RUNNING):
         self.pid: int = Process._next_id
         Process._next_id += 1
-        self.user: str = user
+        self.ppid: int = parent
+        self.name: str = name
         self.command: str = command
         self.status: str = status
 
 class ProcessManager():
     def __init__(self) -> None:
-        self.processes: list[Process] = []
+        self.processes: dict[int, Process] = {}
 
-    def create_process(self, user: str, command: str = ""):
-        process = Process(user, command)
-        self.processes.append(process)
+    def create_process(self, name: str, parent: int, command: str = ""):
+        process = Process(name, parent)
+        self.processes[parent] = process
+
+    def setup_system(self):
+        self.create_process("init", 0)
+        self.create_process("networkd", 1)
+        self.create_process("sshd", 1)
+        self.create_process("journald", 1)
+        self.create_process("cron", 1)
+        self.create_process("bash", 1)
