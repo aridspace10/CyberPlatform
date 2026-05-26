@@ -230,6 +230,8 @@ class CommandLine:
                 return self.sed(args[1:], fdin)
             case "wc":
                 return self.wc(args[1:], fdin)
+            case "ping":
+                return self.ping(args[1:], fdin)
             case _:
                 return CommandResult(1, [], ["Unknown command given"], 'text', None)
 
@@ -239,6 +241,9 @@ class CommandLine:
             for line in f:
                 output.append(line)
         return output
+    
+    def ping(self, args: list[str], input: FileNode) -> CommandResult:
+        
     
     def find(self, args: list[str], input: FileNode) -> CommandResult:
         if (len(args) < 1):
