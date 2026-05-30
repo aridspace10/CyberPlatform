@@ -34,7 +34,7 @@ class ProcessManager():
         del self.processes[pid]
         return proc
     
-    def list_processes(self) -> list[str]:
+    def list_processes(self, paramaters: dict) -> list[str]:
         return []
     
     def modify_process(self, pid: int, status: ProcessState) -> None:

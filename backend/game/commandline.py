@@ -27,7 +27,7 @@ class CommandResult:
 class CommandLine:
     def __init__(self) -> None:
         self.process_manager = ProcessManager()
-        self.process_manager.setup_system()
+        self.process_manager.boot()
         self.network = NetworkManager()
 
     def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
@@ -251,10 +251,17 @@ class CommandLine:
         if ("--help" in args):
             idx = args.index("--help")
             if (idx + 1 < len(args)):
-                type = args[idx + 1]
-                if type == "simple":
+                ty = args[idx + 1]
+                if ty == "simple" or ty == "s":
                     return CommandResult(stdout=self.useage("ps-simple"))
+                elif ty == "list" or ty == "l":
+                    return CommandResult(stdout=self.useage("ps-list"))
+                elif ty == "output" or ty == "o":
+                    return CommandResult(stdout=self.useage("ps-output"))
+                elif ty == "all" or ty == "a":
+                    return CommandResult(stdout=self.useage("ps-all"))
             return CommandResult(stdout=self.useage("ps"))
+
         return CommandResult()
     
     def ping(self, args: list[str], input: FileNode) -> CommandResult:
