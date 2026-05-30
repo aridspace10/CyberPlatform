@@ -34,11 +34,14 @@ class ProcessManager():
         del self.processes[pid]
         return proc
     
+    def list_processes(self) -> list[str]:
+        return []
+    
     def modify_process(self, pid: int, status: ProcessState) -> None:
         self.processes[pid].status = status
 
     def boot(self):
-        self.create_process("init", 0,)
+        self.create_process("init",     0, status=ProcessState.SLEEPING)
         self.create_process("networkd", 1, status=ProcessState.SLEEPING)
         self.create_process("sshd",     1, status=ProcessState.SLEEPING)
         self.create_process("journald", 1, status=ProcessState.SLEEPING)

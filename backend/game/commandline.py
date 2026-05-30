@@ -235,6 +235,8 @@ class CommandLine:
                 return self.wc(args[1:], fdin)
             case "ping":
                 return self.ping(args[1:], fdin)
+            case "ps":
+                return self.ps(args[1:], fdin)
             case _:
                 return CommandResult(1, [], ["Unknown command given"], 'text', None)
 
@@ -245,7 +247,19 @@ class CommandLine:
                 output.append(line)
         return output
     
+    def ps(self, args: list[str], input: FileNode) -> CommandResult:
+        if ("--help" in args):
+            idx = args.index("--help")
+            if (idx + 1 < len(args)):
+                type = args[idx + 1]
+                if type == "simple":
+                    return CommandResult(stdout=self.useage("ps-simple"))
+            return CommandResult(stdout=self.useage("ps"))
+        return CommandResult()
+    
     def ping(self, args: list[str], input: FileNode) -> CommandResult:
+        if ("--help" in args):
+            return CommandResult(stdout=self.useage("ping"))
         return CommandResult()
     
     def find(self, args: list[str], input: FileNode) -> CommandResult:
