@@ -261,6 +261,25 @@ class CommandLine:
                 elif ty == "all" or ty == "a":
                     return CommandResult(stdout=self.useage("ps-all"))
             return CommandResult(stdout=self.useage("ps"))
+        selectionTy = "t"
+        parameters: dict[str, Any] = {}
+        while (len(args)):
+            arg = args.pop(0)
+            for option in arg:
+                match (option):
+                    case ("-e"):
+                        parameters["selectionTy"] = "e"
+                    case ("-A"):
+                        parameters["selectionTy"] = "e"
+                    case "-C":
+                        parameters["command"] = args.pop(0)
+                    case "-p":
+                        parameters["pid"] = args.pop(0)
+                    case "-q":
+                        parameters["qpid"] = args.pop(0)
+                    case "-l":
+                        parameters["long"] = True
+        self.process_manager.list_processes(parameters)
 
         return CommandResult()
     
