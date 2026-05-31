@@ -261,7 +261,6 @@ class CommandLine:
                 elif ty == "all" or ty == "a":
                     return CommandResult(stdout=self.useage("ps-all"))
             return CommandResult(stdout=self.useage("ps"))
-        selectionTy = "t"
         parameters: dict[str, Any] = {}
         while (len(args)):
             arg = args.pop(0)
@@ -284,8 +283,30 @@ class CommandLine:
         return CommandResult()
     
     def ping(self, args: list[str], input: FileNode) -> CommandResult:
-        if ("--help" in args):
+        if ("--help" in args or "-h" in args):
             return CommandResult(stdout=self.useage("ping"))
+        between = 0
+        preload = 3
+        while len(args) > 1:
+            arg = args.pop(0)
+            if (arg[0] == "-"):
+                for option in arg:
+                    match (arg):
+                        case "i":
+                            val = None
+                            try:
+                                val = args.pop(0)
+                                between = int(val)
+                            except:
+                                return CommandResult(stderr=[f"Expected an integer for -i, got {val if val else ""}"])
+                        case "l":
+                            val = None
+                            try:
+                                val = args.pop(0)
+                                preload = int(val)
+                            except:
+                                return CommandResult(stderr=[f"Expected an integer for -l, got {val if val else ""}"])
+        dnsname = args.pop(0)
         return CommandResult()
     
     def find(self, args: list[str], input: FileNode) -> CommandResult:
