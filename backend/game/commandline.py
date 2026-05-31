@@ -64,8 +64,6 @@ class CommandLine:
             raise Exception("Enter command given no sequence object")
 
     def execute_pipe(self, parts: list[AndOr]) -> CommandResult:
-        status = 0
-        stderr, stdout = [], []
         cmd_result = None
         prev_pipe = None  # holds virtual pipe between commands
 
@@ -236,6 +234,8 @@ class CommandLine:
                 return self.ping(args[1:], fdin)
             case "ps":
                 return self.ps(args[1:], fdin)
+            case "sleep":
+                return self.sleep(args[1:], fdin)
             case _:
                 return CommandResult(1, [], ["Unknown command given"], 'text', None)
 
@@ -245,7 +245,51 @@ class CommandLine:
             for line in f:
                 output.append(line)
         return output
-    
+
+    def sleep(self, args: list[str], input: FileNode) -> CommandResult:
+        if ("--help" in args):
+            return CommandResult(stdout=self.useage("sleep"))
+        if (not len(args)):
+            return CommandResult(stderr=["sleep: Missing Argument"])
+        val = args[0]
+        last = val[-1]
+        ty = "s"
+        try:
+            tmp = int(last)
+        except:
+            ty = last
+            val = val[1:]
+        try:
+            val = int(val)
+        except:
+            return CommandResult(stderr=[f"expected int, got {val}"])
+        
+        # Modify val for selected type
+        if (ty == "m"):
+            val *= 60
+        if (ty == "h"):
+            val *= 60 * 60
+        if (ty == "d"):
+            val *= 60 * 60 * 24
+
+
+        # Create process
+        proc = self.process_manager.create_process(
+            f"sleep {" ".join(args)}",
+            parent=1
+        )
+
+        proc.program = SleepProgram(
+        proc,
+        ticks=seconds
+        )
+
+        return CommandResult(
+            stdout=[
+                f"Started process {proc.pid}"
+            ]
+        )
+
     def ps(self, args: list[str], input: FileNode) -> CommandResult:
         if ("--help" in args):
             idx = args.index("--help")

@@ -1,14 +1,5 @@
 from enum import StrEnum
-
-class Program:
-    def start(self):
-        pass
-
-    def receive_input(self, text: str):
-        pass
-
-    def tick(self):
-        pass
+from game.Program import Program
 
 class ProcessState(StrEnum):
     RUNNING = "RUNNING"
@@ -28,7 +19,7 @@ class Process():
         self.stdout: list[str] = []
         self.stderr: list[str] = []
         self.foreground: bool = False
-        self.program: Program
+        self.program: Program | None = None
     
     def __repr__(self):
         return f"PID={self.pid} PPID={self.ppid} {self.command}"
@@ -37,9 +28,10 @@ class ProcessManager():
     def __init__(self) -> None:
         self.processes: dict[int, Process] = {}
 
-    def create_process(self, command: str, parent: int, status: ProcessState = ProcessState.RUNNING):
+    def create_process(self, command: str, parent: int, status: ProcessState = ProcessState.RUNNING) -> Process:
         process = Process(command, parent, status)
         self.processes[process.pid] = process
+        return process
 
     def get_process(self, pid: int) -> Process | None:
         return self.processes.get(pid)
