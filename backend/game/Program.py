@@ -1,4 +1,4 @@
-from game.ProcessManager import Process, ProcessState
+from game.Process import Process, ProcessState
 
 class Program:
     def start(self):

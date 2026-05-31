@@ -11,6 +11,7 @@ from game.Parser import CommandParser, lex, Sequence, Pipe, AndOr, Command, Atom
 from game.ShellState import ShellState
 from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
+from game.Program import *
 import copy
 import re
 
@@ -280,8 +281,8 @@ class CommandLine:
         )
 
         proc.program = SleepProgram(
-        proc,
-        ticks=seconds
+            proc,
+            ticks=val
         )
 
         return CommandResult(

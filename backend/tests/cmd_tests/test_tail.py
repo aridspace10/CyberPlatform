@@ -5,10 +5,6 @@ from game.ShellState import ShellState
 from game.filenode import FileNode
 from game.commandline import CommandLine
 
-@pytest.fixture
-def cl():
-    return CommandLine()
-
 # =========================================================
 # Fixtures
 # =========================================================

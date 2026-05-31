@@ -6,14 +6,13 @@ from game.commandline import CommandLine
 from game.ShellState import ShellState
 from game.filesystem import FileSystem
 from game.filenode import FileNode, Inode, NodeType
+from game.ProcessManager import ProcessManager
+from game.NetworkManager import NetworkManager
 from wonderwords import RandomWord
+from network.SessionManger import GameSession
 from ..game.helpers import determine_perms_fromstr
 import os
 import time
-
-@pytest.fixture
-def cl():
-    return CommandLine()
 
 ######## HELPS #################
 def test_cmd_helps(cl, shell_empty):
