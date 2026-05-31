@@ -110,34 +110,6 @@ class GameSession:
     async def send_to(self, websocket: WebSocket, message: dict):
         await websocket.send_json(message)
 
-    async def handle_message(self, websocket: WebSocket, data: dict):
-        player = self.players.get(websocket)
-        if not player:
-            return
-
-        msg_type = data.get("type")
-
-        if msg_type == "command":
-            await self._handle_command(player, data.get("command", ""))
-
-        elif msg_type == "chat":
-            await self.broadcast({
-                "type": "chat",
-                "user": player.username,
-                "message": data.get("message", "")
-            })
-    
-    async def _handle_command(self, player: Player, command: str):
-        stdout, stderr = self.cmd.enter_command(command, player.shell)
-
-        await player.websocket.send_json({
-            "type": "command_result",
-            "stdout": stdout,
-            "stderr": stderr,
-            "cwd": player.shell.cwd
-        })
-
-
 class SessionManager:
     def __init__(self):
         self.sessions: Dict[str, GameSession] = {}
@@ -157,7 +129,7 @@ class SessionManager:
     
     async def set_session_state(self, session_id: str, new_state: str) -> bool:
         session = self.get_session(session_id)
-        if not session:
+        if not session or session == "404":
             return False
 
         await session.set_state(new_state)
