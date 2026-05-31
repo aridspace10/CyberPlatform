@@ -283,7 +283,7 @@ class CommandLine:
         return CommandResult()
     
     def ping(self, args: list[str], input: FileNode) -> CommandResult:
-        if ("--help" in args or "-h" in args):
+        if ("--help" in args or "-h" in args or "-help" in args):
             return CommandResult(stdout=self.useage("ping"))
         between = 0
         preload = 3
@@ -305,7 +305,7 @@ class CommandLine:
                                 val = args.pop(0)
                                 preload = int(val)
                             except:
-                                return CommandResult(stderr=[f"Expected an integer for -l, got {val if val else ""}"])
+                                return CommandResult(stderr=[f"Expected an integer for -l   , got {val if val else ""}"])
         dnsname = args.pop(0)
         return CommandResult()
     
