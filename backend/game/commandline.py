@@ -305,7 +305,7 @@ class CommandLine:
                                 val = args.pop(0)
                                 preload = int(val)
                             except:
-                                return CommandResult(stderr=[f"Expected an integer for -l   , got {val if val else ""}"])
+                                return CommandResult(stderr=[f"Expected an integer for -l, got {val if val else ""}"])
         dnsname = args.pop(0)
         return CommandResult()
     

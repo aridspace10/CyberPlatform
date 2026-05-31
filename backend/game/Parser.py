@@ -60,7 +60,7 @@ class Sequence:
 class Subshell:
     sequence: Sequence
 
-Atom = SimpleCommand | Subshell | VarDeclaration
+Atom = SimpleCommand | Subshell
 
 ############ FIND CLASSES ############
 class Node:
@@ -285,11 +285,16 @@ class CommandParser:
             return None
 
         if p.type == "WORD":
-            return Word([self.consume().value])
+            word = self.consume()
+            if (word is None):
+                raise SyntaxError("Admin Error: AAAB")
+            return Word([word.value])
 
         if p.type == "DOLLAR":
             self.consume()
             name = self.consume("WORD")
+            if (name is None):
+                raise SyntaxError("expected something after $")
             return Word([VarUse(name.value)])
 
         return None
