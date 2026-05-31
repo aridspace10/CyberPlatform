@@ -7,4 +7,4 @@ class ShellState:
         self.commands: list[str] = []
         self.vars: dict = {}
         self.ls: int = 0
-        foreground_pid: int | None = None
+        self.foreground_pid: int | None = None

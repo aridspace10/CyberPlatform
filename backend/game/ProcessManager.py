@@ -1,10 +1,21 @@
 from enum import StrEnum
 
+class Program:
+    def start(self):
+        pass
+
+    def receive_input(self, text: str):
+        pass
+
+    def tick(self):
+        pass
+
 class ProcessState(StrEnum):
     RUNNING = "RUNNING"
     STOPPED = "STOPPED"
     TERMINATED = "TERMINATED"
     SLEEPING = "SLEEPING"
+    WAITING_INPUT = "WAITING_INPUT"
 
 class Process():
     _next_id = 1
@@ -14,6 +25,10 @@ class Process():
         self.ppid: int = parent
         self.command: str = command
         self.status: str = status
+        self.stdout: list[str] = []
+        self.stderr: list[str] = []
+        self.foreground: bool = False
+        self.program: Program
     
     def __repr__(self):
         return f"PID={self.pid} PPID={self.ppid} {self.command}"

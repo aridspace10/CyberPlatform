@@ -25,10 +25,9 @@ class CommandResult:
     payload: dict[str, Any] | None = None
 
 class CommandLine:
-    def __init__(self) -> None:
-        self.process_manager = ProcessManager()
-        self.process_manager.boot()
-        self.network = NetworkManager()
+    def __init__(self, pm: ProcessManager, nm: NetworkManager) -> None:
+        self.process_manager = pm
+        self.network = nm
 
     def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
         lst = path.split("/")

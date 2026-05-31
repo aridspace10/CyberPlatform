@@ -2,6 +2,8 @@ from typing import Dict, Literal
 from fastapi import WebSocket
 from game.ShellState import ShellState
 from game.GameManager import GameManager
+from game.ProcessManager import ProcessManager
+from game.NetworkManager import NetworkManager
 from game.filesystem import FileSystem
 from game.commandline import CommandLine
 
@@ -24,14 +26,25 @@ class Player:
 
 class GameSession:
     def __init__(self, session_id: str):
+        # Basic Info
         self.session_id = session_id
         self.state = "waiting"
         self.name = "Test"
 
+        # Player and Connecitons
         self.players: Dict[Username, Player] = {}
         self.connections: Dict[WebSocket, Username] = {}
-        self.cmd = CommandLine()
-        self.game_manger: GameManager = GameManager()
+
+        # Setup machine
+        self.process_manager = ProcessManager()
+        self.process_manager.boot()
+
+        self.network_manager = NetworkManager()
+
+        self.commandline = CommandLine(
+            self.process_manager,
+            self.network_manager
+        )
     
     def __str__(self) -> str:
         return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"

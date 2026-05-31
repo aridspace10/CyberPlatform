@@ -63,16 +63,26 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
 
                 raw = data.get("input", "")
 
-                stdout, stderr = session.cmd.enter_command(
+                cmd = session.commandline.enter_command(
                     raw,
                     player.shell
                 )
+                
+                if player.shell.foreground_pid:
+                    proc = session.process_manager.get_process(
+                        player.shell.foreground_pid
+                    )
 
-                await session.send_to(websocket, {
-                    "type": "command_output",
-                    "stdout": stdout,
-                    "stderr": stderr
-                })
+                    if (proc is None):
+                        return
+
+                    proc.program.receive_input(raw)
+                else:
+                    await session.send_to(websocket, {
+                        "type": "command_output",
+                        "stdout": cmd.stdout,
+                        "stderr": cmd.stderr
+                    })
 
     except WebSocketDisconnect:
-        session.disconnect(websocket)
+        await session.disconnect(websocket)
