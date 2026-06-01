@@ -6,6 +6,8 @@ from game.ProcessManager import ProcessManager
 from game.NetworkManager import NetworkManager
 from game.filesystem import FileSystem
 from game.commandline import CommandLine
+from game.Scheduler import Scheduler
+import asyncio
 
 Username = str
 
@@ -39,12 +41,11 @@ class GameSession:
         self.process_manager = ProcessManager()
         self.process_manager.boot()
 
+        self.scheduler = Scheduler(self.process_manager)
+
         self.network_manager = NetworkManager()
 
-        self.commandline = CommandLine(
-            self.process_manager,
-            self.network_manager
-        )
+        self.commandline = CommandLine(self.process_manager, self.network_manager)
     
     def __str__(self) -> str:
         return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
@@ -63,6 +64,13 @@ class GameSession:
             "session": self.session_id,
             "name": self.name
         }
+    
+    async def scheduler_loop(self):
+        while True:
+
+            self.scheduler.tick()
+
+            await asyncio.sleep(1)
 
     async def set_state(self, new_state: str):
         self.state = new_state
@@ -123,7 +131,12 @@ class SessionManager:
         # 1.Setup Session
         new_session = GameSession(session_id) 
         new_session.name = name
-        # 2. Assign to session manger array
+        # 2. Setup scheduler
+        asyncio.create_task(
+            new_session.scheduler_loop()
+        )
+
+        # 3. Assign to session manger array
         self.sessions[session_id] = new_session
         return self.sessions[session_id]
     
