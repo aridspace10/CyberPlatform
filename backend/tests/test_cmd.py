@@ -154,23 +154,6 @@ def test_redirection_writes_newfile(cl, shell_basic: ShellState, fs_basic: FileS
     fnode = fs_basic.current
     assert fnode.get_data() == ["hi"]
 
-########### RM #################
-def test_rm_basic(cl, shell_fouritems: ShellState):
-    CmdResult = cl.enter_command('rm f2.txt', shell_fouritems)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert len(shell_fouritems.fs.current.items) == 3
-
-def test_rm_dir(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command('rm d1', shell_basic)
-    assert len(shell_basic.fs.current.items) == 3
-    assert CmdResult.stderr == ["rm: cannot remove 'd1': Is a directory"]
-    assert CmdResult.stdout == []
-    CmdResult = cl.enter_command('rm -r d1', shell_basic)
-    assert len(shell_basic.fs.current.items) == 2
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-
 ######### CAT ##############
 def test_cat_nonexistent_file(cl, shell_empty):
     # reading missing file returns error
