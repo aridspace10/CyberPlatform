@@ -18,11 +18,18 @@ import re
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
 @dataclass
+class Interaction:
+    mode: str  # "foreground", "prompt"
+
+    prompt: str | None = None
+
+@dataclass
 class CommandResult:
     status: int = 0
     stdout: list[str] = field(default_factory=list)
     stderr: list[str] = field(default_factory=list)
     kind: Literal["text", "app"] = "text"
+    interaction: Interaction | None = None
     payload: dict[str, Any] | None = None
 
 class CommandLine:
