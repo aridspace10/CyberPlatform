@@ -20,7 +20,6 @@ CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 @dataclass
 class Interaction:
     mode: str  # "foreground", "prompt"
-
     prompt: str | None = None
 
 @dataclass
@@ -293,9 +292,9 @@ class CommandLine:
         )
 
         return CommandResult(
-            stdout=[
-                f"Started process {proc.pid}"
-            ]
+            interaction=Interaction(
+                mode="foreground"
+            )
         )
 
     def ps(self, args: list[str], input: FileNode) -> CommandResult:

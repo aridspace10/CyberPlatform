@@ -77,7 +77,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
                     await session.send_to(websocket, {
                         "type": "command_output",
                         "stdout": cmd.stdout,
-                        "stderr": cmd.stderr
+                        "stderr": cmd.stderr,
+                        "interaction": (
+                            None if not cmd.interaction else {
+                                "mode": cmd.interaction.mode,
+                                "prompt": cmd.interaction.prompt
+                            }
+                        )
                     })
 
     except WebSocketDisconnect:
