@@ -75,6 +75,12 @@ export default function Game() {
                 }
                 addLine(data.interaction.prompt ?? "")
             }
+
+            if (data.type === "terminal_state") {
+                // if busy (true), then no interaction (false), vise versa
+                console.log(data)
+                setInteraction(!data.busy)
+            }
         };
 
         wsRef.current = socket;
