@@ -7,6 +7,7 @@ from game.NetworkManager import NetworkManager
 from game.filesystem import FileSystem
 from game.commandline import CommandLine
 from game.Scheduler import Scheduler
+from game.Events import ProcessTerminatedEvent
 import asyncio
 
 Username = str
@@ -40,6 +41,7 @@ class GameSession:
         # Setup machine
         self.process_manager = ProcessManager()
         self.process_manager.boot()
+        self.game_manger = GameManager()
 
         self.scheduler = Scheduler(self.process_manager)
 
@@ -69,6 +71,34 @@ class GameSession:
         while True:
 
             self.scheduler.tick()
+
+            while self.process_manager.events:
+                event = self.process_manager.events.pop(0)
+                print ("A")
+                if isinstance(event, ProcessTerminatedEvent):
+
+                    for player in self.players.values():
+                        print(
+                            "foreground=",
+                            player.shell.foreground_pid,
+                            "event pid=",
+                            event.process.pid
+                        )
+                        if player.shell.foreground_pid == event.process.pid:
+                            print ("B")
+                            player.shell.foreground_pid = None
+
+                            if player.websocket:
+                                print ("C")
+                                await self.send_to(
+                                    player.websocket,
+                                    {
+                                        "type": "terminal_state",
+                                        "busy": False,
+                                        "mode": None,
+                                        "prompt": None
+                                    }
+                                )
 
             await asyncio.sleep(1)
 

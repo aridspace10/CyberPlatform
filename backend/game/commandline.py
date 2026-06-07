@@ -291,6 +291,8 @@ class CommandLine:
             ticks=val
         )
 
+        self.shell.foreground_pid = proc.pid
+
         return CommandResult(
             interaction=Interaction(
                 mode="foreground"

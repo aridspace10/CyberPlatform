@@ -3,6 +3,7 @@ from game.Process import Process, ProcessState
 class ProcessManager():
     def __init__(self) -> None:
         self.processes: dict[int, Process] = {}
+        self.events = []
 
     def create_process(self, command: str, parent: int, status: ProcessState = ProcessState.RUNNING) -> Process:
         process = Process(command, parent, status)
