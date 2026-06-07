@@ -74,7 +74,6 @@ class GameSession:
 
             while self.process_manager.events:
                 event = self.process_manager.events.pop(0)
-                print ("A")
                 if isinstance(event, ProcessTerminatedEvent):
 
                     for player in self.players.values():
@@ -85,11 +84,9 @@ class GameSession:
                             event.process.pid
                         )
                         if player.shell.foreground_pid == event.process.pid:
-                            print ("B")
                             player.shell.foreground_pid = None
 
                             if player.websocket:
-                                print ("C")
                                 await self.send_to(
                                     player.websocket,
                                     {

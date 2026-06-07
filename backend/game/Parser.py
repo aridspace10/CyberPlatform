@@ -38,7 +38,7 @@ class SimpleCommand:
 
 @dataclass
 class Pipe:
-    parts: list[Command]
+    parts: list[AndOr]
 
 @dataclass
 class Command:
@@ -49,12 +49,17 @@ class Command:
 
 @dataclass
 class AndOr:
-    first: Pipe
-    rest: list[tuple[Literal["&&", "||"], Pipe]]
+    first: Command
+    rest: list[tuple[Literal["&&", "||"], Command]]
+
+@dataclass
+class Job:
+    pipeline: Pipe
+    background: bool
 
 @dataclass
 class Sequence:
-    parts: list[AndOr]
+    parts: list[Job]
 
 @dataclass
 class Subshell:
@@ -96,6 +101,7 @@ class DeleteNode(Node):
     pass
 
 OPERATORS = {
+    "&": "AMP",
     "&&": "AND",
     "||": "OR",
     "|": "PIPE",
@@ -194,29 +200,31 @@ class CommandParser:
         return self.parse_sequence()
     
     def parse_sequence(self) -> Sequence:
-        node = self.parse_andor()        # ← change to andor
-        result = [node]
-        while ((p := self.peek()) and p.type == "SEMI"):
-            self.consume("SEMI")
-            result.append(self.parse_andor())  # ← here too
+        pipeline = self.parse_pipeline()
+        result = [Job(pipeline, False)]
+        while ((p := self.peek()) and p.type in ("SEMI", "AMP")):
+            background = p.type == "AMP"
+            self.consume()
+            pipeline = self.parse_pipeline()
+            result.append(Job(pipeline, background))
         return Sequence(result)
 
     def parse_pipeline(self) -> Pipe:
-        node = self.parse_command()      # ← change to command
+        node = self.parse_andor()
         result = [node]
         while ((p := self.peek()) and p.type == "PIPE"):
             self.consume("PIPE")
-            result.append(self.parse_command())  # ← here too
+            result.append(self.parse_andor())
         return Pipe(result)
 
     def parse_andor(self) -> AndOr:
-        first = self.parse_pipeline()    # ← change to pipeline
+        first = self.parse_command()
         rest = []
-        while ((p := self.peek()) and (p.type == "AND" or p.type == "OR")):
+        while ((p := self.peek()) and p.type in ("AND", "OR")):
             tmp = self.consume()
-            if tmp is None:
-                raise Exception()
-            rest.append((tmp.value, self.parse_pipeline()))  # ← here too
+            if (tmp == None):
+                raise SyntaxError()
+            rest.append((tmp.value, self.parse_command()))
         return AndOr(first, rest)
     
     def parse_redirections(self) -> list[Redirection]:

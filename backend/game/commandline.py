@@ -70,22 +70,19 @@ class CommandLine:
         else:
             raise Exception("Enter command given no sequence object")
 
-    def execute_pipe(self, parts: list[Command]) -> CommandResult:
+    def execute_pipeline(self, pipe: Pipe) -> CommandResult:
         cmd_result = None
-        prev_pipe = None  # holds virtual pipe between commands
+        prev_pipe = None
 
-        for part in parts:
-            # feed previous pipe into next command
+        for part in pipe.parts:
             self.fdin = prev_pipe
             self.fdout = None
 
-            cmd_result = self.execute_command(part)
+            cmd_result = self.execute_andor(part)
 
-            # create a new pipe from stdout for next command
             if cmd_result.stdout:
                 pipe_inode = Inode(NodeType.FILE)
                 pipe_node = FileNode(None, "pipe", pipe_inode)
-                # + ("\n" if stdout else "") for wc
                 pipe_node.set_data(cmd_result.stdout)
                 prev_pipe = pipe_node
             else:
@@ -93,15 +90,15 @@ class CommandLine:
 
         self.fdin = None
         self.fdout = None
-        if (cmd_result == None):
+        if cmd_result is None:
             raise Exception("No Cmd Result given")
         return cmd_result
     
     def execute_andor(self, elem: AndOr) -> CommandResult:
-        cmd_result = self.execute_pipe(elem.first.parts)
+        cmd_result = self.execute_command(elem.first)
         for (op, cmd) in elem.rest:
-            if ((op == "&&" and not cmd_result.status) or (op == "||" and cmd_result.status)):
-                tmp_result = self.execute_pipe(cmd.parts)
+            if (op == "&&" and not cmd_result.status) or (op == "||" and cmd_result.status):
+                tmp_result = self.execute_command(cmd)
                 cmd_result.stderr.extend(tmp_result.stderr)
                 cmd_result.stdout.extend(tmp_result.stdout)
                 cmd_result.status = tmp_result.status
@@ -180,15 +177,13 @@ class CommandLine:
             self.fdout = saved_fdout
             return cmd_result
 
-    def execute_sequence(self, parts: list[AndOr]) -> CommandResult:
+    def execute_sequence(self, parts: list[Job]) -> CommandResult:
         cmd_result = None
-
-        for part in parts:
-            cmd_result = self.execute_andor(part)
-
-        if (cmd_result == None):
+        for job in parts:
+            # background jobs not yet supported, just execute inline
+            cmd_result = self.execute_pipeline(job.pipeline)
+        if cmd_result is None:
             raise Exception("cmd being empty")
-        
         return cmd_result
  
     def run_command(self, args: list[str], fdin: FileNode) -> CommandResult:
