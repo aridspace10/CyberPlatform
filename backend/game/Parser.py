@@ -38,7 +38,7 @@ class SimpleCommand:
 
 @dataclass
 class Pipe:
-    parts: list[AndOr]
+    parts: list[Command]
 
 @dataclass
 class Command:
@@ -49,12 +49,12 @@ class Command:
 
 @dataclass
 class AndOr:
-    first: Command
-    rest: list[tuple[Literal["&&", "||"], Command]]
+    first: Pipe
+    rest: list[tuple[Literal["&&", "||"], Pipe]]
 
 @dataclass
 class Sequence:
-    parts: list[Pipe]
+    parts: list[AndOr]
 
 @dataclass
 class Subshell:
@@ -194,29 +194,29 @@ class CommandParser:
         return self.parse_sequence()
     
     def parse_sequence(self) -> Sequence:
-        node = self.parse_pipeline()
+        node = self.parse_andor()        # ← change to andor
         result = [node]
         while ((p := self.peek()) and p.type == "SEMI"):
             self.consume("SEMI")
-            result.append(self.parse_pipeline())
+            result.append(self.parse_andor())  # ← here too
         return Sequence(result)
 
     def parse_pipeline(self) -> Pipe:
-        node = self.parse_andor()
+        node = self.parse_command()      # ← change to command
         result = [node]
         while ((p := self.peek()) and p.type == "PIPE"):
             self.consume("PIPE")
-            result.append(self.parse_andor())
+            result.append(self.parse_command())  # ← here too
         return Pipe(result)
 
-    def parse_andor(self):
-        first = self.parse_command()
+    def parse_andor(self) -> AndOr:
+        first = self.parse_pipeline()    # ← change to pipeline
         rest = []
         while ((p := self.peek()) and (p.type == "AND" or p.type == "OR")):
             tmp = self.consume()
             if tmp is None:
                 raise Exception()
-            rest.append((tmp.value, self.parse_command()))
+            rest.append((tmp.value, self.parse_pipeline()))  # ← here too
         return AndOr(first, rest)
     
     def parse_redirections(self) -> list[Redirection]:

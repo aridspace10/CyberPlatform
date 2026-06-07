@@ -7,7 +7,7 @@ from game.inode import Inode, NodeType
 import random
 import datetime
 from .helpers import determine_perms_fromstr
-from game.Parser import CommandParser, lex, Sequence, Pipe, AndOr, Command, Atom, SimpleCommand, Subshell, VarDeclaration, VarUse, FindParser, AndNode, OrNode, NotNode, FilterNode
+from game.Parser import *
 from game.ShellState import ShellState
 from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
@@ -70,7 +70,7 @@ class CommandLine:
         else:
             raise Exception("Enter command given no sequence object")
 
-    def execute_pipe(self, parts: list[AndOr]) -> CommandResult:
+    def execute_pipe(self, parts: list[Command]) -> CommandResult:
         cmd_result = None
         prev_pipe = None  # holds virtual pipe between commands
 
@@ -79,7 +79,7 @@ class CommandLine:
             self.fdin = prev_pipe
             self.fdout = None
 
-            cmd_result = self.execute_andor(part)
+            cmd_result = self.execute_command(part)
 
             # create a new pipe from stdout for next command
             if cmd_result.stdout:
@@ -98,10 +98,10 @@ class CommandLine:
         return cmd_result
     
     def execute_andor(self, elem: AndOr) -> CommandResult:
-        cmd_result = self.execute_command(elem.first)
+        cmd_result = self.execute_pipe(elem.first.parts)
         for (op, cmd) in elem.rest:
             if ((op == "&&" and not cmd_result.status) or (op == "||" and cmd_result.status)):
-                tmp_result = self.execute_command(cmd)
+                tmp_result = self.execute_pipe(cmd.parts)
                 cmd_result.stderr.extend(tmp_result.stderr)
                 cmd_result.stdout.extend(tmp_result.stdout)
                 cmd_result.status = tmp_result.status
@@ -180,13 +180,11 @@ class CommandLine:
             self.fdout = saved_fdout
             return cmd_result
 
-    def execute_sequence(self, parts: list[Pipe]) -> CommandResult:
-        last_status = 0
-        stdout, stderr = [], []
+    def execute_sequence(self, parts: list[AndOr]) -> CommandResult:
         cmd_result = None
 
         for part in parts:
-            cmd_result = self.execute_pipe(part.parts)
+            cmd_result = self.execute_andor(part)
 
         if (cmd_result == None):
             raise Exception("cmd being empty")

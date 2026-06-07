@@ -1,5 +1,4 @@
 from game.ProcessManager import ProcessManager, ProcessState, Process
-from game.Events import ProcessTerminatedEvent
 
 class Scheduler:
     def __init__(self, pm: ProcessManager):
@@ -9,10 +8,10 @@ class Scheduler:
         dead = []
         for proc in self.pm.processes.values():
 
+            if proc.status != ProcessState.RUNNING:
+                continue
+
             if proc.status == ProcessState.TERMINATED:
-                self.pm.events.append(
-                    ProcessTerminatedEvent(proc)
-                )
                 dead.append(proc.pid)
                 continue
 

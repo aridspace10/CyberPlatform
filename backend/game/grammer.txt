@@ -1,6 +1,10 @@
 Input -> Sequence
 
-Sequence -> Pipeline { ";" Pipeline }
+Sequence -> Job { Separator Job }
+
+Separator -> ";" | "&"
+
+Job -> Pipeline
 
 Pipeline -> AndOr { "|" AndOr }
 
