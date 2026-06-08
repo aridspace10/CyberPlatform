@@ -1364,31 +1364,40 @@ class CommandLine:
         return CommandResult(0, stdout, stderr)
 
     def rm(self, args: list[str], input: FileNode) -> CommandResult:
-        recurse, verbose = False, False
+        recurse, verbose, interactive = False, False, False
         stdout = []
         stderr = []
         if ("--help" in args):
             return CommandResult(0, stdout=self.useage("rm"))
         
-        while len(args) > 1:
-            arg = args[0]
-            if (arg[0] == "-"):
+        while len(args) and args[0][0] == "-":
+            arg = args.pop(0)
+            if (arg == "--recursive"):
+                recurse = True
+            else:
                 options = arg[1:].split()
                 for option in options:
-                    if (option == "r" or option == "R"):
+                    if (option == "r" or option == "R" ):
                         recurse = True
                     elif (option == "-v"):
                         verbose = True
-            args = args[1:]
-        filename = args[0]
-        result = self.filesystem.current.delete_child(filename, recurse)
-        if (result == ""):
-            stderr.append(f"rm: {filename} was not found")
-        elif (result == "dir"):
-            stderr.append(f"rm: cannot remove '{filename}': Is a directory")
-        elif (verbose):
-            stdout.append("rm: File sucessfully deleted")
-        return CommandResult(0, stdout, stderr)
+                    elif (option == "-i"):
+                        interactive = True
+        files = args
+        if (not len(files)):
+            return CommandResult(1, stderr=["rm: missing operand"])
+        if (interactive):
+            pass
+        else:
+            for filename in files:
+                result = self.filesystem.current.delete_child(filename, recurse)
+                if (result == ""):
+                    stderr.append(f"rm: {filename} was not found")
+                elif (result == "dir"):
+                    stderr.append(f"rm: cannot remove '{filename}': Is a directory")
+                elif (verbose):
+                    stdout.append("rm: File sucessfully deleted")
+                return CommandResult(0, stdout, stderr)
 
     def pwd(self, args: list[str], input: FileNode) -> CommandResult:
         ty = "l"
