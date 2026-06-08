@@ -1387,7 +1387,20 @@ class CommandLine:
         if (not len(files)):
             return CommandResult(1, stderr=["rm: missing operand"])
         if (interactive):
-            pass
+            proc = self.process_manager.create_process(
+                f"sleep {" ".join(args)}",
+                parent=1
+            )
+
+            proc.program = RmProgram(proc, files)
+
+            self.shell.foreground_pid = proc.pid
+
+            return CommandResult(
+                interaction=Interaction(
+                    mode="foreground"
+                )
+            )
         else:
             for filename in files:
                 result = self.filesystem.current.delete_child(filename, recurse)

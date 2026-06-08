@@ -5,10 +5,10 @@ class Program:
         pass
 
     def receive_input(self, text: str):
-        pass
+        raise NotImplementedError()
 
     def tick(self):
-        pass
+        raise NotImplementedError()
 
 class SleepProgram(Program):
     def __init__(self, process: Process, ticks: int):
@@ -20,3 +20,27 @@ class SleepProgram(Program):
 
         if self.remaining <= 0:
             self.process.status = ProcessState.TERMINATED
+
+class RmProgram(Program):
+    def __init__(self, process: Process, files: list[str]):
+        self.process = process
+        self.files = files
+        self.current_file = None
+
+    def start(self):
+        self.next_file()
+
+    def next_file(self):
+        if not self.files:
+            self.process.status = ProcessState.TERMINATED
+            return
+
+        self.current_file = self.files.pop(0)
+
+    def receive_input(self, text):
+        if text.lower() in ["y", "yes"]:
+            # delete file
+            pass
+
+        self.next_file()
+        
