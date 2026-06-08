@@ -31,37 +31,75 @@ class CommandResult:
     interaction: Interaction | None = None
     payload: dict[str, Any] | None = None
 
+@dataclass
+class SystemContext:
+    fs: FileSystem
+    pm: ProcessManager
+    nm: NetworkManager
+    shell: ShellState
+
+@dataclass
+class CommandContext:
+    system: SystemContext
+    args: list[str]
+    stdin: FileNode
+    stdout: FileNode | None
+
+    
+
 class CommandLine:
     def __init__(self, pm: ProcessManager, nm: NetworkManager) -> None:
         self.process_manager = pm
         self.network = nm
 
-    def get_fd(self, path: str, removing: bool = False) -> FileNode | str:
+        self.commands = {
+            "ls": self.ls,
+            "mkdir": self.mkdir,
+            "cd": self.cd,
+            "pwd": self.pwd,
+            "rm": self.rm,
+            "touch": self.touch,
+            "cat": self.cat,
+            "head": self.head,
+            "tail": self.tail,
+            "echo": self.echo,
+            "chmod": self.chmod,
+            "cp": self.cp,
+            "mv": self.mv,
+            "grep": self.grep,
+            "ln": self.ln,
+            "uniq": self.uniq,
+            "sort": self.sort,
+            "find": self.find,
+            "sed": self.sed,
+            "wc": self.wc,
+            "ping": self.ping,
+            "ps": self.ps,
+            "sleep": self.sleep,
+        }
+
+    def get_fd(self, path: str, removing: bool = False, sys: SystemContext) -> FileNode | str:
         lst = path.split("/")
-        saved_current = self.filesystem.current
+        saved_current = sys.fs.current
         # only go to path if a path is given
-        if (len(lst) > 1 and (error := self.filesystem.search("/".join(lst[0:-1]))) != ""):
-            self.filesystem.current = saved_current
+        if (len(lst) > 1 and (error := sys.fs.search("/".join(lst[0:-1]))) != ""):
+            sys.fs.current = saved_current
             return (error)
-        for idx, item in enumerate(self.filesystem.current.items):
+        for idx, item in enumerate(sys.fs.current.items):
             if item.name == lst[-1]:
                 if (removing):
                     item.set_data([])
-                self.filesystem.current = saved_current
+                sys.fs.current = saved_current
                 return item
         inode = Inode(NodeType.FILE)
-        self.filesystem.current.add_child(lst[-1], inode)  
-        self.filesystem.search_withaccess(lst[-1]) # search with access will set new filenode as self.filesystem.current
-        result = self.filesystem.current
-        self.filesystem.current = saved_current
+        sys.fs.current.add_child(lst[-1], inode)  
+        sys.fs.search_withaccess(lst[-1]) # search with access will set new filenode as self.filesystem.current
+        result = sys.fs.current
+        sys.fs.current = saved_current
         return result
     
     def enter_command(self, raw: str, shell: ShellState) -> CommandResult:
-        self.filesystem = shell.fs
-        if (self.filesystem.cwd != shell.cwd):
-            self.filesystem.search(shell.cwd)
-            self.filesystem.cwd = shell.cwd
-        self.shell = shell
+        sys = SystemContext(shell.fs, self.process_manager, self.network, shell)
         tokens = lex(raw)
         parser = CommandParser(tokens)
         ast = parser.parse()
@@ -186,58 +224,38 @@ class CommandLine:
             raise Exception("cmd being empty")
         return cmd_result
  
-    def run_command(self, args: list[str], fdin: FileNode) -> CommandResult:
-        if (not (len(args))):
-            return CommandResult(0, [], [], 'text', None)
-        match args[0]:
-            case "ls":
-                return self.ls(args[1:], fdin)
-            case "mkdir":
-                return self.mkdir(args[1:], fdin)
-            case "cd":
-                return self.cd(args[1:], fdin)
-            case "pwd":
-                return self.pwd(args[1:], fdin)
-            case "rm":
-                return self.rm(args[1:], fdin)
-            case "touch":
-                return self.touch(args[1:], fdin)
-            case "cat":
-                return self.cat(args[1:], fdin)
-            case "head":
-                return self.head(args[1:], fdin)
-            case "tail":
-                return self.tail(args[1:], fdin)
-            case "echo":
-                return self.echo(args[1:], fdin)
-            case "chmod":
-                return self.chmod(args[1:], fdin)
-            case "cp":
-                return self.cp(args[1:], fdin)
-            case "mv":
-                return self.mv(args[1:], fdin)
-            case "grep":
-                return self.grep(args[1:], fdin)
-            case "ln":
-                return self.ln(args[1:], fdin)
-            case "uniq":
-                return self.uniq(args[1:], fdin)
-            case "sort":    
-                return self.sort(args[1:], fdin)
-            case "find":
-                return self.find(args[1:], fdin)
-            case "sed":
-                return self.sed(args[1:], fdin)
-            case "wc":
-                return self.wc(args[1:], fdin)
-            case "ping":
-                return self.ping(args[1:], fdin)
-            case "ps":
-                return self.ps(args[1:], fdin)
-            case "sleep":
-                return self.sleep(args[1:], fdin)
-            case _:
-                return CommandResult(1, [], ["Unknown command given"], 'text', None)
+    def execute(
+        self,
+        args: list[str],
+        fdin: FileNode
+    ) -> CommandResult:
+
+        if not args:
+            return CommandResult(
+                1,
+                stderr=["No command given"]
+            )
+
+        command = args[0]
+
+
+        ctx = CommandContext(
+            system=sys,
+            command=command,
+            args=args[1:],
+            stdin=fdin,
+            stdout=None,
+        )
+
+        handler = self.commands.get(command)
+
+        if handler is None:
+            return CommandResult(
+                1,
+                stderr=["Unknown command given"]
+            )
+
+        return handler(ctx)
 
     def useage(self, type: str) -> list[str]:
         output = []
