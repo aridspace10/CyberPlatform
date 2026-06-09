@@ -41,11 +41,10 @@ class SystemContext:
 @dataclass
 class CommandContext:
     system: SystemContext
+    command: str
     args: list[str]
     stdin: FileNode
     stdout: FileNode | None
-
-    
 
 class CommandLine:
     def __init__(self, pm: ProcessManager, nm: NetworkManager) -> None:
@@ -78,7 +77,7 @@ class CommandLine:
             "sleep": self.sleep,
         }
 
-    def get_fd(self, path: str, removing: bool = False, sys: SystemContext) -> FileNode | str:
+    def get_fd(self, path: str, removing: bool, sys: SystemContext) -> FileNode | str:
         lst = path.split("/")
         saved_current = sys.fs.current
         # only go to path if a path is given
@@ -104,11 +103,11 @@ class CommandLine:
         parser = CommandParser(tokens)
         ast = parser.parse()
         if isinstance(ast, Sequence):
-            return self.execute_sequence(ast.parts)
+            return self.execute_sequence(ast.parts, sys)
         else:
             raise Exception("Enter command given no sequence object")
 
-    def execute_pipeline(self, pipe: Pipe) -> CommandResult:
+    def execute_pipeline(self, pipe: Pipe, sys: SystemContext) -> CommandResult:
         cmd_result = None
         prev_pipe = None
 
@@ -116,7 +115,7 @@ class CommandLine:
             self.fdin = prev_pipe
             self.fdout = None
 
-            cmd_result = self.execute_andor(part)
+            cmd_result = self.execute_andor(part, sys)
 
             if cmd_result.stdout:
                 pipe_inode = Inode(NodeType.FILE)
@@ -132,11 +131,11 @@ class CommandLine:
             raise Exception("No Cmd Result given")
         return cmd_result
     
-    def execute_andor(self, elem: AndOr) -> CommandResult:
-        cmd_result = self.execute_command(elem.first)
+    def execute_andor(self, elem: AndOr, sys: SystemContext) -> CommandResult:
+        cmd_result = self.execute_command(elem.first, sys)
         for (op, cmd) in elem.rest:
             if (op == "&&" and not cmd_result.status) or (op == "||" and cmd_result.status):
-                tmp_result = self.execute_command(cmd)
+                tmp_result = self.execute_command(cmd, sys)
                 cmd_result.stderr.extend(tmp_result.stderr)
                 cmd_result.stdout.extend(tmp_result.stdout)
                 cmd_result.status = tmp_result.status
@@ -144,28 +143,28 @@ class CommandLine:
                 break
         return cmd_result
 
-    def execute_command(self, command: Command) -> CommandResult:
+    def execute_command(self, command: Command, sys: SystemContext) -> CommandResult:
         redirs = command.pre_redirs + command.post_redirs
         for assign in command.assignments:
-            self.shell.vars[assign.name] = assign.value.parts[0]
+            sys.shell.vars[assign.name] = assign.value.parts[0]
 
         for redir in redirs:
             if (redir.op == "<"):
-                self.fdin = self.get_fd(redir.target)
+                self.fdin = self.get_fd(redir.target, False, sys)
                 if (isinstance(self.fdin, str)):
                     cmd_result = CommandResult(1, [], [self.fdin], 'text', None)
                     return cmd_result
             elif (redir.op == ">"):
-                self.fdout = self.get_fd(redir.target, True)
+                self.fdout = self.get_fd(redir.target, True, sys)
                 if (isinstance(self.fdout, str)):
                     cmd_result = CommandResult(1, [], [self.fdout], 'text', None)
                     return cmd_result
             elif (redir.op == ">>"):
-                self.fdout = self.get_fd(redir.target)
+                self.fdout = self.get_fd(redir.target, False, sys)
                 if (isinstance(self.fdout, str)):
                     cmd_result = CommandResult(1, [], [self.fdout], 'text', None)
                     return cmd_result
-        cmd_result = self.execute_atom(command.atom)
+        cmd_result = self.execute_atom(command.atom, sys)
         if command.pre_redirs or command.post_redirs:
             if isinstance(self.fdout, FileNode):
                 self.fdout.append_data(cmd_result.stdout)
@@ -175,7 +174,7 @@ class CommandLine:
             self.fdout = None
         return cmd_result
 
-    def execute_atom(self, atom: Atom) -> CommandResult:
+    def execute_atom(self, atom: Atom, sys: SystemContext) -> CommandResult:
         if (isinstance(atom, SimpleCommand)):
             if self.fdin is None:
                 fdin = FileNode(None, "stdin", Inode(NodeType.FILE))
@@ -191,44 +190,36 @@ class CommandLine:
                     if isinstance(part, str):
                         word += part
                     else:
-                        if part.name not in self.shell.vars:
+                        if part.name not in sys.shell.vars:
                             return CommandResult(1, [], [f'Var Used which is unassigned: {part.name}'], 'text', None)
-                        word += self.shell.vars[part.name]
+                        word += sys.shell.vars[part.name]
                 args.append(word)
-            return self.run_command(args, fdin)
+            return self.execute(args, fdin, sys)
         else:
             # save state
-            saved_cwd = self.shell.cwd
-            saved_env = self.shell.vars.copy()
-            saved_fs_current = self.filesystem.current
-            saved_fs_cwd = self.filesystem.cwd
-            saved_fdin = self.fdin
-            saved_fdout = self.fdout
+            saved_cwd = sys.shell.cwd
+            saved_env = sys.shell.vars.copy()
+            saved_fs_current = sys.fs.current
+            saved_fs_cwd = sys.shell.cwd
             #execute
-            cmd_result = self.execute_sequence(atom.sequence.parts)
+            cmd_result = self.execute_sequence(atom.sequence.parts, sys)
             #restore state
-            self.shell.cwd = saved_cwd
-            self.shell.vars = saved_env
-            self.filesystem.current = saved_fs_current
-            self.filesystem.cwd = saved_fs_cwd
-            self.fdin = saved_fdin
-            self.fdout = saved_fdout
+            sys.shell.cwd = saved_cwd
+            sys.shell.vars = saved_env
+            sys.fs.current = saved_fs_current
+            sys.fs.cwd = saved_fs_cwd
             return cmd_result
 
-    def execute_sequence(self, parts: list[Job]) -> CommandResult:
+    def execute_sequence(self, parts: list[Job], sys: SystemContext) -> CommandResult:
         cmd_result = None
         for job in parts:
             # background jobs not yet supported, just execute inline
-            cmd_result = self.execute_pipeline(job.pipeline)
+            cmd_result = self.execute_pipeline(job.pipeline, sys)
         if cmd_result is None:
             raise Exception("cmd being empty")
         return cmd_result
  
-    def execute(
-        self,
-        args: list[str],
-        fdin: FileNode
-    ) -> CommandResult:
+    def execute(self, args: list[str], fdin: FileNode, sys: SystemContext) -> CommandResult:
 
         if not args:
             return CommandResult(
