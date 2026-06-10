@@ -39,6 +39,11 @@ class SystemContext:
     shell: ShellState
 
 @dataclass
+class ExecutionContext:
+    stdin: FileNode | str | None = None
+    stdout: FileNode | str | None = None
+
+@dataclass
 class CommandContext:
     system: SystemContext
     command: str
@@ -102,6 +107,7 @@ class CommandLine:
         tokens = lex(raw)
         parser = CommandParser(tokens)
         ast = parser.parse()
+        print (ast)
         if isinstance(ast, Sequence):
             return self.execute_sequence(ast.parts, sys)
         else:
@@ -111,11 +117,13 @@ class CommandLine:
         cmd_result = None
         prev_pipe = None
 
-        for part in pipe.parts:
-            self.fdin = prev_pipe
-            self.fdout = None
+        exec_ctx = ExecutionContext()
 
-            cmd_result = self.execute_andor(part, sys)
+        for part in pipe.parts:
+            exec_ctx.stdin = prev_pipe
+            exec_ctx.stdout = None
+
+            cmd_result = self.execute_andor(part, sys, exec_ctx)
 
             if cmd_result.stdout:
                 pipe_inode = Inode(NodeType.FILE)
@@ -125,17 +133,16 @@ class CommandLine:
             else:
                 prev_pipe = None
 
-        self.fdin = None
-        self.fdout = None
         if cmd_result is None:
             raise Exception("No Cmd Result given")
+
         return cmd_result
     
-    def execute_andor(self, elem: AndOr, sys: SystemContext) -> CommandResult:
-        cmd_result = self.execute_command(elem.first, sys)
+    def execute_andor(self, elem: AndOr, sys: SystemContext, exec_ctx: ExecutionContext) -> CommandResult:
+        cmd_result = self.execute_command(elem.first, sys, exec_ctx)
         for (op, cmd) in elem.rest:
             if (op == "&&" and not cmd_result.status) or (op == "||" and cmd_result.status):
-                tmp_result = self.execute_command(cmd, sys)
+                tmp_result = self.execute_command(cmd, sys, exec_ctx)
                 cmd_result.stderr.extend(tmp_result.stderr)
                 cmd_result.stdout.extend(tmp_result.stdout)
                 cmd_result.status = tmp_result.status
@@ -143,46 +150,49 @@ class CommandLine:
                 break
         return cmd_result
 
-    def execute_command(self, command: Command, sys: SystemContext) -> CommandResult:
+    def execute_command(self, command: Command, sys: SystemContext, exec_ctx: ExecutionContext) -> CommandResult:
         redirs = command.pre_redirs + command.post_redirs
         for assign in command.assignments:
             sys.shell.vars[assign.name] = assign.value.parts[0]
 
+        if (command.assignments and isinstance(command.atom, SimpleCommand) and not command.atom.args):
+            return CommandResult(0)
+
         for redir in redirs:
             if (redir.op == "<"):
-                self.fdin = self.get_fd(redir.target, False, sys)
-                if (isinstance(self.fdin, str)):
-                    cmd_result = CommandResult(1, [], [self.fdin], 'text', None)
+                exec_ctx.stdin = self.get_fd(redir.target, False, sys)
+                if (isinstance(exec_ctx.stdin, str)):
+                    cmd_result = CommandResult(1, [], [exec_ctx.stdin], 'text', None)
                     return cmd_result
             elif (redir.op == ">"):
-                self.fdout = self.get_fd(redir.target, True, sys)
-                if (isinstance(self.fdout, str)):
-                    cmd_result = CommandResult(1, [], [self.fdout], 'text', None)
+                exec_ctx.stdout = self.get_fd(redir.target, True, sys)
+                if (isinstance(exec_ctx.stdout, str)):
+                    cmd_result = CommandResult(1, [], [exec_ctx.stdout], 'text', None)
                     return cmd_result
             elif (redir.op == ">>"):
-                self.fdout = self.get_fd(redir.target, False, sys)
-                if (isinstance(self.fdout, str)):
-                    cmd_result = CommandResult(1, [], [self.fdout], 'text', None)
+                exec_ctx.stdout = self.get_fd(redir.target, False, sys)
+                if (isinstance(exec_ctx.stdout, str)):
+                    cmd_result = CommandResult(1, [], [exec_ctx.stdout], 'text', None)
                     return cmd_result
-        cmd_result = self.execute_atom(command.atom, sys)
+        cmd_result = self.execute_atom(command.atom, sys, exec_ctx)
         if command.pre_redirs or command.post_redirs:
-            if isinstance(self.fdout, FileNode):
-                self.fdout.append_data(cmd_result.stdout)
+            if isinstance(exec_ctx.stdout, FileNode):
+                exec_ctx.stdout.append_data(cmd_result.stdout)
                 cmd_result.stdout = []
         else:
             # No redirection → leave stdout alone
-            self.fdout = None
+            exec_ctx.stdout = None
         return cmd_result
 
-    def execute_atom(self, atom: Atom, sys: SystemContext) -> CommandResult:
+    def execute_atom(self, atom: Atom, sys: SystemContext, exec_ctx: ExecutionContext) -> CommandResult:
         if (isinstance(atom, SimpleCommand)):
-            if self.fdin is None:
+            if exec_ctx.stdin is None:
                 fdin = FileNode(None, "stdin", Inode(NodeType.FILE))
                 fdin.set_data([])
-            elif isinstance(self.fdin, str):
+            elif isinstance(exec_ctx.stdin, str):
                 raise Exception("Look here")
             else:
-                fdin = self.fdin
+                fdin = exec_ctx.stdin
             args = []
             for arg in atom.args:
                 word = ""
@@ -1020,7 +1030,7 @@ class CommandLine:
         for file in files:
             saved_current = ctx.system.fs.current
             if (file == "-"):
-                ty = ctx.stdin.get_size()
+                ty = ctx.stdin.get_type()
                 ctx.system.fs.current = ctx.stdin
             else:
                 err = ctx.system.fs.search(file)
@@ -1190,7 +1200,7 @@ class CommandLine:
         while ctx.args:
             arg = ctx.args.pop(0)
             if (arg == "-"):
-                files.append(input)
+                files.append(ctx.stdin)
             elif (arg[0] == "-"):
                 if (arg == "--help"):
                     return CommandResult(0, stdout=self.useage("head"))
