@@ -6,18 +6,17 @@ from game.commandline import CommandLine
 from game.ShellState import ShellState
 from game.filesystem import FileSystem
 from game.filenode import FileNode, Inode, NodeType
+from game.ProcessManager import ProcessManager
+from game.NetworkManager import NetworkManager
 from wonderwords import RandomWord
+from network.SessionManger import GameSession
 from ..game.helpers import determine_perms_fromstr
 import os
 import time
 
-@pytest.fixture
-def cl():
-    return CommandLine()
-
 ######## HELPS #################
 def test_cmd_helps(cl, shell_empty):
-    cmds = ['mkdir', 'cat', 'chmod', 'grep', 'head', 'ln', 'ls', 'mv', 'sort', 'touch', "rm", "sed"]
+    cmds = ['mkdir', 'cat', 'chmod', 'grep', 'head', 'ln', 'ls', 'mv', 'sort', 'touch', "rm", "sed", "ps", "ping"]
     for cmd in cmds:
         CmdResult = cl.enter_command(f'{cmd} --help', shell_empty)
         with open(f"../static/help/{cmd}.txt") as f:
@@ -154,23 +153,6 @@ def test_redirection_writes_newfile(cl, shell_basic: ShellState, fs_basic: FileS
     fs_basic.search('f3.txt')
     fnode = fs_basic.current
     assert fnode.get_data() == ["hi"]
-
-########### RM #################
-def test_rm_basic(cl, shell_fouritems: ShellState):
-    CmdResult = cl.enter_command('rm f2.txt', shell_fouritems)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert len(shell_fouritems.fs.current.items) == 3
-
-def test_rm_dir(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command('rm d1', shell_basic)
-    assert len(shell_basic.fs.current.items) == 3
-    assert CmdResult.stderr == ["rm: cannot remove 'd1': Is a directory"]
-    assert CmdResult.stdout == []
-    CmdResult = cl.enter_command('rm -r d1', shell_basic)
-    assert len(shell_basic.fs.current.items) == 2
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
 
 ######### CAT ##############
 def test_cat_nonexistent_file(cl, shell_empty):

@@ -41,7 +41,7 @@ def list_sessions():
     }
 
 @router.post("/sandbox/{user_id}")
-def get_sandbox(user_id: str, db: Session = Depends(get_db)):
+async def get_sandbox(user_id: str, db: Session = Depends(get_db)):
     # get sandbox from db if exist
     tut = get_sandbox_session(db, int(user_id))
     if (tut == None):

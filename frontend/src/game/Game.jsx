@@ -20,6 +20,7 @@ export default function Game() {
     const hasPrompted = useRef(false);
     const [log, setLog] = useState([]);
     const [state, setState] = useState("")
+    const [interaction, setInteraction] = useState("")
 
     function addLine(text) {
         setLog(prev => [...prev, text]);
@@ -67,6 +68,18 @@ export default function Game() {
             if (data.type === "command_output") {
                 data.stdout.forEach(line => addLine(line));
                 data.stderr.forEach(line => addLine(line));
+                if (data.interaction && data.interaction.mode) {
+                    setInteraction(data.interaction.mode);
+                } else {
+                    setInteraction("");
+                }
+                addLine(data.interaction.prompt ?? "")
+            }
+
+            if (data.type === "terminal_state") {
+                // if busy (true), then no interaction (false), vise versa
+                console.log(data)
+                setInteraction(!data.busy)
             }
         };
 
@@ -83,7 +96,7 @@ export default function Game() {
     } else if (state == 'running') {
         return (
             <SessionContext.Provider value={{ sessionId, wsRef }}>
-                <Gamescreen wsRef={wsRef} log={log} addLine={addLine} />
+                <Gamescreen wsRef={wsRef} log={log} addLine={addLine} interaction={interaction} />
             </SessionContext.Provider>
     )
     } else if (state == 'starting') {

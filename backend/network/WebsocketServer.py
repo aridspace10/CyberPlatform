@@ -12,15 +12,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
     await websocket.accept()
     session = session_manager.get_session(session_id)
     if session == "404":
-        print ("hehe")
         ses_db = get_session(db, int(session_id))
         if (ses_db == None):
             await websocket.close()
             return
-        session = GameSession(str(session_id))
-        session.name = ses_db.name if ses_db.name is not None else ""
-        session.state = ses_db.state if ses_db.state is not None else ""
-        print (session.state)
+        session = session_manager.add_session(session_id, ses_db.name if ses_db.name else "")
     try:
         # Expect join packet first
         join_data = await websocket.receive_json()
@@ -63,16 +59,32 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, db: Session 
 
                 raw = data.get("input", "")
 
-                stdout, stderr = session.cmd.enter_command(
-                    raw,
-                    player.shell
-                )
+                if player.shell.foreground_pid:
 
-                await session.send_to(websocket, {
-                    "type": "command_output",
-                    "stdout": stdout,
-                    "stderr": stderr
-                })
+                    proc = session.process_manager.get_process(
+                        player.shell.foreground_pid
+                    )
+
+                    if proc and proc.program:
+                        proc.program.receive_input(raw)
+
+                else:
+                    cmd = session.commandline.enter_command(
+                        raw,
+                        player.shell
+                    )
+
+                    await session.send_to(websocket, {
+                        "type": "command_output",
+                        "stdout": cmd.stdout,
+                        "stderr": cmd.stderr,
+                        "interaction": (
+                            None if not cmd.interaction else {
+                                "mode": cmd.interaction.mode,
+                                "prompt": cmd.interaction.prompt
+                            }
+                        )
+                    })
 
     except WebSocketDisconnect:
-        session.disconnect(websocket)
+        await session.disconnect(websocket)

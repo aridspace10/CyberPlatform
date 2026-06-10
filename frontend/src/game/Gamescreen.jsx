@@ -5,7 +5,7 @@ import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
 import Terminal from "./Terminal";
 import "./Gamescreen.css"
-export default function Gamescreen({wsRef, log, addLine}) {
+export default function Gamescreen({wsRef, log, addLine, interaction}) {
   const [input, setInput] = useState("");
   const [content, setContent] = useState(<GeneralTab />)
 
@@ -72,6 +72,7 @@ export default function Gamescreen({wsRef, log, addLine}) {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleEnter}
+                disabled={interaction === "foreground"}
                 autoFocus
             />
         </div>

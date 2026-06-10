@@ -53,14 +53,19 @@ class AndOr:
     rest: list[tuple[Literal["&&", "||"], Command]]
 
 @dataclass
+class Job:
+    pipeline: Pipe
+    background: bool
+
+@dataclass
 class Sequence:
-    parts: list[Pipe]
+    parts: list[Job]
 
 @dataclass
 class Subshell:
     sequence: Sequence
 
-Atom = SimpleCommand | Subshell | VarDeclaration
+Atom = SimpleCommand | Subshell
 
 ############ FIND CLASSES ############
 class Node:
@@ -96,6 +101,7 @@ class DeleteNode(Node):
     pass
 
 OPERATORS = {
+    "&": "AMP",
     "&&": "AND",
     "||": "OR",
     "|": "PIPE",
@@ -194,11 +200,13 @@ class CommandParser:
         return self.parse_sequence()
     
     def parse_sequence(self) -> Sequence:
-        node = self.parse_pipeline()
-        result = [node]
-        while ((p := self.peek()) and p.type == "SEMI"):
-            self.consume("SEMI")
-            result.append(self.parse_pipeline())
+        pipeline = self.parse_pipeline()
+        result = [Job(pipeline, False)]
+        while ((p := self.peek()) and p.type in ("SEMI", "AMP")):
+            background = p.type == "AMP"
+            self.consume()
+            pipeline = self.parse_pipeline()
+            result.append(Job(pipeline, background))
         return Sequence(result)
 
     def parse_pipeline(self) -> Pipe:
@@ -209,13 +217,13 @@ class CommandParser:
             result.append(self.parse_andor())
         return Pipe(result)
 
-    def parse_andor(self):
+    def parse_andor(self) -> AndOr:
         first = self.parse_command()
         rest = []
-        while ((p := self.peek()) and (p.type == "AND" or p.type == "OR")):
+        while ((p := self.peek()) and p.type in ("AND", "OR")):
             tmp = self.consume()
-            if tmp is None:
-                raise Exception()
+            if (tmp == None):
+                raise SyntaxError()
             rest.append((tmp.value, self.parse_command()))
         return AndOr(first, rest)
     
@@ -285,11 +293,16 @@ class CommandParser:
             return None
 
         if p.type == "WORD":
-            return Word([self.consume().value])
+            word = self.consume()
+            if (word is None):
+                raise SyntaxError("Admin Error: AAAB")
+            return Word([word.value])
 
         if p.type == "DOLLAR":
             self.consume()
             name = self.consume("WORD")
+            if (name is None):
+                raise SyntaxError("expected something after $")
             return Word([VarUse(name.value)])
 
         return None

@@ -4,12 +4,28 @@ import random
 from game.ShellState import ShellState
 from game.filesystem import FileSystem
 from game.commandline import CommandLine
+from game.ProcessManager import ProcessManager
+from game.NetworkManager import NetworkManager
+from network.SessionManger import GameSession
 from game.filenode import FileNode, Inode, NodeType
 import time
 
 @pytest.fixture
-def cl():
-    return CommandLine()
+def game_session():
+    session = GameSession("1")
+    return session
+
+@pytest.fixture
+def process_manager():
+    return ProcessManager()
+
+@pytest.fixture
+def network_manager():
+    return NetworkManager()
+
+@pytest.fixture
+def cl(process_manager, network_manager):
+    return CommandLine(process_manager, network_manager)
 
 # Basic helpers to create a filesystem with one file
 @pytest.fixture
