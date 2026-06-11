@@ -6,18 +6,22 @@ from pydantic import BaseModel
 from typing import Dict, Any
 from services.session_service import get_sandbox_session as get_sandbox
 
+
 class SessionCreate(BaseModel):
     creatorID: int
     name: str
     scenarioID: str
     config: Dict[str, Any]
 
+
 class SessionJoin(BaseModel):
     userID: int
     sessionID: int
     shell: Dict[str, Any]
 
+
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
 
 def get_db():
     db = SessionLocal()
@@ -26,6 +30,7 @@ def get_db():
     finally:
         db.close()
 
+
 # CREATE USER
 @router.post("/")
 def create_session(ses_data: SessionCreate, db: Session = Depends(get_db)):
@@ -33,32 +38,41 @@ def create_session(ses_data: SessionCreate, db: Session = Depends(get_db)):
     db.add(ses)
     db.commit()
     db.refresh(ses)
-    ss = ScenarioToSession(scenarioID=ses_data.scenarioID, sessionID= ses.id, config= ses_data.config)
+    ss = ScenarioToSession(
+        scenarioID=ses_data.scenarioID, sessionID=ses.id, config=ses_data.config
+    )
     db.add(ss)
     db.commit()
     db.refresh(ss)
     return (ses, ss)
 
+
 @router.post("/sessions/{session_id}")
 def join_session(ses_data: SessionJoin, db: Session = Depends(get_db)):
-    ses = SessionShell(SessionID=ses_data.sessionID,UserID=ses_data.userID,shell=ses_data.shell)
+    ses = SessionShell(
+        SessionID=ses_data.sessionID, UserID=ses_data.userID, shell=ses_data.shell
+    )
     db.add(ses)
     db.commit()
     db.refresh(ses)
     return ses
+
 
 # GET USERS
 @router.get("/")
 def get_sessions(db: Session = Depends(get_db)):
     return db.query(GameSession).all()
 
+
 @router.get("/{session_id}")
 def get_session(session_id: int, db: Session = Depends(get_db)):
     return db.query(GameSession).filter(GameSession.id == session_id).first()
 
+
 @router.get("/sandbox/{user_id}")
 def get_sandbox_session(user_id: int, db: Session = Depends(get_db)):
     return get_sandbox(db, user_id)
+
 
 # UPDATE USER
 @router.put("/{session_id}")

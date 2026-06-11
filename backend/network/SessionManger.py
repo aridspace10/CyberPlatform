@@ -7,6 +7,7 @@ from game.commandline import CommandLine
 
 Username = str
 
+
 class Player:
     def __init__(self, websocket: WebSocket | None, username: str, user_id: str):
         self.websocket = websocket
@@ -19,8 +20,9 @@ class Player:
         return {
             "vars": self.shell.vars,
             "cmds": self.shell.commands,
-            "fs": self.shell.fs.to_dict()
+            "fs": self.shell.fs.to_dict(),
         }
+
 
 class GameSession:
     def __init__(self, session_id: str):
@@ -32,7 +34,7 @@ class GameSession:
         self.connections: Dict[WebSocket, Username] = {}
         self.cmd = CommandLine()
         self.game_manger: GameManager = GameManager()
-    
+
     def __str__(self) -> str:
         return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
 
@@ -48,7 +50,7 @@ class GameSession:
             "players": [p.username for p in self.players.values()],
             "state": self.state,
             "session": self.session_id,
-            "name": self.name
+            "name": self.name,
         }
 
     async def set_state(self, new_state: str):
@@ -65,22 +67,18 @@ class GameSession:
             # Reconnecting
             self.players[username].websocket = websocket
 
-        await self.broadcast({
-            "type": "system",
-            "message": f"{username} joined session"
-        })
+        await self.broadcast(
+            {"type": "system", "message": f"{username} joined session"}
+        )
 
         await self.broadcast(self.lobby_state())
 
     async def disconnect(self, websocket: WebSocket):
         username = self.connections.pop(websocket, None)
         if not username:
-            return 
+            return
 
-        await self.broadcast({
-            "type": "system",
-            "message": f"{username} disconnected"
-        })
+        await self.broadcast({"type": "system", "message": f"{username} disconnected"})
 
     async def broadcast(self, message: dict):
         dead = []
@@ -108,21 +106,25 @@ class GameSession:
             await self._handle_command(player, data.get("command", ""))
 
         elif msg_type == "chat":
-            await self.broadcast({
-                "type": "chat",
-                "user": player.username,
-                "message": data.get("message", "")
-            })
-    
+            await self.broadcast(
+                {
+                    "type": "chat",
+                    "user": player.username,
+                    "message": data.get("message", ""),
+                }
+            )
+
     async def _handle_command(self, player: Player, command: str):
         stdout, stderr = self.cmd.enter_command(command, player.shell)
 
-        await player.websocket.send_json({
-            "type": "command_result",
-            "stdout": stdout,
-            "stderr": stderr,
-            "cwd": player.shell.cwd
-        })
+        await player.websocket.send_json(
+            {
+                "type": "command_result",
+                "stdout": stdout,
+                "stderr": stderr,
+                "cwd": player.shell.cwd,
+            }
+        )
 
 
 class SessionManager:
@@ -133,15 +135,15 @@ class SessionManager:
         if session_id not in self.sessions:
             return "404"
         return self.sessions[session_id]
-    
+
     def add_session(self, session_id: str, name: str):
         # 1.Setup Session
-        new_session = GameSession(session_id) 
+        new_session = GameSession(session_id)
         new_session.name = name
         # 2. Assign to session manger array
         self.sessions[session_id] = new_session
         return self.sessions[session_id]
-    
+
     async def set_session_state(self, session_id: str, new_state: str) -> bool:
         session = self.get_session(session_id)
         if not session:
@@ -149,5 +151,6 @@ class SessionManager:
 
         await session.set_state(new_state)
         return True
+
 
 session_manager = SessionManager()

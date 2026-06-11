@@ -6,9 +6,10 @@ from game.filenode import FileNode
 from game.inode import NodeType
 from game.commandline import CommandLine
 
+
 ######## LN ###################
 def test_ln_basic(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command('ln f1.txt s1.txt', shell_basic)
+    CommandResult = cl.enter_command("ln f1.txt s1.txt", shell_basic)
 
     assert CommandResult.stderr == []
     assert CommandResult.stdout == []
@@ -51,7 +52,7 @@ def test_ln_basic(cl, shell_basic: ShellState):
 
 
 def test_ln_nested_directory(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command('ln d1/f3.txt d1/s3.txt', shell_basic)
+    CommandResult = cl.enter_command("ln d1/f3.txt d1/s3.txt", shell_basic)
 
     assert CommandResult.stderr == []
     assert CommandResult.stdout == []
@@ -70,7 +71,7 @@ def test_ln_nested_directory(cl, shell_basic: ShellState):
 
 
 def test_ln_existing_target(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command('ln f1.txt f2.txt', shell_basic)
+    CommandResult = cl.enter_command("ln f1.txt f2.txt", shell_basic)
 
     assert CommandResult.stderr == ["ln: f2.txt: File exists"]
     assert CommandResult.stdout == []
@@ -83,7 +84,7 @@ def test_ln_existing_target(cl, shell_basic: ShellState):
 
 
 def test_ln_missing_source(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command('ln missing.txt s1.txt', shell_basic)
+    CommandResult = cl.enter_command("ln missing.txt s1.txt", shell_basic)
 
     assert CommandResult.stderr != []
     assert CommandResult.stdout == []
@@ -93,15 +94,15 @@ def test_ln_missing_source(cl, shell_basic: ShellState):
 
 
 def test_ln_directory_should_fail(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command('ln d1 s1', shell_basic)
+    CommandResult = cl.enter_command("ln d1 s1", shell_basic)
 
     assert CommandResult.stderr != []
     assert CommandResult.stdout == []
 
 
 def test_ln_multiple_links_same_inode(cl, shell_basic: ShellState):
-    cl.enter_command('ln f1.txt s1.txt', shell_basic)
-    cl.enter_command('ln f1.txt s2.txt', shell_basic)
+    cl.enter_command("ln f1.txt s1.txt", shell_basic)
+    cl.enter_command("ln f1.txt s2.txt", shell_basic)
 
     f1 = shell_basic.fs.get_file("f1.txt")
     s1 = shell_basic.fs.get_file("s1.txt")
@@ -121,7 +122,7 @@ def test_ln_multiple_links_same_inode(cl, shell_basic: ShellState):
 
 
 def test_ln_preserves_shared_inode_behavior(cl, shell_basic: ShellState):
-    cl.enter_command('ln f1.txt s1.txt', shell_basic)
+    cl.enter_command("ln f1.txt s1.txt", shell_basic)
 
     f1 = shell_basic.fs.get_file("f1.txt")
     s1 = shell_basic.fs.get_file("s1.txt")
@@ -135,8 +136,8 @@ def test_ln_preserves_shared_inode_behavior(cl, shell_basic: ShellState):
 
 
 def test_ln_chain_links(cl, shell_basic: ShellState):
-    cl.enter_command('ln f1.txt s1.txt', shell_basic)
-    cl.enter_command('ln s1.txt s2.txt', shell_basic)
+    cl.enter_command("ln f1.txt s1.txt", shell_basic)
+    cl.enter_command("ln s1.txt s2.txt", shell_basic)
 
     f1 = shell_basic.fs.get_file("f1.txt")
     s1 = shell_basic.fs.get_file("s1.txt")
@@ -156,24 +157,21 @@ def test_ln_chain_links(cl, shell_basic: ShellState):
 
 
 def test_ln_no_arguments(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command('ln', shell_basic)
+    CommandResult = cl.enter_command("ln", shell_basic)
 
     assert CommandResult.stderr != []
     assert CommandResult.stdout == []
 
 
 def test_ln_one_argument(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command('ln f1.txt', shell_basic)
+    CommandResult = cl.enter_command("ln f1.txt", shell_basic)
 
     assert CommandResult.stderr != []
     assert CommandResult.stdout == []
 
 
 def test_ln_symbolic_basic(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command(
-        'ln -s f1.txt sym1.txt',
-        shell_basic
-    )
+    CommandResult = cl.enter_command("ln -s f1.txt sym1.txt", shell_basic)
 
     assert CommandResult.stderr == []
     assert CommandResult.stdout == []
@@ -195,10 +193,7 @@ def test_ln_symbolic_basic(cl, shell_basic: ShellState):
 
 
 def test_ln_symbolic_nested(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command(
-        'ln -s d1/f3.txt d1/sym3.txt',
-        shell_basic
-    )
+    CommandResult = cl.enter_command("ln -s d1/f3.txt d1/sym3.txt", shell_basic)
 
     assert CommandResult.stderr == []
     assert CommandResult.stdout == []
@@ -212,10 +207,7 @@ def test_ln_symbolic_nested(cl, shell_basic: ShellState):
 
 
 def test_ln_symbolic_directory_allowed(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command(
-        'ln -s d1 d1link',
-        shell_basic
-    )
+    CommandResult = cl.enter_command("ln -s d1 d1link", shell_basic)
 
     assert CommandResult.stderr == []
     assert CommandResult.stdout == []
@@ -230,7 +222,7 @@ def test_ln_symbolic_directory_allowed(cl, shell_basic: ShellState):
 
 
 def test_ln_symbolic_does_not_share_inode(cl, shell_basic: ShellState):
-    cl.enter_command('ln -s f1.txt sym1.txt', shell_basic)
+    cl.enter_command("ln -s f1.txt sym1.txt", shell_basic)
 
     original = shell_basic.fs.get_file("f1.txt")
     sym = shell_basic.fs.get_file("sym1.txt")
@@ -242,10 +234,7 @@ def test_ln_symbolic_does_not_share_inode(cl, shell_basic: ShellState):
 
 
 def test_ln_symbolic_existing_destination(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command(
-        'ln -s f1.txt f2.txt',
-        shell_basic
-    )
+    CommandResult = cl.enter_command("ln -s f1.txt f2.txt", shell_basic)
 
     assert CommandResult.stderr != []
     assert CommandResult.stdout == []
@@ -259,10 +248,7 @@ def test_ln_symbolic_existing_destination(cl, shell_basic: ShellState):
 
 
 def test_ln_symbolic_missing_target_allowed(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command(
-        'ln -s missing.txt sym_missing.txt',
-        shell_basic
-    )
+    CommandResult = cl.enter_command("ln -s missing.txt sym_missing.txt", shell_basic)
 
     # POSIX symlinks can point to missing targets
     assert CommandResult.stderr == []
@@ -277,10 +263,7 @@ def test_ln_symbolic_missing_target_allowed(cl, shell_basic: ShellState):
 
 
 def test_ln_invalid_option(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command(
-        'ln -z f1.txt s1.txt',
-        shell_basic
-    )
+    CommandResult = cl.enter_command("ln -z f1.txt s1.txt", shell_basic)
 
     assert CommandResult.stderr != []
     assert CommandResult.stdout == []
@@ -289,10 +272,7 @@ def test_ln_invalid_option(cl, shell_basic: ShellState):
 
 
 def test_ln_combined_options(cl, shell_basic: ShellState):
-    CommandResult = cl.enter_command(
-        'ln -s f1.txt slink.txt',
-        shell_basic
-    )
+    CommandResult = cl.enter_command("ln -s f1.txt slink.txt", shell_basic)
 
     assert CommandResult.stderr == []
     assert CommandResult.stdout == []
@@ -305,8 +285,8 @@ def test_ln_combined_options(cl, shell_basic: ShellState):
 
 
 def test_ln_symbolic_multiple(cl, shell_basic: ShellState):
-    cl.enter_command('ln -s f1.txt sym1.txt', shell_basic)
-    cl.enter_command('ln -s f1.txt sym2.txt', shell_basic)
+    cl.enter_command("ln -s f1.txt sym1.txt", shell_basic)
+    cl.enter_command("ln -s f1.txt sym2.txt", shell_basic)
 
     sym1 = shell_basic.fs.get_file("sym1.txt")
     sym2 = shell_basic.fs.get_file("sym2.txt")

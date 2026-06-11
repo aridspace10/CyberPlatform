@@ -10,35 +10,44 @@ class Token:
     type: str
     value: str
 
+
 Identifier = str
+
 
 @dataclass
 class Redirection:
     op: Literal[">", ">>", "<", "<<"]
     target: Identifier
 
+
 @dataclass
 class VarUse:
     name: Identifier
+
 
 @dataclass
 class Word:
     parts: list["Segment"]
 
+
 Segment = str | VarUse
+
 
 @dataclass
 class VarDeclaration:
     name: Identifier
     value: Word
 
+
 @dataclass
 class SimpleCommand:
     args: list[Word]
 
+
 @dataclass
 class Pipe:
     parts: list[AndOr]
+
 
 @dataclass
 class Command:
@@ -47,53 +56,65 @@ class Command:
     post_redirs: list[Redirection]
     assignments: list[VarDeclaration]
 
+
 @dataclass
 class AndOr:
     first: Command
     rest: list[tuple[Literal["&&", "||"], Command]]
 
+
 @dataclass
 class Sequence:
     parts: list[Pipe]
+
 
 @dataclass
 class Subshell:
     sequence: Sequence
 
+
 Atom = SimpleCommand | Subshell | VarDeclaration
+
 
 ############ FIND CLASSES ############
 class Node:
     def eval(self, f) -> bool:
         raise NotImplementedError
 
+
 @dataclass
 class OrNode(Node):
     left: Node
     right: Node
+
 
 @dataclass
 class AndNode(Node):
     left: Node
     right: Node
 
+
 @dataclass
 class NotNode(Node):
     node: Node
+
 
 @dataclass
 class FilterNode(Node):
     type: str
     value: str
 
+
 @dataclass
 class ExecNode(Node):
     command: list[str]
     mode: Literal[";", "+"]
 
+
 @dataclass
 class DeleteNode(Node):
     pass
+
 
 OPERATORS = {
     "&&": "AND",
@@ -110,6 +131,7 @@ OPERATORS = {
     "$": "DOLLAR",
 }
 
+
 def lex(text: str) -> list[Token]:
     tokens = []
     i = 0
@@ -122,12 +144,12 @@ def lex(text: str) -> list[Token]:
             continue
         # handle escape globally
         if c == "\\" and i + 1 < n:
-            tokens.append(Token("WORD", text[i+1]))
+            tokens.append(Token("WORD", text[i + 1]))
             i += 2
             continue
         # check 2-char operators
         if i + 1 < n:
-            two = text[i:i+2]
+            two = text[i : i + 2]
             if two in OPERATORS:
                 tokens.append(Token(OPERATORS[two], two))
                 i += 2
@@ -174,6 +196,7 @@ def lex(text: str) -> list[Token]:
         tokens.append(Token("WORD", buf))
     return tokens
 
+
 class CommandParser:
     def __init__(self, tokens):
         self.tokens = tokens
@@ -192,11 +215,11 @@ class CommandParser:
     # entry point
     def parse(self):
         return self.parse_sequence()
-    
+
     def parse_sequence(self) -> Sequence:
         node = self.parse_pipeline()
         result = [node]
-        while ((p := self.peek()) and p.type == "SEMI"):
+        while (p := self.peek()) and p.type == "SEMI":
             self.consume("SEMI")
             result.append(self.parse_pipeline())
         return Sequence(result)
@@ -204,7 +227,7 @@ class CommandParser:
     def parse_pipeline(self) -> Pipe:
         node = self.parse_andor()
         result = [node]
-        while ((p := self.peek()) and p.type == "PIPE"):
+        while (p := self.peek()) and p.type == "PIPE":
             self.consume("PIPE")
             result.append(self.parse_andor())
         return Pipe(result)
@@ -212,22 +235,24 @@ class CommandParser:
     def parse_andor(self):
         first = self.parse_command()
         rest = []
-        while ((p := self.peek()) and (p.type == "AND" or p.type == "OR")):
+        while (p := self.peek()) and (p.type == "AND" or p.type == "OR"):
             tmp = self.consume()
             if tmp is None:
                 raise Exception()
             rest.append((tmp.value, self.parse_command()))
         return AndOr(first, rest)
-    
+
     def parse_redirections(self) -> list[Redirection]:
         result = []
-        while ((p := self.peek()) and (p.value == ">" or p.value == ">>" or p.value == "<<" or p.value == "<")):
+        while (p := self.peek()) and (
+            p.value == ">" or p.value == ">>" or p.value == "<<" or p.value == "<"
+        ):
             self.consume()
             target = self.consume()
-            if (p is not None and target is not None):
+            if p is not None and target is not None:
                 result.append(Redirection(p.value, target.value))
         return result
-    
+
     def split_assignment(self, word: str):
         if "=" not in word:
             return None
@@ -264,11 +289,9 @@ class CommandParser:
             name, value = res
             self.consume()
 
-            assignments.append(
-                VarDeclaration(name, Word([value]))
-            )
+            assignments.append(VarDeclaration(name, Word([value])))
 
-        if ((p := self.peek()) is None or p.type not in ("WORD", "LPAREN")):
+        if (p := self.peek()) is None or p.type not in ("WORD", "LPAREN"):
             if not assignments:
                 raise SyntaxError("expected command")
             atom = SimpleCommand([])
@@ -295,7 +318,7 @@ class CommandParser:
         return None
 
     def parse_atom(self):
-        if ((p := self.peek()) and p.type == "LPAREN"):
+        if (p := self.peek()) and p.type == "LPAREN":
             return self.parse_subshell()
 
         args = []
@@ -317,7 +340,8 @@ class CommandParser:
         self.consume("RPAREN")
         return Subshell(node)
 
-class FindParser():
+
+class FindParser:
     def __init__(self, tokens) -> None:
         self.tokens = tokens
         self.pos = 0
@@ -333,7 +357,7 @@ class FindParser():
     # entry point
     def parse(self):
         return self.parse_or()
-    
+
     def parse_or(self):
         node = self.parse_and()
 
@@ -343,7 +367,7 @@ class FindParser():
             node = OrNode(node, right)
 
         return node
-    
+
     def parse_and(self):
         node = self.parse_factor()
 
@@ -356,10 +380,10 @@ class FindParser():
             node = AndNode(node, right)
 
         return node
-    
+
     def parse_factor(self) -> Node:
         tok = self.peek()
-        if tok == None: 
+        if tok == None:
             raise SyntaxError()
 
         if tok == "!":
@@ -374,22 +398,23 @@ class FindParser():
             return node
 
         filt = self.consume()
-        if (filt == None):
+        if filt == None:
             return FilterNode("", "")
-        if (filt in ["-true", "-false", "-empty", "-delete"]): # Singular 
+        if filt in ["-true", "-false", "-empty", "-delete"]:  # Singular
             return FilterNode(filt, "")
-        if (filt == "-exec"):
+        if filt == "-exec":
             cmd = []
             while (tok := self.peek()) is not None and tok not in (";", "+"):
                 cmd.append(self.consume())
             mode = self.consume()
-            if (mode == None or mode != ";" or mode != "+"):
+            if mode == None or mode != ";" or mode != "+":
                 raise SyntaxError("Expected ; or +")
             return ExecNode(cmd, mode)
         val = self.consume()
-        if (val == None):
+        if val == None:
             raise SyntaxError(f"No value for given for: {filt}")
         return FilterNode(filt, val)
+
 
 if __name__ == "__main__":
     text = ["(", "-name", "*.txt", "-o", "-true", ")", "-exec", "cat", "{}", ";"]
