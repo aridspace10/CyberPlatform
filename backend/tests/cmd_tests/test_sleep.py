@@ -6,6 +6,22 @@ from game.ShellState import ShellState
 from network.SessionManger import GameSession
 
 
+###### non async ##############
+def test_sleep_error1(cl, shell_empty: ShellState):
+    cmd = cl.enter_command("sleep", shell_empty)
+    assert cmd.stderr != []
+    assert cmd.stdout == []
+
+
+def test_sleep_error2(cl, shell_empty: ShellState):
+    cmd = cl.enter_command("sleep hello", shell_empty)
+    assert cmd.stderr != []
+    assert cmd.stdout == []
+
+
+# Async
+
+
 @pytest.mark.asyncio
 async def test_sleep_process_runs_and_terminates():
 
@@ -45,6 +61,123 @@ async def test_sleep_process_runs_and_terminates():
 
         scheduler_task.cancel()
 
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_sleep_process_minutes():
+    # Setup machine
+    session = GameSession("1")
+    # Start scheduler
+    scheduler_task = asyncio.create_task(session.scheduler_loop())
+    try:
+        shell = ShellState()
+        result = session.commandline.enter_command("sleep 1m", shell)
+        assert result.stderr == []
+        # Find the sleep process
+        sleep_proc = next(
+            (
+                proc
+                for proc in session.process_manager.processes.values()
+                if proc.command == "sleep 1m"
+            ),
+            None,
+        )
+        assert sleep_proc is not None
+        assert sleep_proc.status == ProcessState.RUNNING
+
+        # Tick 3 times (simulate 3 seconds) - should still be running
+        for _ in range(3):
+            session.scheduler.tick()
+        assert sleep_proc.status == ProcessState.RUNNING
+
+        # Tick remaining ~57 times (simulate 60s total) - should now be terminated
+        for _ in range(57):
+            session.scheduler.tick()
+        assert sleep_proc.status == ProcessState.TERMINATED
+    finally:
+        scheduler_task.cancel()
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_sleep_process_hours():
+    # Setup machine
+    session = GameSession("1")
+    # Start scheduler
+    scheduler_task = asyncio.create_task(session.scheduler_loop())
+    try:
+        shell = ShellState()
+        result = session.commandline.enter_command("sleep 1h", shell)
+        assert result.stderr == []
+        # Find the sleep process
+        sleep_proc = next(
+            (
+                proc
+                for proc in session.process_manager.processes.values()
+                if proc.command == "sleep 1h"
+            ),
+            None,
+        )
+        assert sleep_proc is not None
+        assert sleep_proc.status == ProcessState.RUNNING
+
+        # Tick 3 times (simulate 3 seconds) - should still be running
+        for _ in range(3):
+            session.scheduler.tick()
+        assert sleep_proc.status == ProcessState.RUNNING
+
+        # Tick remaining ~57 times (simulate 60s total) - should now be terminated
+        for _ in range(3597):
+            session.scheduler.tick()
+        assert sleep_proc.status == ProcessState.TERMINATED
+    finally:
+        scheduler_task.cancel()
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_sleep_process_days():
+    # Setup machine
+    session = GameSession("1")
+    # Start scheduler
+    scheduler_task = asyncio.create_task(session.scheduler_loop())
+    try:
+        shell = ShellState()
+        result = session.commandline.enter_command("sleep 1d", shell)
+        assert result.stderr == []
+        # Find the sleep process
+        sleep_proc = next(
+            (
+                proc
+                for proc in session.process_manager.processes.values()
+                if proc.command == "sleep 1d"
+            ),
+            None,
+        )
+        assert sleep_proc is not None
+        assert sleep_proc.status == ProcessState.RUNNING
+
+        # Tick 3 times (simulate 3 seconds) - should still be running
+        for _ in range(3):
+            session.scheduler.tick()
+        assert sleep_proc.status == ProcessState.RUNNING
+
+        # Tick remaining ~57 times (simulate 60s total) - should now be terminated
+        for _ in range(86397):
+            session.scheduler.tick()
+        assert sleep_proc.status == ProcessState.TERMINATED
+    finally:
+        scheduler_task.cancel()
         try:
             await scheduler_task
         except asyncio.CancelledError:

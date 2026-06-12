@@ -26,6 +26,8 @@ def test_cmd_helps(cl, shell_empty):
         "sed",
         "ps",
         "ping",
+        "sleep",
+        "uniq",
     ]
     for cmd in cmds:
         CmdResult = cl.enter_command(f"{cmd} --help", shell_empty)

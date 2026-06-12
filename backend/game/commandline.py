@@ -326,7 +326,7 @@ class CommandLine:
             int(last)
         except ValueError:
             ty = last
-            val = val[1:]
+            val = val[:-1]
         try:
             val = int(val)
         except ValueError:
@@ -1724,6 +1724,9 @@ class CommandLine:
         return CommandResult()
 
     def uniq(self, ctx: CommandContext) -> CommandResult:
+        if "--help" in ctx.args:
+            return CommandResult(0, stdout=self.useage("uniq"))
+
         printdup = False
         skipfield = 0
         skipchars = 0
