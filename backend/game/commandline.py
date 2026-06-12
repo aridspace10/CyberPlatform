@@ -1669,6 +1669,8 @@ class CommandLine:
         linkty = "hard"
         if len(ctx.args) == 1 and ctx.args[0] == "--help":
             return CommandResult(0, stdout=self.useage("ln"))
+        if len(ctx.args) < 2:
+            return CommandResult(2, stderr=["Invalid number of arguments"])
         while len(ctx.args) > 2:
             arg = ctx.args.pop(0)
             if arg[0] == "-":
@@ -1682,21 +1684,34 @@ class CommandLine:
         target = ctx.args[0]
         destination = ctx.args[1]
         saved_current = ctx.system.fs.current
-        if (err := ctx.system.fs.search(target)) != "":
+        if (err := ctx.system.fs.search(target)) != "" and linkty == "hard":
             return CommandResult(1, stderr=[err])
         target_inode = ctx.system.fs.current.inode
+        # Check cause inode of dir is nothing
+        if ctx.system.fs.current.inode.type == NodeType.DIRECTORY and linkty == "hard":
+            ctx.system.fs.current = saved_current
+            return CommandResult(1, stderr=["Cannot hard link directory"])
+        # Reset Pointer
+        ctx.system.fs.current = saved_current
+        # Search for the destination and check it doesn't exist
+        if ctx.system.fs.search(destination) == "":
+            ctx.system.fs.current = saved_current
+            return CommandResult(1, stderr=[f"ln: {destination}: File exists"])
+        # Reset pointer after search
         ctx.system.fs.current = saved_current
         ctx.system.fs.add_file(destination)
-        ctx.system.fs.search(destination)
+        new_file = ctx.system.fs.get_file(destination)
+        if new_file is None or isinstance(new_file, str):
+            return CommandResult(1, stderr=["Could not create link"])
         if linkty == "hard":
-            ctx.system.fs.current.inode = target_inode
-            ctx.system.fs.current.inode.link_count += 1
+            new_file.inode = target_inode
+            target_inode.link_count += 1
         else:
             inode = Inode(NodeType.SYMLINK)
-            inode.set_data(target.splitlines())
-            ctx.system.fs.current.inode = inode
+            inode.set_data([target])
+            new_file.inode = inode
         ctx.system.fs.current = saved_current
-        return CommandResult(1)
+        return CommandResult()
 
     def uniq(self, ctx: CommandContext) -> CommandResult:
         printdup = False

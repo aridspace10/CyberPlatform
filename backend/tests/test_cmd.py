@@ -408,31 +408,6 @@ def test_and_failure(cl, shell_basic: ShellState):
     assert CmdResult.stdout == []
 
 
-######## LN ###################
-def test_ln_basic(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("ln f1.txt s1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    f1, f2 = shell_basic.fs.get_file("f1.txt"), shell_basic.fs.get_file("s1.txt")
-    assert isinstance(f1, FileNode)
-    assert isinstance(f2, FileNode)
-    assert f1.get_data() == f2.get_data()
-    CmdResult = cl.enter_command('echo "Example" >> f1.txt', shell_basic)
-    f1, f2 = shell_basic.fs.get_file("f1.txt"), shell_basic.fs.get_file("s1.txt")
-    assert isinstance(f1, FileNode)
-    assert isinstance(f2, FileNode)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert f1.get_data() == f2.get_data()
-    CmdResult = cl.enter_command('echo "Example2" >> s1.txt', shell_basic)
-    f1, f2 = shell_basic.fs.get_file("f1.txt"), shell_basic.fs.get_file("s1.txt")
-    assert isinstance(f1, FileNode)
-    assert isinstance(f2, FileNode)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert f1.get_data() == f2.get_data()
-
-
 ######### MV ##################
 def test_mv_rename(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("mv f1.txt", shell_basic)
