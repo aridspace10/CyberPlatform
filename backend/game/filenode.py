@@ -42,8 +42,8 @@ class FileNode:
                 f = FileNode(parent, item["name"], inode)
                 f.from_dict(item, depth + 1, self)
                 self.items.append(f)
-        except:
-            raise Exception("Syncronization Error")
+        except Exception as err:
+            raise Exception("Syncronization Error") from err
 
     def __str__(self):
         return f"name: {self.name}, items: {self.items}, size: {self.inode.size}"
@@ -86,7 +86,7 @@ class FileNode:
 
     def accumualate_depth(self) -> None:
         self.depth += 1
-        if self.parent != None:
+        if self.parent is not None:
             self.parent.accumualate_depth()
 
     def add_child(self, name: str, inode: Inode) -> str:
@@ -117,7 +117,7 @@ class FileNode:
     def delete_child(self, name: str, recurse: bool = False) -> FileNode | str:
         for idx, item in enumerate(self.items):
             if item.name == name:
-                if item.get_type() == NodeType.DIRECTORY and recurse == False:
+                if item.get_type() == NodeType.DIRECTORY and not recurse:
                     return "dir"
                 return self.items.pop(idx)
         return ""
@@ -182,7 +182,7 @@ class FileNode:
                 raise SyntaxError("-type not found")
 
     def _join(self, past: str) -> str:
-        if self.parent == None:
+        if self.parent is None:
             return "."
         if past == ".":
             return f"./{self.name}"
@@ -210,8 +210,11 @@ class FileNode:
         prev: str,
         deep: int = 0,
         detail: int = 0,
-        extras: dict[str, bool | str] = {},
+        extras: dict[str, bool | str] | None = None,
     ) -> list:
+        if extras is None:
+            extras = {}
+
         content: list[list] = []
         items = self.items
         if "showhiddenall" in extras:
@@ -282,7 +285,7 @@ class FileNode:
                 def size_sort(val):
                     itemname = val[-1]
                     item = self.access(itemname)
-                    if item == None:
+                    if item is None:
                         return ""
                     return item.inode.size
 
@@ -292,7 +295,7 @@ class FileNode:
                 def time_sort(val):
                     itemname = val[-1].split("/")[-1]
                     item = self.access(itemname)
-                    if item == None:
+                    if item is None:
                         return 0
                     if method == "mod":
                         return item.inode.mtime

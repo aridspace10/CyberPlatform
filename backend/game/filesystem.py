@@ -20,8 +20,8 @@ class FileSystem:
         try:
             self.lcs = fs["lcs"]
             self.filehead.from_dict(fs["nodes"], 0, None)
-        except:
-            raise Exception("Syncronization failure")
+        except Exception as err:
+            raise Exception("Syncronization failure") from err
 
     def get_file(self, path: str) -> FileNode | str | None:
         saved_current = self.current
@@ -38,7 +38,7 @@ class FileSystem:
         path: str,
         deep: int = 0,
         detail: int = 0,
-        extras: dict[str, bool | str] = {},
+        extras: dict[str, bool | str] | None = None,
     ) -> list[list[str]] | str:
         if path != "":
             if (error := self.search(path)) != "":
@@ -97,8 +97,10 @@ class FileSystem:
             return self.add_directory(path)
 
     def add_directory(
-        self, path: str, creating: bool = False, permissions: dict = {}
+        self, path: str, creating: bool = False, permissions: dict | None = None
     ) -> str:
+        if permissions is None:
+            permissions = {}
         error = ""
         saved_current = self.current
         lst = path.split("/")
