@@ -56,4 +56,4 @@ def get_current_user(token=Depends(security)):
         return int(payload["sub"])  # <-- convert back to int for DB query
     except Exception as e:
         print(f"Token error: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token") from e

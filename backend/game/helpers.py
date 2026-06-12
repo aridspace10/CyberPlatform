@@ -19,3 +19,15 @@ def determine_perms_fromstr(permissions: str) -> dict | str:
         d[ORDER[idx]]["w"] = bool(bits[-2])
         d[ORDER[idx]]["r"] = bool(bits[-3])
     return d
+
+
+def match_whole_word(line: str, pat: str) -> bool:
+    return any(pat == w for w in line.split())
+
+
+def match_line(line: str, pat: str) -> bool:
+    return line == pat
+
+
+def match_contains(line: str, pat: str) -> bool:
+    return pat in line

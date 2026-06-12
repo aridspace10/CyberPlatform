@@ -9,12 +9,29 @@ from game.filenode import FileNode
 from game.filesystem import FileSystem
 from game.inode import Inode, NodeType
 from game.NetworkManager import NetworkManager
-from game.Parser import *
+from game.Parser import (
+    AndOr,
+    Atom,
+    Command,
+    CommandParser,
+    FilterNode,
+    FindParser,
+    Job,
+    Pipe,
+    Sequence,
+    SimpleCommand,
+    lex,
+)
 from game.ProcessManager import ProcessManager
-from game.Program import *
+from game.Program import RmProgram, SleepProgram
 from game.ShellState import ShellState
 
-from .helpers import determine_perms_fromstr
+from .helpers import (
+    determine_perms_fromstr,
+    match_contains,
+    match_line,
+    match_whole_word,
+)
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
@@ -96,7 +113,7 @@ class CommandLine:
         if len(lst) > 1 and (error := sys.fs.search("/".join(lst[0:-1]))) != "":
             sys.fs.current = saved_current
             return error
-        for idx, item in enumerate(sys.fs.current.items):
+        for _idx, item in enumerate(sys.fs.current.items):
             if item.name == lst[-1]:
                 if removing:
                     item.set_data([])
@@ -296,13 +313,13 @@ class CommandLine:
         last = val[-1]
         ty = "s"
         try:
-            tmp = int(last)
-        except:
+            int(last)
+        except ValueError:
             ty = last
             val = val[1:]
         try:
             val = int(val)
-        except:
+        except ValueError:
             return CommandResult(stderr=[f"expected int, got {val}"])
 
         # Modify val for selected type
@@ -362,36 +379,38 @@ class CommandLine:
     def ping(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args or "-h" in ctx.args or "-help" in ctx.args:
             return CommandResult(stdout=self.useage("ping"))
-        between = 0
-        preload = 3
+        # between = 0
+        # preload = 3
         while len(ctx.args) > 1:
             arg = ctx.args.pop(0)
             if arg[0] == "-":
                 for option in arg:
-                    match (arg):
+                    match (option):
                         case "i":
                             val = None
                             try:
                                 val = ctx.args.pop(0)
-                                between = int(val)
-                            except:
+                                # between = int(val)
+                            except ValueError:
                                 return CommandResult(
                                     stderr=[
-                                        f"Expected an integer for -i, got {val if val else ""}"
+                                        f"Expected an integer for -i,"
+                                        f" got {val if val else ""}"
                                     ]
                                 )
                         case "l":
                             val = None
                             try:
                                 val = ctx.args.pop(0)
-                                preload = int(val)
-                            except:
+                                # preload = int(val)
+                            except ValueError:
                                 return CommandResult(
                                     stderr=[
-                                        f"Expected an integer for -l, got {val if val else ""}"
+                                        f"Expected an integer for -l, "
+                                        f"got {val if val else ""}"
                                     ]
                                 )
-        dnsname = ctx.args.pop(0)
+        # dnsname = ctx.args.pop(0)
         return CommandResult()
 
     def find(self, ctx: CommandContext) -> CommandResult:
@@ -400,7 +419,7 @@ class CommandLine:
                 1, stderr=["find: atleast one argument needs to be given"]
             )
         while len(ctx.args) and ctx.args[0][0] == "-":
-            arg = ctx.args.pop(0)
+            _ = ctx.args.pop(0)
         if not len(ctx.args):
             return CommandResult(
                 1, stderr=["find: starting locaiton needs to be given"]
@@ -494,7 +513,7 @@ class CommandLine:
             if backup not in ("", "-i"):
                 inode = Inode(NodeType.FILE)
                 inode.set_data(old)
-                assert ctx.system.fs.current.parent != None
+                assert ctx.system.fs.current.parent is not None
                 ctx.system.fs.current.parent.add_child(
                     backup.replace("-i", ctx.system.fs.current.name, 1), inode
                 )
@@ -504,21 +523,17 @@ class CommandLine:
             printed = []
             for expression in expressions:
                 # Setup
-                l = len(expression)
+                length = len(expression)
                 before_s = ""
                 pattern = ""
                 replacement = ""
                 glob = False
-                delete = False
-                sprint = False
-                occur = 1
                 csensentive = True
                 print_after_sub = False
-                write = True
 
                 # Parse Expression
                 index = 0
-                while index < l and expression[index] not in ["s", "d", "p"]:
+                while index < length and expression[index] not in ["s", "d", "p"]:
                     before_s += expression[index]
                     index += 1
 
@@ -534,7 +549,7 @@ class CommandLine:
                         if len(sp) == 2:
                             try:
                                 between = [int(sp[0]) - 1, int(sp[1]) - 1]
-                            except:
+                            except ValueError:
                                 return CommandResult(
                                     1, stderr=[f"sed: expected int, got {before_s}"]
                                 )
@@ -547,7 +562,7 @@ class CommandLine:
                                     single = -1
                                 else:
                                     single = int(before_s)
-                            except:
+                            except ValueError:
                                 return CommandResult(
                                     1, stderr=[f"sed: expected int, got {before_s}"]
                                 )
@@ -558,37 +573,39 @@ class CommandLine:
                     delim = expression[index]
                     index += 1
 
-                    while index < l and expression[index] != delim:
+                    while index < length and expression[index] != delim:
                         pattern += expression[index]
                         index += 1
-                    if index == l:
+                    if index == length:
                         return CommandResult(
                             1, stderr=["sed: substution expects s/pattern/replacement/"]
                         )
                     index += 1
-                    while index < l and expression[index] != delim:
+                    while index < length and expression[index] != delim:
                         replacement += expression[index]
                         index += 1
-                    if index == l and expression[index - 1] != delim:
+                    if index == length and expression[index - 1] != delim:
                         return CommandResult(
                             1, stderr=["sed: expected terminating delim"]
                         )
                     index += 1
                     noccurences = 0
-                    while index < l:
+                    while index < length:
                         match (expression[index]):
                             case "g":
                                 glob = True
                             case "I":
                                 csensentive = False
-                            case "w":
-                                write = True
+                            # case "w":
+                            #     write = True
                             case "p":
                                 print_after_sub = True
                             case _:
                                 if expression[index].isdigit():
                                     num = ""
-                                    while index < l and expression[index].isdigit():
+                                    while (
+                                        index < length and expression[index].isdigit()
+                                    ):
                                         num += expression[index]
                                         index += 1
                                     noccurences = int(num)
@@ -597,11 +614,11 @@ class CommandLine:
                                     return CommandResult(
                                         1,
                                         stderr=[
-                                            f"sed: unknown expression flag - {expression[index]}"
+                                            "sed: unknown expression flag - "
+                                            f"{expression[index]}"
                                         ],
                                     )
                         index += 1
-                    count = 1
                     for i, line in enumerate(new):
                         if single is not None:
                             if (not rev_single and single != i) or (
@@ -618,7 +635,11 @@ class CommandLine:
                             if noccurences != 0:
                                 matches_seen = 0
 
-                                def repl(match):
+                                def repl(
+                                    match,
+                                    replacement=replacement,
+                                    noccurences=noccurences,
+                                ):
                                     nonlocal matches_seen
                                     matches_seen += 1
 
@@ -636,7 +657,9 @@ class CommandLine:
                         elif noccurences != 0:
                             matches_seen = 0
 
-                            def repl(match):
+                            def repl(
+                                match, replacement=replacement, noccurences=noccurences
+                            ):
                                 nonlocal matches_seen
                                 matches_seen += 1
 
@@ -810,37 +833,41 @@ class CommandLine:
 
     def cp(self, ctx: CommandContext) -> CommandResult:
         verbose = False
-        interactive = False
-        clobbar = True
+        # interactive = False
+        # clobbar = True
         recursive = False
         verbose = False
-        dereference = True
-        hardlink = False
-        symlink = False
-        preserve = False
-        update = False
+        # dereference = True
+        # hardlink = False
+        # symlink = False
+        # preserve = False
+        # update = False
         files = []
         stdout = []
         stderr = []
+
+        if "--help" in ctx.args:
+            return CommandResult(stdout=self.useage("cp"))
+
         while len(ctx.args) > 1:
             arg = ctx.args[0]
             if arg[0] == "-":
                 for option in arg[1:]:
                     match (option):
-                        case "n":
-                            clobbar = False
-                        case "i":
-                            interactive = True
+                        # case "n":
+                        #     clobbar = False
+                        # case "i":
+                        #     interactive = True
                         case "r":
                             recursive = True
                         case "R":
                             recursive = False
-                        case "u":
-                            update = True
-                        case "L":
-                            dereference = True
-                        case "d":
-                            dereference = False
+                        # case "u":
+                        #     update = True
+                        # case "L":
+                        #     dereference = True
+                        # case "d":
+                        #     dereference = False
                         case "v":
                             verbose = True
             else:
@@ -849,14 +876,14 @@ class CommandLine:
         target = ctx.args[0]
         tmp = ctx.system.fs.current
         destination_created = False
-        if error := ctx.system.fs.search(target):
+        if ctx.system.fs.search(target):
             # Directory/file doesn't exist
             if len(files) == 1:
                 destination_created = True
                 # peek at source type before creating destination
                 ctx.system.fs.search(files[0])
                 source_peek = ctx.system.fs.current
-                ctx.system.fs.current = tmp  # restore current
+                ctx.system.fs.current = tmp
 
                 if source_peek.get_type() == NodeType.DIRECTORY:
                     ctx.system.fs.add_directory(target)
@@ -867,6 +894,7 @@ class CommandLine:
                 return CommandResult(
                     1, stderr=[f"cp: target '{target}' is not a directory"]
                 )
+
         target_fnode = ctx.system.fs.current
         target_ty = target_fnode.get_type()
         ctx.system.fs.current = tmp
@@ -881,7 +909,8 @@ class CommandLine:
             if source_ty == NodeType.DIRECTORY:
                 if target_ty == NodeType.FILE:
                     stderr.append(
-                        f"cp: cannot overwrite non-directory '{target}' with directory '{file}'"
+                        f"cp: cannot overwrite non-directory '{target}' "
+                        f"with directory '{file}'"
                     )
                     continue
                 elif target_ty == NodeType.DIRECTORY:
@@ -917,7 +946,6 @@ class CommandLine:
 
     def mv(self, ctx: CommandContext) -> CommandResult:
         verbose = False
-        clobber = False
         stdout = []
         stderr = []
         if "--help" in ctx.args:
@@ -935,7 +963,7 @@ class CommandLine:
         tmp = ctx.system.fs.current
         if len(files) == 1:
             ftype = ctx.system.fs.search_withaccess(files[0])
-            if ftype == None:
+            if ftype is None:
                 return CommandResult(0, stderr=[f"mv: could not find file {files[0]}"])
             ttype = NodeType.DIRECTORY if len(target.split(".")) == 1 else NodeType.FILE
             if ftype == ttype:
@@ -946,7 +974,7 @@ class CommandLine:
                 return CommandResult(0, stdout, stderr)
             elif ftype == NodeType.FILE and ttype == NodeType.DIRECTORY:
                 if (
-                    ctx.system.fs.current.parent == None
+                    ctx.system.fs.current.parent is None
                 ):  # literally impossible to be true
                     return CommandResult(2)  # pragma: no cover
                 ctx.system.fs.current = ctx.system.fs.current.parent
@@ -956,7 +984,7 @@ class CommandLine:
                         saved = item
                         ctx.system.fs.current.items.pop(idx)
                         break
-                if saved == None:
+                if saved is None:
                     return CommandResult(
                         2, stderr=[f"mv: could not find file {target}"]
                     )
@@ -996,7 +1024,6 @@ class CommandLine:
         matchwhole = False
         matchline = False
         showmatched = False
-        quiet = False
         recursive = False
         pattern = ""
         files = []
@@ -1033,8 +1060,6 @@ class CommandLine:
                             matchline = True
                         case "o":
                             showmatched = True
-                        case "q":
-                            quiet = True
                         case "r":
                             recursive = True
                         case _:
@@ -1045,18 +1070,18 @@ class CommandLine:
                 pattern = arg
                 files = ctx.args
                 break
+
         if not pattern:
             return CommandResult(1, stderr=["grep: pattern not given"])
         if not len(files):
             files = ["-"]
         saved_current = ctx.system.fs.current
         if matchwhole:
-            match_cond_func = lambda line, pat: any(pat == w for w in line.split())
+            match_cond_func = match_whole_word
         elif matchline:
-            match_cond_func = lambda line, pat: line == pat
+            match_cond_func = match_line
         else:
-            # if the pattern exists in the line, there will be an element in the string comp
-            match_cond_func = lambda line, pat: pat in line
+            match_cond_func = match_contains
 
         def search_file(item: FileNode) -> None:
             lst = item.get_data()
@@ -1244,7 +1269,7 @@ class CommandLine:
             ctx.args = ctx.args[1:]
         filename = ctx.args[0]
         content = ctx.system.fs.get_file(filename)
-        if content == None or isinstance(content, str):
+        if content is None or isinstance(content, str):
             return CommandResult(1, stderr=[f"File {filename} does not exist"])
         data = content.get_data()
         for line in data:
@@ -1301,7 +1326,7 @@ class CommandLine:
             if ty == NodeType.DIRECTORY:
                 stderr.append(f"head: ${file} is a directory")
                 continue
-            if content == None or isinstance(content, str):
+            if content is None or isinstance(content, str):
                 return CommandResult(1)
             counter = 0
             data = content.get_data()
@@ -1365,7 +1390,8 @@ class CommandLine:
                     return CommandResult(
                         1,
                         stderr=[
-                            "tail: argument for -c must be an integar with a possible + prefix"
+                            "tail: argument for -c must be an integar "
+                            "with a possible + prefix"
                         ],
                     )
 
@@ -1388,7 +1414,8 @@ class CommandLine:
                     return CommandResult(
                         1,
                         stderr=[
-                            "tail: argument for -c must be an integar with a possible + prefix"
+                            "tail: argument for -c must be "
+                            "an integar with a possible + prefix"
                         ],
                     )
 
@@ -1507,19 +1534,14 @@ class CommandLine:
             return CommandResult(0, stdout, stderr)
 
     def pwd(self, ctx: CommandContext) -> CommandResult:
-        ty = "l"
         while len(ctx.args) > 1:
             arg = ctx.args[0]
             if arg == "--help":
                 return CommandResult(0, stdout=self.useage("pwd"))
-            elif arg == "-l":
-                ty = "l"
-            elif arg == "-p":
-                ty = "p"
             ctx.args = ctx.args[1:]
         pointer = ctx.system.fs.current
         direct = ""
-        while pointer != None:
+        while pointer is not None:
             if direct:
                 direct = pointer.name + "/" + direct
             else:
@@ -1580,8 +1602,6 @@ class CommandLine:
     def ls(self, ctx: CommandContext) -> CommandResult:
         deep, detail = False, 0
         extra: dict[str, bool | str] = {}
-        oneline = False
-        listdir = False
         target = ""
         stdout = []
         stderr = []
@@ -1599,8 +1619,6 @@ class CommandLine:
                             detail = 1
                         case "i":
                             extra["inode"] = True
-                        case "1":
-                            oneline = True
                         case "a":
                             extra["showhiddenall"] = True
                         case "A":
@@ -1706,15 +1724,15 @@ class CommandLine:
         data = ctx.stdin.get_data()
         processed = []
         for line in data:
-            if (not csenstive):
+            if not csenstive:
                 line = line.lower()
-            if (skipchars):
+            if skipchars:
                 line = line[skipchars:]
-            if (skipfield):
+            if skipfield:
                 fields = [f for f in line.split(" ") if f != ""]
-                t = " ".join(fields[skipfield:])
+                line = " ".join(fields[skipfield:])
             processed.append(line)
-            
+
         output = []
         for i, line in enumerate(data):
             same_as_prev = i > 0 and processed[i] == processed[i - 1]
@@ -1722,10 +1740,10 @@ class CommandLine:
             is_dup = same_as_prev or same_as_next
 
             if printdup:
-                if same_as_prev:
+                if is_dup:
                     output.append(line)
             else:
-                if not same_as_prev:
+                if not is_dup:
                     output.append(line)
 
         return CommandResult(0, stdout=output)

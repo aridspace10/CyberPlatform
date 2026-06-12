@@ -170,7 +170,6 @@ def lex(text: str) -> list[Token]:
         if c == '"' or c == "'":
             quote = c
             i += 1
-            start = i
             buf = ""
             while i < n:
                 if text[i] == quote:
@@ -246,7 +245,7 @@ class CommandParser:
         rest = []
         while (p := self.peek()) and p.type in ("AND", "OR"):
             tmp = self.consume()
-            if tmp == None:
+            if tmp is None:
                 raise SyntaxError()
             rest.append((tmp.value, self.parse_command()))
         return AndOr(first, rest)
@@ -397,7 +396,7 @@ class FindParser:
 
     def parse_factor(self) -> Node:
         tok = self.peek()
-        if tok == None:
+        if tok is None:
             raise SyntaxError()
 
         if tok == "!":
@@ -412,7 +411,7 @@ class FindParser:
             return node
 
         filt = self.consume()
-        if filt == None:
+        if filt is None:
             return FilterNode("", "")
         if filt in ["-true", "-false", "-empty", "-delete"]:  # Singular
             return FilterNode(filt, "")
@@ -421,11 +420,11 @@ class FindParser:
             while (tok := self.peek()) is not None and tok not in (";", "+"):
                 cmd.append(self.consume())
             mode = self.consume()
-            if mode == None or mode != ";" or mode != "+":
+            if mode is None or mode != ";" or mode != "+":
                 raise SyntaxError("Expected ; or +")
             return ExecNode(cmd, mode)
         val = self.consume()
-        if val == None:
+        if val is None:
             raise SyntaxError(f"No value for given for: {filt}")
         return FilterNode(filt, val)
 

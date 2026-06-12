@@ -49,13 +49,13 @@ def list_sessions():
 async def get_sandbox(user_id: str, db: Session = Depends(get_db)):
     # get sandbox from db if exist
     tut = get_sandbox_session(db, int(user_id))
-    if tut == None:
+    if tut is None:
         # Create a tutorial session
         sessionID = add_session(db, int(user_id), "Sandbox", "running")
         session = session_manager.add_session(str(sessionID), "Sandbox")
         # Generate tutorial config
         scenario = get_scenario_byname(db, "Tutorial")
-        if scenario == None:
+        if scenario is None:
             return {"error": "No tutorial config"}
         config: dict = scenario.config or {}
         session.game_manger.set_config(config)
@@ -91,7 +91,7 @@ async def save_session_state(session_id: str, db: Session = Depends(get_db)):
     ses = session_manager.get_session(session_id)
     if ses == "404":
         return {"message": "sessionID does not exist"}
-    for username, player in ses.players.items():
+    for _username, player in ses.players.items():
         update_session_shell(
             db, int(session_id), int(player.user_id), player.serialize()
         )
