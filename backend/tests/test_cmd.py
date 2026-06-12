@@ -576,7 +576,7 @@ def test_sort_random(cl, shell_basic: ShellState):
         if CmdResult.stdout[i] == name:
             assert CmdResult.stdout[i + 1] == name
             return
-    assert False
+    raise AssertionError()
 
 
 def test_sort_dups(cl, shell_basic: ShellState):
