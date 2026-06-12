@@ -1,31 +1,33 @@
 import pytest
-import datetime
-import random
-from game.ShellState import ShellState
-from game.filesystem import FileSystem
 from game.commandline import CommandLine
-from game.ProcessManager import ProcessManager
-from game.NetworkManager import NetworkManager
-from network.SessionManger import GameSession
 from game.filenode import FileNode, Inode, NodeType
-import time
+from game.filesystem import FileSystem
+from game.NetworkManager import NetworkManager
+from game.ProcessManager import ProcessManager
+from game.ShellState import ShellState
+from network.SessionManger import GameSession
+
 
 @pytest.fixture
 def game_session():
     session = GameSession("1")
     return session
 
+
 @pytest.fixture
 def process_manager():
     return ProcessManager()
+
 
 @pytest.fixture
 def network_manager():
     return NetworkManager()
 
+
 @pytest.fixture
 def cl(process_manager, network_manager):
     return CommandLine(process_manager, network_manager)
+
 
 # Basic helpers to create a filesystem with one file
 @pytest.fixture
@@ -34,12 +36,14 @@ def fs_empty():
     # ensure root present and empty
     return fs
 
+
 @pytest.fixture
 def shell_empty(fs_empty):
     s = ShellState()
     s.fs = fs_empty
     s.cwd = "/"
     return s
+
 
 @pytest.fixture
 def fs_fouritems():
@@ -56,6 +60,7 @@ def fs_fouritems():
     fs.add_file("f4.txt")
     return fs
 
+
 @pytest.fixture
 def fs_basic():
     fs = FileSystem()
@@ -71,6 +76,7 @@ def fs_basic():
     fs.add_file("d1/f4.txt", fn)
     return fs
 
+
 @pytest.fixture
 def fs_sed():
     fs = FileSystem()
@@ -79,10 +85,13 @@ def fs_sed():
     fs.add_file("f2.txt")
     fs.current.items[1].set_data(["cat CaT Cat"])
     fs.add_file("f3.txt")
-    fs.current.items[2].set_data(["cat wolf cat", "hi cat", " whats up", " the cat", " test cat here"])
+    fs.current.items[2].set_data(
+        ["cat wolf cat", "hi cat", " whats up", " the cat", " test cat here"]
+    )
     fs.add_file("many.txt")
     fs.current.items[-1].set_data(["cat cat cat cat"])
     return fs
+
 
 @pytest.fixture
 def fs_cp():
@@ -97,7 +106,9 @@ def fs_cp():
     fs.add_directory("project2")
     return fs
 
+
 # ---------------- WC TEST FIXTURES ----------------
+
 
 @pytest.fixture
 def shell_emptyfile():
@@ -127,7 +138,7 @@ def shell_one_line_no_newline():
 
 
 @pytest.fixture
-def shell_one_line_newline(): 
+def shell_one_line_newline():
     fs = FileSystem()
     fs.add_file("f1.txt")
     fn = fs.get_file("f1.txt")
@@ -264,12 +275,14 @@ def shell_no_final_newline():
     s.cwd = "/"
     return s
 
+
 @pytest.fixture
 def shell_basic(fs_basic):
     s = ShellState()
     s.fs = fs_basic
     s.cwd = "/"
     return s
+
 
 @pytest.fixture
 def shell_fouritems(fs_fouritems):
@@ -278,12 +291,14 @@ def shell_fouritems(fs_fouritems):
     s.cwd = "/"
     return s
 
+
 @pytest.fixture
 def shell_cp(fs_cp):
     s = ShellState()
     s.fs = fs_cp
     s.cwd = "/"
     return s
+
 
 @pytest.fixture
 def shell_sed(fs_sed):

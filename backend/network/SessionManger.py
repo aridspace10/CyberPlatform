@@ -1,16 +1,18 @@
-from typing import Dict, Literal
-from fastapi import WebSocket
-from game.ShellState import ShellState
-from game.GameManager import GameManager
-from game.ProcessManager import ProcessManager
-from game.NetworkManager import NetworkManager
-from game.filesystem import FileSystem
-from game.commandline import CommandLine
-from game.Scheduler import Scheduler
-from game.Events import *
 import asyncio
+from typing import Dict, Literal
+
+from fastapi import WebSocket
+from game.commandline import CommandLine
+from game.Events import HereDocTerminateEvent, ProcessTerminatedEvent
+from game.filesystem import FileSystem
+from game.GameManager import GameManager
+from game.NetworkManager import NetworkManager
+from game.ProcessManager import ProcessManager
+from game.Scheduler import Scheduler
+from game.ShellState import ShellState
 
 Username = str
+
 
 class Player:
     def __init__(self, websocket: WebSocket | None, username: str, user_id: str):
@@ -24,8 +26,9 @@ class Player:
         return {
             "vars": self.shell.vars,
             "cmds": self.shell.commands,
-            "fs": self.shell.fs.to_dict()
+            "fs": self.shell.fs.to_dict(),
         }
+
 
 class GameSession:
     def __init__(self, session_id: str):
@@ -48,7 +51,7 @@ class GameSession:
         self.network_manager = NetworkManager()
 
         self.commandline = CommandLine(self.process_manager, self.network_manager)
-    
+
     def __str__(self) -> str:
         return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
 
@@ -64,9 +67,9 @@ class GameSession:
             "players": [p.username for p in self.players.values()],
             "state": self.state,
             "session": self.session_id,
-            "name": self.name
+            "name": self.name,
         }
-    
+
     async def scheduler_loop(self):
         while True:
 
@@ -86,10 +89,10 @@ class GameSession:
                                         "type": "terminal_state",
                                         "busy": False,
                                         "mode": None,
-                                        "prompt": None
-                                    }
+                                        "prompt": None,
+                                    },
                                 )
-                elif (isinstance(event, HereDocTerminateEvent)):
+                elif isinstance(event, HereDocTerminateEvent):
                     pass
 
             await asyncio.sleep(1)
@@ -108,22 +111,18 @@ class GameSession:
             # Reconnecting
             self.players[username].websocket = websocket
 
-        await self.broadcast({
-            "type": "system",
-            "message": f"{username} joined session"
-        })
+        await self.broadcast(
+            {"type": "system", "message": f"{username} joined session"}
+        )
 
         await self.broadcast(self.lobby_state())
 
     async def disconnect(self, websocket: WebSocket):
         username = self.connections.pop(websocket, None)
         if not username:
-            return 
+            return
 
-        await self.broadcast({
-            "type": "system",
-            "message": f"{username} disconnected"
-        })
+        await self.broadcast({"type": "system", "message": f"{username} disconnected"})
 
     async def broadcast(self, message: dict):
         dead = []
@@ -131,7 +130,7 @@ class GameSession:
         for ws in self.connections:
             try:
                 await ws.send_json(message)
-            except:
+            except Exception:
                 dead.append(ws)
 
         for ws in dead:
@@ -139,6 +138,7 @@ class GameSession:
 
     async def send_to(self, websocket: WebSocket, message: dict):
         await websocket.send_json(message)
+
 
 class SessionManager:
     def __init__(self):
@@ -148,20 +148,18 @@ class SessionManager:
         if session_id not in self.sessions:
             return "404"
         return self.sessions[session_id]
-    
+
     def add_session(self, session_id: str, name: str):
         # 1.Setup Session
-        new_session = GameSession(session_id) 
+        new_session = GameSession(session_id)
         new_session.name = name
         # 2. Setup scheduler
-        asyncio.create_task(
-            new_session.scheduler_loop()
-        )
+        asyncio.create_task(new_session.scheduler_loop())
 
         # 3. Assign to session manger array
         self.sessions[session_id] = new_session
         return self.sessions[session_id]
-    
+
     async def set_session_state(self, session_id: str, new_state: str) -> bool:
         session = self.get_session(session_id)
         if not session or session == "404":
@@ -169,5 +167,6 @@ class SessionManager:
 
         await session.set_state(new_state)
         return True
+
 
 session_manager = SessionManager()

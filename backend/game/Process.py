@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from game.Program import Program
 
+
 class ProcessState(StrEnum):
     RUNNING = "RUNNING"
     STOPPED = "STOPPED"
@@ -11,9 +12,13 @@ class ProcessState(StrEnum):
     SLEEPING = "SLEEPING"
     WAITING_INPUT = "WAITING_INPUT"
 
-class Process():
+
+class Process:
     _next_id = 1
-    def __init__(self, command: str, parent: int, status: ProcessState = ProcessState.RUNNING):
+
+    def __init__(
+        self, command: str, parent: int, status: ProcessState = ProcessState.RUNNING
+    ):
         self.pid: int = Process._next_id
         Process._next_id += 1
         self.ppid: int = parent
@@ -23,6 +28,6 @@ class Process():
         self.stderr: list[str] = []
         self.foreground: bool = False
         self.program: Program | None = None
-    
+
     def __repr__(self):
         return f"PID={self.pid} PPID={self.ppid} {self.command}"

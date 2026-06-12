@@ -1,6 +1,6 @@
 from game.filenode import FileNode
-from typing import Literal, Tuple
 from game.inode import Inode, NodeType
+
 
 class FileSystem:
     def __init__(self):
@@ -9,12 +9,9 @@ class FileSystem:
         self.current: FileNode = self.filehead
         self.lcs = 0
         self.cwd = ""
-    
+
     def to_dict(self) -> dict:
-        return {
-            "lcs": self.lcs,
-            "nodes": self.filehead.to_dict()
-        }
+        return {"lcs": self.lcs, "nodes": self.filehead.to_dict()}
 
     def from_dict(self, fs: dict) -> None:
         # Clear fs
@@ -23,8 +20,8 @@ class FileSystem:
         try:
             self.lcs = fs["lcs"]
             self.filehead.from_dict(fs["nodes"], 0, None)
-        except:
-            raise Exception("Syncronization failure")
+        except Exception as err:
+            raise Exception("Syncronization failure") from err
 
     def get_file(self, path: str) -> FileNode | str | None:
         saved_current = self.current
@@ -35,31 +32,37 @@ class FileSystem:
         tmp = self.current
         self.current = saved_current
         return tmp.access(lst[-1])
-    
-    def list_files(self, path: str, deep: int = 0, detail: int = 0, extras: dict[str, bool | str] = {}) -> list[list[str]] | str:
-        if (path != ""):
+
+    def list_files(
+        self,
+        path: str,
+        deep: int = 0,
+        detail: int = 0,
+        extras: dict[str, bool | str] | None = None,
+    ) -> list[list[str]] | str:
+        if path != "":
             if (error := self.search(path)) != "":
                 return error
         return self.current.list_content("", deep, detail, extras)
 
     def search(self, path: str, creating: bool = False) -> str:
-        if (path == "/"):
+        if path == "/":
             return ""
         lst = path.split("/")
-        while len(lst) > 0 and lst != ['']:
+        while len(lst) > 0 and lst != [""]:
             cur = lst.pop(0)
             # if we are staying still
-            if cur == '' or cur == ".":
+            if cur == "" or cur == ".":
                 continue
             # if we going back
             if cur == "..":
-                if (self.current.parent is not None):
+                if self.current.parent is not None:
                     self.current = self.current.parent
                     continue
 
             if self.current.get_type() == NodeType.FILE:
                 return f"{self.current.name} is not a directory"
-            
+
             if self.current.access(cur) is None and creating:
                 inode = Inode(NodeType.DIRECTORY)
                 self.current.add_child(cur, inode)
@@ -77,8 +80,8 @@ class FileSystem:
                 self.current = saved
             self.current = node
         return ""
-    
-    def search_withaccess(self, path: str, creating: bool = False) -> NodeType | None: 
+
+    def search_withaccess(self, path: str, creating: bool = False) -> NodeType | None:
         lst = path.split("/")
         self.search("/".join(lst[0:-1]))
         for item in self.current.items:
@@ -86,14 +89,18 @@ class FileSystem:
                 self.current = item
                 return item.get_type()
         return None
-    
+
     def add(self, path: str) -> str:
         if "." in path:
             return self.add_file(path)
         else:
             return self.add_directory(path)
 
-    def add_directory(self, path: str, creating: bool = False, permissions: dict = {}) -> str:
+    def add_directory(
+        self, path: str, creating: bool = False, permissions: dict | None = None
+    ) -> str:
+        if permissions is None:
+            permissions = {}
         error = ""
         saved_current = self.current
         lst = path.split("/")
@@ -119,6 +126,7 @@ class FileSystem:
             self.current.add_child(fn.name, fn.inode)
         self.current = saved_current
         return ""
+
 
 """
 f = FileSystem()
