@@ -135,7 +135,7 @@ class GameSession:
         for ws in self.connections:
             try:
                 await ws.send_json(message)
-            except:
+            except Exception:
                 dead.append(ws)
 
         for ws in dead:

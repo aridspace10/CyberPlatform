@@ -16,7 +16,7 @@ async def websocket_endpoint(
     session = session_manager.get_session(session_id)
     if session == "404":
         ses_db = get_session(db, int(session_id))
-        if ses_db == None:
+        if ses_db is None:
             await websocket.close()
             return
         session = session_manager.add_session(
