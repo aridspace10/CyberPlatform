@@ -1,12 +1,13 @@
-from fastapi import FastAPI
-from network.WebsocketServer import router as websocket_router
-from api.sessions import router as sessions_router
-from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from db.session import engine, Base
-from routers import users
+
+from api.sessions import router as sessions_router
 from db.seed import seed_db
-from db.session import SessionLocal
+from db.session import Base, SessionLocal, engine
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from network.WebsocketServer import router as websocket_router
+from routers import users
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,7 +17,7 @@ async def lifespan(app: FastAPI):
 
     db = SessionLocal()
     try:
-        seed_db(db)   # ✅ run once on startup
+        seed_db(db)  # ✅ run once on startup
     finally:
         db.close()
 
@@ -24,6 +25,7 @@ async def lifespan(app: FastAPI):
 
     # shutdown
     pass
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -38,6 +40,7 @@ app.add_middleware(
 app.include_router(websocket_router)
 app.include_router(sessions_router)
 app.include_router(users.router)
+
 
 @app.get("/")
 def root():

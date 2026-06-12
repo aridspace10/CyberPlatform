@@ -1,5 +1,6 @@
 from game.Process import Process, ProcessState
 
+
 class Program:
     def start(self):
         pass
@@ -9,6 +10,7 @@ class Program:
 
     def tick(self):
         raise NotImplementedError()
+
 
 class SleepProgram(Program):
     def __init__(self, process: Process, ticks: int):
@@ -20,6 +22,7 @@ class SleepProgram(Program):
 
         if self.remaining <= 0:
             self.process.status = ProcessState.TERMINATED
+
 
 class RmProgram(Program):
     def __init__(self, process: Process, files: list[str]):
@@ -43,4 +46,3 @@ class RmProgram(Program):
             pass
 
         self.next_file()
-        

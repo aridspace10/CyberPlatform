@@ -1,10 +1,12 @@
-import os
 import json
-from sqlalchemy.orm import Session
-from db.modals import Scenario, User
+import os
+
 from db.authentication import hash_password
+from db.modals import Scenario, User
+from sqlalchemy.orm import Session
 
 CONFIG_FOLDER = "./game/configs"
+
 
 def seed_db(db: Session):
     ## ADD BASE USER ##
@@ -12,9 +14,7 @@ def seed_db(db: Session):
 
     if not exists:
         user = User(
-            username="jack",
-            email="jackovand27",
-            password=hash_password("1234")
+            username="jack", email="jackovand27", password=hash_password("1234")
         )
         db.add(user)
     ## ADD CONFIGS ##
@@ -32,8 +32,7 @@ def seed_db(db: Session):
 
         if not exists:
             scenario = Scenario(
-                name=config_data["name"],
-                config=json.dumps(config_data)
+                name=config_data["name"], config=json.dumps(config_data)
             )
             db.add(scenario)
 

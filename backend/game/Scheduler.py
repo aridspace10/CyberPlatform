@@ -1,4 +1,5 @@
-from game.ProcessManager import ProcessManager, ProcessState, Process
+from game.ProcessManager import ProcessManager, ProcessState
+
 
 class Scheduler:
     def __init__(self, pm: ProcessManager):

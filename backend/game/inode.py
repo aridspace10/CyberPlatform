@@ -1,14 +1,14 @@
 from __future__ import annotations
-from typing import Literal, Tuple
-from datetime import datetime
-import sys
 
+from datetime import datetime
 from enum import Enum
+
 
 class NodeType(Enum):
     FILE = "file"
     DIRECTORY = "directory"
     SYMLINK = "symlink"
+
 
 class Inode:
     _next_id = 1
@@ -33,7 +33,7 @@ class Inode:
         self.ctime = now
         self.atime = now
         self.mtime = now
-    
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -45,30 +45,30 @@ class Inode:
             "atimes": self.atime.isoformat(),
             "mtimes": self.mtime.isoformat(),
         }
-    
+
     def from_dict(self, i: dict) -> None:
         self.id = i["id"]
-        self.type = NodeType(i['type'])
+        self.type = NodeType(i["type"])
         self.data = i["data"]
         self.permissions = i["permissions"]
         self.btime = datetime.fromisoformat(i["btimes"])
         self.ctime = datetime.fromisoformat(i["ctimes"])
         self.atime = datetime.fromisoformat(i["atimes"])
         self.mtime = datetime.fromisoformat(i["mtimes"])
-    
+
     @property
     def size(self):
         return sum(len(line) for line in self.data)
-    
+
     def get_data(self) -> list[str]:
         self.atime = datetime.now()
         return self.data
-    
+
     def set_data(self, data: list[str]) -> None:
         self.mtime = datetime.now()
         self.data = data
         self.has_trailing_newline = True
-    
+
     def append_data(self, data: list[str]) -> None:
         self.mtime = datetime.now()
         self.data.extend(data)

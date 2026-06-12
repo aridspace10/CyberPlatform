@@ -1,5 +1,5 @@
-from game.filesystem import FileSystem
 from game.commandline import CommandLine
+from game.filesystem import FileSystem
 from game.ShellState import ShellState
 
 s = ShellState()
@@ -9,4 +9,4 @@ f.add_file("d1/f2.txt")
 f.add_file("f1.txt")
 s.fs = f
 cmd = CommandLine()
-print (cmd.enter_command('find . \( -name "*.txt" \)', s))
+print(cmd.enter_command('find . \( -name "*.txt" \)', s))
