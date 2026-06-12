@@ -164,6 +164,21 @@ class CommandLine:
                 if (isinstance(exec_ctx.stdin, str)):
                     cmd_result = CommandResult(1, [], [exec_ctx.stdin], 'text', None)
                     return cmd_result
+            elif (redir.op == "<<"):
+                proc = self.process_manager.create_process(
+                    f"heredoc {redir.target}",
+                    parent=1
+                )
+
+                proc.program = HeredocProgram(proc, command, redir.target)
+
+                sys.shell.foreground_pid = proc.pid
+
+                return CommandResult(
+                    interaction=Interaction(
+                        mode="foreground"
+                    )
+                )
             elif (redir.op == ">"):
                 exec_ctx.stdout = self.get_fd(redir.target, True, sys)
                 if (isinstance(exec_ctx.stdout, str)):

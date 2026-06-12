@@ -1,3 +1,6 @@
+from game.Parser import Command
+from game.filenode import FileNode
+from game.inode import Inode, NodeType
 from game.Process import Process, ProcessState
 
 class Program:
@@ -43,4 +46,17 @@ class RmProgram(Program):
             pass
 
         self.next_file()
-        
+
+class HeredocProgram(Program):
+    def __init__(self, proc: Process, command: Command, delimiter: str):
+        self.proc = proc
+        self.command = command
+        self.delimiter = delimiter
+        self.lines = []
+    
+    def on_input(self, line: str):
+        if line == self.delimiter:
+            self.proc.status = ProcessState.TERMINATED
+            return
+
+        self.lines.append(line)

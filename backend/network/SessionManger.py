@@ -7,7 +7,7 @@ from game.NetworkManager import NetworkManager
 from game.filesystem import FileSystem
 from game.commandline import CommandLine
 from game.Scheduler import Scheduler
-from game.Events import ProcessTerminatedEvent
+from game.Events import *
 import asyncio
 
 Username = str
@@ -75,14 +75,7 @@ class GameSession:
             while self.process_manager.events:
                 event = self.process_manager.events.pop(0)
                 if isinstance(event, ProcessTerminatedEvent):
-
                     for player in self.players.values():
-                        print(
-                            "foreground=",
-                            player.shell.foreground_pid,
-                            "event pid=",
-                            event.process.pid
-                        )
                         if player.shell.foreground_pid == event.process.pid:
                             player.shell.foreground_pid = None
 
@@ -96,6 +89,8 @@ class GameSession:
                                         "prompt": None
                                     }
                                 )
+                elif (isinstance(event, HereDocTerminateEvent)):
+                    pass
 
             await asyncio.sleep(1)
 
