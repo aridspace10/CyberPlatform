@@ -1681,31 +1681,53 @@ class CommandLine:
         return CommandResult(1)
 
     def uniq(self, ctx: CommandContext) -> CommandResult:
-        count = False
-        repeated = False
         printdup = False
-        skip = 0
-        unique = False
+        skipfield = 0
+        skipchars = 0
+        csenstive = True
         file = ""
         while ctx.args:
             arg = ctx.args.pop(0)
-            if arg == "-c" or arg == "--count":
-                count = True
-            elif arg == "-d" or arg == "repeated":
-                repeated = True
-            elif arg == "-D":
+            if arg == "-d" or arg == "repeated":
                 printdup = True
             elif arg.startswith("--skip-fields"):
-                skip = int(arg.split("=")[1])
+                skipfield = int(arg.split("=")[1])
+            elif arg == "-i":
+                csenstive = False
             elif arg == "-f":
-                skip = int(ctx.args.pop(0))
+                skipfield = int(ctx.args.pop(0))
+            elif arg == "-s":
+                skipchars = int(ctx.args.pop(0))
             else:
                 file = arg
         if file != "":
             ctx.system.fs.search_withaccess(file)
-            input = ctx.system.fs.current
+            ctx.stdin = ctx.system.fs.current
         data = ctx.stdin.get_data()
-        output = list(dict.fromkeys(data))
+        processed = []
+        for line in data:
+            if (not csenstive):
+                line = line.lower()
+            if (skipchars):
+                line = line[skipchars:]
+            if (skipfield):
+                fields = [f for f in line.split(" ") if f != ""]
+                t = " ".join(fields[skipfield:])
+            processed.append(line)
+            
+        output = []
+        for i, line in enumerate(data):
+            same_as_prev = i > 0 and processed[i] == processed[i - 1]
+            same_as_next = i < len(data) - 1 and processed[i] == processed[i + 1]
+            is_dup = same_as_prev or same_as_next
+
+            if printdup:
+                if same_as_prev:
+                    output.append(line)
+            else:
+                if not same_as_prev:
+                    output.append(line)
+
         return CommandResult(0, stdout=output)
 
     def sort(self, ctx: CommandContext) -> CommandResult:
