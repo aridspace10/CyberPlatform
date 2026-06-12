@@ -1736,14 +1736,12 @@ class CommandLine:
         output = []
         for i, line in enumerate(data):
             same_as_prev = i > 0 and processed[i] == processed[i - 1]
-            same_as_next = i < len(data) - 1 and processed[i] == processed[i + 1]
-            is_dup = same_as_prev or same_as_next
 
             if printdup:
-                if is_dup:
+                if same_as_prev:
                     output.append(line)
             else:
-                if not is_dup:
+                if not same_as_prev:
                     output.append(line)
 
         return CommandResult(0, stdout=output)

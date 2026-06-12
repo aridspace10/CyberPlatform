@@ -660,6 +660,7 @@ def test_pipes_lshead2(cl, shell_empty: ShellState):
 
 def test_pipes_sortuniq(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
+    print(names)
     name = random.choice(names)
     names = names.copy()
     fn = shell_basic.fs.get_file("f2.txt")
