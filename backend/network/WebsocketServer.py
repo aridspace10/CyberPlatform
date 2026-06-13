@@ -76,7 +76,11 @@ async def websocket_endpoint(
                         proc.program.receive_input(raw)
 
                 else:
+                    print("before enter_command")
+
                     cmd = session.commandline.enter_command(raw, player.shell)
+
+                    print("after enter_command")
 
                     await session.send_to(
                         websocket,

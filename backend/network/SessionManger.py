@@ -71,12 +71,15 @@ class GameSession:
         }
 
     async def scheduler_loop(self):
+        print("scheduler started")
         while True:
 
             self.scheduler.tick()
+            print("schule tick")
 
             while self.process_manager.events:
                 event = self.process_manager.events.pop(0)
+                print("Event occured")
                 if isinstance(event, ProcessTerminatedEvent):
                     for player in self.players.values():
                         if player.shell.foreground_pid == event.process.pid:
@@ -151,9 +154,11 @@ class SessionManager:
 
     def add_session(self, session_id: str, name: str):
         # 1.Setup Session
+        print("ADD_SESSION", session_id)
         new_session = GameSession(session_id)
         new_session.name = name
         # 2. Setup scheduler
+        print("CREATE TASK")
         asyncio.create_task(new_session.scheduler_loop())
 
         # 3. Assign to session manger array
