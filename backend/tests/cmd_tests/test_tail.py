@@ -105,6 +105,16 @@ def test_tail_one_line_no_newline(cl, shell_one_line_no_newline):
     assert CmdResult.stdout == ["hello"]
 
 
+def test_tail_error(cl, shell_basic: ShellState):
+    CmdResult = cl.enter_command("tail -c", shell_basic)
+    assert CmdResult.stderr == ["tail: argument required for -c"]
+
+
+def test_tail_error2(cl, shell_basic: ShellState):
+    CmdResult = cl.enter_command("tail d1", shell_basic)
+    assert CmdResult.stderr == ["tail: d1 is a directory"]
+
+
 # =========================================================
 # -n Tests
 # =========================================================

@@ -1270,19 +1270,31 @@ class CommandLine:
     def cat(self, ctx: CommandContext) -> CommandResult:
         stdout = []
         stderr = []
-        if len(ctx.args) == 1 and ctx.args[0] == "--help":
+        numbering = False
+        if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("cat"))
         while len(ctx.args) > 1:
-            arg = ctx.args[0]
-            if arg == "--help":
-                return CommandResult(0, stdout=self.useage("cat"))
-            ctx.args = ctx.args[1:]
+            arg = ctx.args.pop(0)
+            if arg[0] == "-":
+                for option in arg[1:]:
+                    match (option):
+                        case "n":
+                            numbering = True
+                        case _:
+                            return CommandResult(
+                                1, stderr=[f"cat: Unknown Argument Given ({option})"]
+                            )
         filename = ctx.args[0]
-        content = ctx.system.fs.get_file(filename)
+        if filename == "-":
+            content = ctx.stdin
+        else:
+            content = ctx.system.fs.get_file(filename)
         if content is None or isinstance(content, str):
             return CommandResult(1, stderr=[f"File {filename} does not exist"])
         data = content.get_data()
-        for line in data:
+        for idx, line in enumerate(data):
+            if numbering:
+                line = f"{idx + 1} {line}"
             stdout.append(line)
         return CommandResult(0, stdout, stderr)
 
@@ -1334,7 +1346,7 @@ class CommandLine:
                 ty = ctx.system.fs.search_withaccess(file)
                 content = ctx.system.fs.current
             if ty == NodeType.DIRECTORY:
-                stderr.append(f"head: ${file} is a directory")
+                stderr.append(f"head: {file} is a directory")
                 continue
             if content is None or isinstance(content, str):
                 return CommandResult(1)
@@ -1459,7 +1471,7 @@ class CommandLine:
 
             # Check is file
             if ty == NodeType.DIRECTORY:
-                stderr.append(f"tail: ${file} is a directory")
+                stderr.append(f"tail: {file} is a directory")
                 continue
 
             if ty is None:
