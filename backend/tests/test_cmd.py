@@ -14,6 +14,8 @@ def test_cmd_helps(cl, shell_empty):
     cmds = [
         "mkdir",
         "cat",
+        "cp",
+        "tail",
         "chmod",
         "grep",
         "head",
