@@ -23,6 +23,8 @@ async def websocket_endpoint(
             session_id, ses_db.name if ses_db.name else ""
         )
     try:
+        session.ensure_scheduler()
+        print("Scheduler ensured")
         # Expect join packet first
         join_data = await websocket.receive_json()
         username = join_data.get("username", "anonymous")

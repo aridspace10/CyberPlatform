@@ -47,6 +47,7 @@ class GameSession:
         self.game_manger = GameManager()
 
         self.scheduler = Scheduler(self.process_manager)
+        self.scheduler_task = None
 
         self.network_manager = NetworkManager()
 
@@ -71,7 +72,7 @@ class GameSession:
         }
 
     async def scheduler_loop(self):
-        print("scheduler started")
+        print("scheduler loop")
         while True:
 
             self.scheduler.tick()
@@ -99,6 +100,10 @@ class GameSession:
                     pass
 
             await asyncio.sleep(1)
+
+    def ensure_scheduler(self):
+        if self.scheduler_task is None or self.scheduler_task.done():
+            self.scheduler_task = asyncio.create_task(self.scheduler_loop())
 
     async def set_state(self, new_state: str):
         self.state = new_state
