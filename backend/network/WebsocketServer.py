@@ -1,9 +1,13 @@
 from db.session import get_db
+from faker import Faker
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from game.filesystem import FileNode
+from game.inode import Inode, NodeType
+from network.SessionManger import Player, session_manager
 from services.session_service import get_session, get_session_shell
 from sqlalchemy.orm import Session
 
-from .SessionManger import Player, session_manager
+fake = Faker()
 
 router = APIRouter()
 
@@ -58,6 +62,16 @@ async def websocket_endpoint(
                         "message": data.get("message", ""),
                     }
                 )
+
+            elif msg_type == "add_random_file":
+                # Used for testing
+                player = session.players.get(username)
+                inode = Inode(NodeType.FILE)
+                inode.data = fake.paragraph().split("\n")
+                fn = FileNode(
+                    session.players[username].shell.fs.current, fake.word(), inode
+                )
+                session.players[username].shell.fs.add_file(".", fn)
 
             elif msg_type == "command":
 

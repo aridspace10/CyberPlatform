@@ -127,6 +127,16 @@ class FileSystem:
         self.current = saved_current
         return ""
 
+    def delete(self, path: str):
+        saved_current = self.current
+        lst = path.split("/")
+        if (error := self.search("/".join(lst[0:-1]))) != "":
+            self.current = saved_current
+            return error
+        for idx, item in enumerate(self.current.items):
+            if (item.name) == lst[-1]:
+                self.current.items.pop(idx)
+
 
 """
 f = FileSystem()

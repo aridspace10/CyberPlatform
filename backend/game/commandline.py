@@ -5,8 +5,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Literal, Tuple
 
+from game.Context import CommandContext, ExecutionContext, SystemContext
 from game.filenode import FileNode
-from game.filesystem import FileSystem
 from game.inode import Inode, NodeType
 from game.NetworkManager import NetworkManager
 from game.Parser import (
@@ -50,29 +50,6 @@ class CommandResult:
     kind: Literal["text", "app"] = "text"
     interaction: Interaction | None = None
     payload: dict[str, Any] | None = None
-
-
-@dataclass
-class SystemContext:
-    fs: FileSystem
-    pm: ProcessManager
-    nm: NetworkManager
-    shell: ShellState
-
-
-@dataclass
-class ExecutionContext:
-    stdin: FileNode | str | None = None
-    stdout: FileNode | str | None = None
-
-
-@dataclass
-class CommandContext:
-    system: SystemContext
-    command: str
-    args: list[str]
-    stdin: FileNode
-    stdout: FileNode | None
 
 
 class CommandLine:
@@ -1529,7 +1506,7 @@ class CommandLine:
                         recurse = True
                     elif option == "-v":
                         verbose = True
-                    elif option == "-i":
+                    elif option == "i":
                         interactive = True
         files = ctx.args
         if not len(files):
@@ -1539,7 +1516,8 @@ class CommandLine:
                 f"sleep {" ".join(ctx.args)}", parent=1
             )
 
-            proc.program = RmProgram(proc, files)
+            proc.program = RmProgram(proc, files, ctx.system)
+            proc.program.start()
 
             ctx.system.shell.foreground_pid = proc.pid
 

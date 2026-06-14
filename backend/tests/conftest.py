@@ -325,6 +325,9 @@ class WSSession:
     def send_message(self, text: str):
         self.ws.send_json({"type": "message", "text": text})
 
+    def add_random_file(self):
+        self.ws.send_json({"type": "add_random_file"})
+
     def receive(self):
         return self.ws.receive_json()
 
