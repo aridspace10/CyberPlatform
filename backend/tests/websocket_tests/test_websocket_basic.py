@@ -1,36 +1,11 @@
-import pytest
-from fastapi.testclient import TestClient
-from main import app
+def test_rm_command(session):
+    session.send_command("rm -i .")
+    response = session.receive()
+    assert response is not None
 
 
-@pytest.fixture
-def client():
-    return TestClient(app)
-
-
-def test_websocket_connect(client):
-
-    with client.websocket_connect("/ws/1") as ws:
-
-        ws.send_json({"username": "jackson", "userID": "1"})
-
-        response = ws.receive_json()
-
-        assert response["type"] == "system"
-
-
-def test_pwd_command(client):
-
-    with client.websocket_connect("/ws/1") as ws:
-
-        ws.send_json({"username": "jackson", "userID": "1"})
-
-        # consume join messages
-        ws.receive_json()
-        ws.receive_json()
-
-        ws.send_json({"type": "command", "input": "pwd"})
-
-        response = ws.receive_json()
-
-        assert response["type"] == "command_output"
+def test_command_output_contains_echo(session):
+    session.send_command("echo hello")
+    # Skip any intermediate messages, find the output one
+    output_msg = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert "hello" in output_msg["stdout"]

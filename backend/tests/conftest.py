@@ -1,10 +1,12 @@
 import pytest
+from fastapi.testclient import TestClient
 from game.commandline import CommandLine
 from game.filenode import FileNode, Inode, NodeType
 from game.filesystem import FileSystem
 from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
 from game.ShellState import ShellState
+from main import app
 from network.SessionManger import GameSession
 
 
@@ -306,3 +308,40 @@ def shell_sed(fs_sed):
     s.fs = fs_sed
     s.cwd = "/"
     return s
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+class WSSession:
+    def __init__(self, ws):
+        self.ws = ws
+
+    def send_command(self, input_str: str):
+        self.ws.send_json({"type": "command", "input": input_str})
+
+    def send_message(self, text: str):
+        self.ws.send_json({"type": "message", "text": text})
+
+    def receive(self):
+        return self.ws.receive_json()
+
+    def receive_until(self, predicate, max_messages=10):
+        """Keep receiving until predicate(msg) is True, then return that message."""
+        for _ in range(max_messages):
+            msg = self.ws.receive_json()
+            if predicate(msg):
+                return msg
+        raise TimeoutError("No matching message received")
+
+
+@pytest.fixture
+def session(client):
+    """A ready-to-use WebSocket session fixture."""
+    with client.websocket_connect("/ws/1") as ws:
+        ws.send_json({"username": "jackson", "userID": "1"})
+        ws.receive_json()
+        ws.receive_json()
+        yield WSSession(ws)
