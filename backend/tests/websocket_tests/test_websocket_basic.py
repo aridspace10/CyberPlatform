@@ -6,10 +6,26 @@ def test_command_output_contains_echo(session):
 
 
 def test_rm_command(session):
-    session.add_random_file()
-    session.add_random_file()
-    session.add_random_file()
-    session.send_command("rm -i .")
+    a = session.add_random_file()
+    b = session.add_random_file()
+    c = session.add_random_file()
+    session.send_command(f"rm -i {a} {b} {c}")
     response = session.receive()
-    print(response)
+    assert response["type"] == "command_output"
+    assert response["interaction"]["mode"] == "foreground"
+    assert response["interaction"]["prompt"] == f"rm: remove regular file '{a}'?"
+    session.send_command("y")
+    response = session.receive()
+    assert response["type"] == "command_output"
+    assert response["interaction"]["mode"] == "foreground"
+    assert response["interaction"]["prompt"] == f"rm: remove regular file '{b}'?"
+    session.send_command("n")
+    response = session.receive()
+    assert response["type"] == "command_output"
+    assert response["interaction"]["mode"] == "foreground"
+    assert response["interaction"]["prompt"] == f"rm: remove regular file '{c}'?"
+    session.send_command("y")
+    response = session.receive()
+    assert response["type"] == "command_output"
+    assert response["interaction"] is None
     raise AssertionError()

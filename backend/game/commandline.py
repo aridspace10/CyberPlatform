@@ -1517,11 +1517,15 @@ class CommandLine:
             )
 
             proc.program = RmProgram(proc, files, ctx.system)
-            proc.program.start()
+            stdout, stderr = proc.program.start()
 
             ctx.system.shell.foreground_pid = proc.pid
 
-            return CommandResult(interaction=Interaction(mode="foreground"))
+            return CommandResult(
+                0,
+                stderr,
+                interaction=Interaction(mode="foreground", prompt="\n".join(stdout)),
+            )
         else:
             for filename in files:
                 result = ctx.system.fs.current.delete_child(filename, recurse)

@@ -3,6 +3,7 @@ from faker import Faker
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from game.filesystem import FileNode
 from game.inode import Inode, NodeType
+from game.ProcessManager import ProcessState
 from network.SessionManger import Player, session_manager
 from services.session_service import get_session, get_session_shell
 from sqlalchemy.orm import Session
@@ -68,10 +69,10 @@ async def websocket_endpoint(
                 player = session.players.get(username)
                 inode = Inode(NodeType.FILE)
                 inode.data = fake.paragraph().split("\n")
-                fn = FileNode(
-                    session.players[username].shell.fs.current, fake.word(), inode
-                )
+                name = f"{fake.word()}.txt"
+                fn = FileNode(session.players[username].shell.fs.current, name, inode)
                 session.players[username].shell.fs.add_file(".", fn)
+                await session.broadcast({"success": True, "name": name})
 
             elif msg_type == "command":
 
@@ -89,8 +90,30 @@ async def websocket_endpoint(
                     )
 
                     if proc and proc.program:
-                        proc.program.receive_input(raw)
-
+                        stdout, stderr = proc.program.receive_input(raw)
+                        if proc.status == ProcessState.TERMINATED:
+                            await session.send_to(
+                                websocket,
+                                {
+                                    "type": "command_output",
+                                    "stdout": stdout,
+                                    "stderr": stderr,
+                                    "interaction": None,
+                                },
+                            )
+                        else:
+                            await session.send_to(
+                                websocket,
+                                {
+                                    "type": "command_output",
+                                    "stdout": None,
+                                    "stderr": stderr,
+                                    "interaction": {
+                                        "mode": "foreground",
+                                        "prompt": "\n".join(stdout),
+                                    },
+                                },
+                            )
                 else:
                     print("before enter_command")
 
