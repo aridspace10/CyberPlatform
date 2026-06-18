@@ -84,7 +84,6 @@ async def websocket_endpoint(
                 raw = data.get("input", "")
 
                 if player.shell.foreground_pid:
-
                     proc = session.process_manager.get_process(
                         player.shell.foreground_pid
                     )
@@ -92,6 +91,7 @@ async def websocket_endpoint(
                     if proc and proc.program:
                         stdout, stderr = proc.program.receive_input(raw)
                         if proc.status == ProcessState.TERMINATED:
+                            player.shell.foreground_pid = None
                             await session.send_to(
                                 websocket,
                                 {

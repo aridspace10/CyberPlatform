@@ -1509,9 +1509,22 @@ class CommandLine:
                     elif option == "i":
                         interactive = True
         files = ctx.args
+        targets = []
+        # Expand directories
+        if recurse:
+            saved_current = ctx.system.fs.current
+            for file in files:
+                ctx.system.fs.search(file)
+                targets.extend(
+                    ctx.system.fs.current.expand_targets([]),
+                )
+                ctx.system.fs.current = saved_current
+        else:
+            targets = files
         if not len(files):
             return CommandResult(1, stderr=["rm: missing operand"])
         if interactive:
+            # Create the process
             proc = self.process_manager.create_process(
                 f"sleep {" ".join(ctx.args)}", parent=1
             )

@@ -9,6 +9,12 @@ def test_rm_command(session):
     a = session.add_random_file()
     b = session.add_random_file()
     c = session.add_random_file()
+    session.send_command("ls")
+    response = session.receive()
+    print(response)
+    assert response["type"] == "command_output"
+    assert b in response["stdout"]
+
     session.send_command(f"rm -i {a} {b} {c}")
     response = session.receive()
     assert response["type"] == "command_output"
@@ -28,4 +34,7 @@ def test_rm_command(session):
     response = session.receive()
     assert response["type"] == "command_output"
     assert response["interaction"] is None
-    raise AssertionError()
+    session.send_command("ls")
+    response = session.receive()
+    assert response["type"] == "command_output"
+    assert b in response["stdout"]

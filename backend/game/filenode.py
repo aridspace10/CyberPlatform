@@ -310,3 +310,12 @@ class FileNode:
             if "reverse" in extras:
                 content = content[::-1]
         return content
+
+    def expand_targets(self, past: list[str]) -> list[str]:
+        if self.get_type() == NodeType.FILE:
+            return [f"{"/".join(past)}/{self.name}"]
+        output = []
+        for item in self.items:
+            output.extend(item.expand_targets(past))
+        output.append(self.name)
+        return output

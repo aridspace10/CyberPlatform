@@ -60,6 +60,7 @@ class RmProgram(Program):
         self.output = ([], [])
         assert self.current_file
         if text.lower() in ["y", "yes"]:
+            print(self.current_file)
             self.sys.fs.delete(self.current_file)
         return self.next_file()
 
