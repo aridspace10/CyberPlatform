@@ -1292,10 +1292,10 @@ class CommandLine:
                             1, stderr=[f"cat: Unknown Argument Given ({option})"]
                         )
 
-        files: list[str | None] = ctx.args or [None]
+        files: list[str] = ctx.args or ["-"]
         line_number = 1
         for filename in files:
-            if filename is None or filename == "-":
+            if filename == "-":
                 content = ctx.stdin
             else:
                 content = ctx.system.fs.get_file(filename)

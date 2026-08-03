@@ -15,7 +15,7 @@ class Program:
     def start(self) -> ProgramOutput:
         raise NotImplementedError()
 
-    def receive_input(self, text: str) -> ProgramOutput:
+    def receive_input(self, line: str) -> ProgramOutput:
         raise NotImplementedError()
 
     def tick(self):
@@ -75,7 +75,7 @@ class RmProgram(Program):
         self.process.status = ProcessState.TERMINATED
         return [], stderr
 
-    def receive_input(self, text: str) -> ProgramOutput:
+    def receive_input(self, line: str) -> ProgramOutput:
         self.process.status = ProcessState.RUNNING
         stderr = []
 
@@ -83,7 +83,7 @@ class RmProgram(Program):
             self.process.status = ProcessState.TERMINATED
             return [], ["rm: interactive process has no current target"]
 
-        if text.lower() in ["y", "yes"]:
+        if line.lower() in ["y", "yes"]:
             target = self.sys.fs.get_file(self.current_file)
             if (
                 target is not None
