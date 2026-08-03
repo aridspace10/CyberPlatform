@@ -26,6 +26,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem("token");
     setUser(null);
+    setLoading(false);
   };
 
   // Load user on app start
