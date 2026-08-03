@@ -14,6 +14,8 @@ def test_cmd_helps(cl, shell_empty):
     cmds = [
         "mkdir",
         "cat",
+        "cp",
+        "tail",
         "chmod",
         "grep",
         "head",
@@ -26,6 +28,8 @@ def test_cmd_helps(cl, shell_empty):
         "sed",
         "ps",
         "ping",
+        "sleep",
+        "uniq",
     ]
     for cmd in cmds:
         CmdResult = cl.enter_command(f"{cmd} --help", shell_empty)
@@ -189,6 +193,23 @@ def test_cat_nonexistent_file(cl, shell_empty):
     assert len(CmdResult.stderr) == 1
 
 
+def test_cat_error(cl, shell_empty):
+    cmd = cl.enter_command("cat -x missing.txt", shell_empty)
+    assert cmd.stderr == ["cat: Unknown Argument Given (x)"]
+
+
+def test_cat_numbering(cl, shell_basic):
+    CmdResult = cl.enter_command("cat -n f1.txt", shell_basic)
+    assert CmdResult.stderr == []
+    assert CmdResult.stdout == ["1 ERROR no", "2 INFO hey", "3 ERROR no2", "4 error 1"]
+
+
+def test_cat_stdin(cl, shell_basic):
+    CmdResult = cl.enter_command("cat - < f1.txt", shell_basic)
+    assert CmdResult.stderr == []
+    assert CmdResult.stdout == ["ERROR no", "INFO hey", "ERROR no2", "error 1"]
+
+
 def test_cat_basic(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("cat f1.txt", shell_basic)
     assert CmdResult.stderr == []
@@ -217,6 +238,11 @@ def test_head_count(cl, shell_basic: ShellState):
     assert CmdResult.stderr == []
     for i in range(r, 0):
         assert CmdResult.stdout[-i] == str(i)
+
+
+def test_head_error(cl, shell_basic: ShellState):
+    CmdResult = cl.enter_command("head d1", shell_basic)
+    assert CmdResult.stderr == ["head: d1 is a directory"]
 
 
 def test_head_bytes(cl, shell_basic: ShellState):

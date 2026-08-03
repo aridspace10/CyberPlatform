@@ -1,11 +1,15 @@
+import uuid
+
 import pytest
+from fastapi.testclient import TestClient
 from game.commandline import CommandLine
 from game.filenode import FileNode, Inode, NodeType
 from game.filesystem import FileSystem
 from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
 from game.ShellState import ShellState
-from network.SessionManger import GameSession
+from main import app
+from network.SessionManger import GameSession, session_manager
 
 
 @pytest.fixture
@@ -306,3 +310,49 @@ def shell_sed(fs_sed):
     s.fs = fs_sed
     s.cwd = "/"
     return s
+
+
+@pytest.fixture
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+class WSSession:
+    def __init__(self, ws, game_session: GameSession):
+        self.ws = ws
+        self.game_session = game_session
+
+    def send_command(self, input_str: str):
+        self.ws.send_json({"type": "command", "input": input_str})
+
+    def send_message(self, text: str):
+        self.ws.send_json({"type": "message", "text": text})
+
+    def receive(self):
+        return self.ws.receive_json()
+
+    def receive_until(self, predicate, max_messages=10):
+        """Keep receiving until predicate(msg) is True, then return that message."""
+        for _ in range(max_messages):
+            msg = self.ws.receive_json()
+            if predicate(msg):
+                return msg
+        raise TimeoutError("No matching message received")
+
+
+@pytest.fixture
+def session(client):
+    """A ready-to-use, isolated WebSocket session fixture."""
+    session_id = f"test-{uuid.uuid4().hex}"
+    game_session = GameSession(session_id)
+    session_manager.sessions[session_id] = game_session
+
+    try:
+        with client.websocket_connect(f"/ws/{session_id}") as ws:
+            ws.send_json({"username": "jackson", "userID": "1"})
+            ws.receive_json()
+            ws.receive_json()
+            yield WSSession(ws, game_session)
+    finally:
+        client.portal.call(session_manager.remove_session, session_id)

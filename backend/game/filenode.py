@@ -123,7 +123,6 @@ class FileNode:
         return ""
 
     def _evalNode(self, node: Node, actions: list[str]) -> Tuple[bool, list[str]]:
-        print(node)
         if isinstance(node, OrNode):
             return self._evalOrFindNode(node, actions)
         elif isinstance(node, AndNode):
@@ -192,7 +191,6 @@ class FileNode:
         output = []
         self.current_path = "." if past == "." and self.name == "" else self._join(past)
         passed, actions = self._evalNode(filter, [])
-        print(passed)
         if passed:
             output.append(self.current_path)
 
@@ -310,3 +308,15 @@ class FileNode:
             if "reverse" in extras:
                 content = content[::-1]
         return content
+
+    def expand_targets(self, path: str) -> list[str]:
+        """Return this node and its descendants in safe deletion order."""
+        if self.get_type() != NodeType.DIRECTORY:
+            return [path]
+
+        output = []
+        for item in self.items:
+            child_path = f"{path.rstrip('/')}/{item.name}"
+            output.extend(item.expand_targets(child_path))
+        output.append(path)
+        return output

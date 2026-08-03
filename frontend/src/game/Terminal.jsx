@@ -11,12 +11,19 @@ export default function Terminal() {
 
   const sessionId = "test123";
 
+  function addLine(text) {
+    setLog(prev => [...prev, text]);
+  }
+
   // ----------------------
   // Ask username once
   // ----------------------
   useEffect(() => {
-    const name = prompt("Enter username");
-    setUsername(name || "anonymous");
+    const promptTimer = window.setTimeout(() => {
+      const name = prompt("Enter username");
+      setUsername(name || "anonymous");
+    }, 0);
+    return () => window.clearTimeout(promptTimer);
   }, []);
 
   // ----------------------
@@ -50,8 +57,10 @@ export default function Terminal() {
       }
 
       if (data.type === "command_output") {
-        data.stdout.forEach(line => addLine(line));
-        data.stderr.forEach(line => addLine(line));
+        const stdout = Array.isArray(data.stdout) ? data.stdout : [];
+        const stderr = Array.isArray(data.stderr) ? data.stderr : [];
+        stdout.forEach(line => addLine(line));
+        stderr.forEach(line => addLine(line));
       }
     };
 
@@ -63,13 +72,6 @@ export default function Terminal() {
     };
 
   }, [username]);
-
-  // ----------------------
-  // Helpers
-  // ----------------------
-  function addLine(text) {
-    setLog(prev => [...prev, text]);
-  }
 
   function handleEnter(e) {
     if (e.key === "Enter") {

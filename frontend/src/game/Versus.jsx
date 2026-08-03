@@ -1,12 +1,11 @@
-import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { motion as Motion, AnimatePresence } from "framer-motion";
 import "./Versus.css"
 
 export default function Versus({ players }) {
 
   return (
     <div className="arena">
-      <motion.div
+      <Motion.div
         className="player-card"
         animate={"centerLeft"}
         variants={{
@@ -16,10 +15,10 @@ export default function Versus({ players }) {
         transition={{ type: "spring", stiffness: 120, damping: 18 }}
       >
         {players[0]}
-      </motion.div>
+      </Motion.div>
 
       <AnimatePresence>
-          <motion.h1
+          <Motion.h1
             className="vs"
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -27,10 +26,10 @@ export default function Versus({ players }) {
             transition={{ duration: 0.4, ease: "easeOut" }}
           >
             VS
-          </motion.h1>
+          </Motion.h1>
       </AnimatePresence>
 
-      <motion.div
+      <Motion.div
         className="player-card"
         animate={"start"}
         variants={{
@@ -40,7 +39,7 @@ export default function Versus({ players }) {
         transition={{ type: "spring", stiffness: 120, damping: 18 }}
       >
         {players[1]}
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

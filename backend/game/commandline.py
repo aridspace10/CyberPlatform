@@ -5,8 +5,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Literal, Tuple
 
+from game.Context import CommandContext, ExecutionContext, SystemContext
 from game.filenode import FileNode
-from game.filesystem import FileSystem
 from game.inode import Inode, NodeType
 from game.NetworkManager import NetworkManager
 from game.Parser import (
@@ -22,8 +22,9 @@ from game.Parser import (
     SimpleCommand,
     lex,
 )
+from game.Process import ProcessState
 from game.ProcessManager import ProcessManager
-from game.Program import RmProgram, SleepProgram
+from game.Program import HeredocProgram, RmProgram, SleepProgram
 from game.ShellState import ShellState
 
 from .helpers import (
@@ -50,29 +51,6 @@ class CommandResult:
     kind: Literal["text", "app"] = "text"
     interaction: Interaction | None = None
     payload: dict[str, Any] | None = None
-
-
-@dataclass
-class SystemContext:
-    fs: FileSystem
-    pm: ProcessManager
-    nm: NetworkManager
-    shell: ShellState
-
-
-@dataclass
-class ExecutionContext:
-    stdin: FileNode | str | None = None
-    stdout: FileNode | str | None = None
-
-
-@dataclass
-class CommandContext:
-    system: SystemContext
-    command: str
-    args: list[str]
-    stdin: FileNode
-    stdout: FileNode | None
 
 
 class CommandLine:
@@ -133,7 +111,6 @@ class CommandLine:
         tokens = lex(raw)
         parser = CommandParser(tokens)
         ast = parser.parse()
-        print(ast)
         if isinstance(ast, Sequence):
             return self.execute_sequence(ast.parts, sys)
         else:
@@ -200,6 +177,46 @@ class CommandLine:
                 if isinstance(exec_ctx.stdin, str):
                     cmd_result = CommandResult(1, [], [exec_ctx.stdin], "text", None)
                     return cmd_result
+            elif redir.op == "<<":
+                heredoc_command = copy.deepcopy(command)
+                heredoc_command.pre_redirs = [
+                    item for item in heredoc_command.pre_redirs if item.op != "<<"
+                ]
+                heredoc_command.post_redirs = [
+                    item for item in heredoc_command.post_redirs if item.op != "<<"
+                ]
+
+                def complete_heredoc(
+                    lines: list[str], pending_command: Command = heredoc_command
+                ):
+                    inode = Inode(NodeType.FILE)
+                    stdin = FileNode(None, "heredoc", inode)
+                    stdin.set_data(lines)
+                    result = self.execute_command(
+                        pending_command,
+                        sys,
+                        ExecutionContext(stdin=stdin),
+                    )
+                    return result.stdout, result.stderr
+
+                proc = self.process_manager.create_process(
+                    f"heredoc {redir.target}", parent=1
+                )
+                proc.program = HeredocProgram(
+                    proc,
+                    redir.target,
+                    complete_heredoc,
+                )
+                stdout, stderr = proc.program.start()
+                sys.shell.foreground_pid = proc.pid
+                return CommandResult(
+                    stdout=stdout,
+                    stderr=stderr,
+                    interaction=Interaction(
+                        mode="foreground",
+                        prompt=proc.program.prompt,
+                    ),
+                )
             elif redir.op == ">":
                 exec_ctx.stdout = self.get_fd(redir.target, True, sys)
                 if isinstance(exec_ctx.stdout, str):
@@ -316,7 +333,7 @@ class CommandLine:
             int(last)
         except ValueError:
             ty = last
-            val = val[1:]
+            val = val[:-1]
         try:
             val = int(val)
         except ValueError:
@@ -1260,20 +1277,41 @@ class CommandLine:
     def cat(self, ctx: CommandContext) -> CommandResult:
         stdout = []
         stderr = []
-        if len(ctx.args) == 1 and ctx.args[0] == "--help":
+        numbering = False
+        if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("cat"))
-        while len(ctx.args) > 1:
-            arg = ctx.args[0]
-            if arg == "--help":
-                return CommandResult(0, stdout=self.useage("cat"))
-            ctx.args = ctx.args[1:]
-        filename = ctx.args[0]
-        content = ctx.system.fs.get_file(filename)
-        if content is None or isinstance(content, str):
-            return CommandResult(1, stderr=[f"File {filename} does not exist"])
-        data = content.get_data()
-        for line in data:
-            stdout.append(line)
+
+        while ctx.args and ctx.args[0].startswith("-") and ctx.args[0] != "-":
+            arg = ctx.args.pop(0)
+            for option in arg[1:]:
+                match option:
+                    case "n":
+                        numbering = True
+                    case _:
+                        return CommandResult(
+                            1, stderr=[f"cat: Unknown Argument Given ({option})"]
+                        )
+
+        files: list[str] = ctx.args or ["-"]
+        line_number = 1
+        for filename in files:
+            if filename == "-":
+                content = ctx.stdin
+            else:
+                content = ctx.system.fs.get_file(filename)
+
+            if content is None or isinstance(content, str):
+                stderr.append(f"File {filename} does not exist")
+                continue
+
+            for line in content.get_data():
+                if numbering:
+                    line = f"{line_number} {line}"
+                    line_number += 1
+                stdout.append(line)
+
+        if stderr:
+            return CommandResult(1, stdout, stderr)
         return CommandResult(0, stdout, stderr)
 
     def head(self, ctx: CommandContext) -> CommandResult:
@@ -1324,7 +1362,7 @@ class CommandLine:
                 ty = ctx.system.fs.search_withaccess(file)
                 content = ctx.system.fs.current
             if ty == NodeType.DIRECTORY:
-                stderr.append(f"head: ${file} is a directory")
+                stderr.append(f"head: {file} is a directory")
                 continue
             if content is None or isinstance(content, str):
                 return CommandResult(1)
@@ -1449,7 +1487,7 @@ class CommandLine:
 
             # Check is file
             if ty == NodeType.DIRECTORY:
-                stderr.append(f"tail: ${file} is a directory")
+                stderr.append(f"tail: {file} is a directory")
                 continue
 
             if ty is None:
@@ -1498,40 +1536,77 @@ class CommandLine:
 
         while len(ctx.args) and ctx.args[0][0] == "-":
             arg = ctx.args.pop(0)
-            if arg == "--recursive":
-                recurse = True
+            if arg in ("--recursive", "--interactive", "--verbose"):
+                recurse = recurse or arg == "--recursive"
+                interactive = interactive or arg == "--interactive"
+                verbose = verbose or arg == "--verbose"
             else:
-                options = arg[1:].split()
-                for option in options:
-                    if option == "r" or option == "R":
+                for option in arg[1:]:
+                    if option in ("r", "R"):
                         recurse = True
-                    elif option == "-v":
+                    elif option == "v":
                         verbose = True
-                    elif option == "-i":
+                    elif option == "i":
                         interactive = True
-        files = ctx.args
-        if not len(files):
+                    else:
+                        return CommandResult(
+                            1,
+                            stderr=[f"rm: invalid option -- '{option}'"],
+                        )
+
+        files = ctx.args.copy()
+        if not files:
             return CommandResult(1, stderr=["rm: missing operand"])
+
+        targets = []
+        if recurse:
+            for file in files:
+                node = ctx.system.fs.get_file(file)
+                if isinstance(node, FileNode):
+                    targets.extend(node.expand_targets(file))
+                else:
+                    targets.append(file)
+        else:
+            targets = files
+
         if interactive:
             proc = self.process_manager.create_process(
-                f"sleep {" ".join(ctx.args)}", parent=1
+                f"rm {" ".join(files)}", parent=1
             )
+            proc.program = RmProgram(
+                proc,
+                targets,
+                ctx.system,
+                recursive=recurse,
+            )
+            stdout, stderr = proc.program.start()
 
-            proc.program = RmProgram(proc, files)
+            if proc.status == ProcessState.TERMINATED:
+                ctx.system.shell.foreground_pid = None
+                return CommandResult(
+                    status=1 if stderr else 0,
+                    stdout=stdout,
+                    stderr=stderr,
+                )
 
             ctx.system.shell.foreground_pid = proc.pid
+            return CommandResult(
+                status=0,
+                stdout=stdout,
+                stderr=stderr,
+                interaction=Interaction(
+                    mode="foreground",
+                    prompt=proc.program.prompt,
+                ),
+            )
 
-            return CommandResult(interaction=Interaction(mode="foreground"))
-        else:
-            for filename in files:
-                result = ctx.system.fs.current.delete_child(filename, recurse)
-                if result == "":
-                    stderr.append(f"rm: {filename} was not found")
-                elif result == "dir":
-                    stderr.append(f"rm: cannot remove '{filename}': Is a directory")
-                elif verbose:
-                    stdout.append("rm: File sucessfully deleted")
-            return CommandResult(0, stdout, stderr)
+        for filename in targets:
+            result = ctx.system.fs.delete(filename, recursive=recurse)
+            if isinstance(result, str):
+                stderr.append(f"rm: {result}")
+            elif verbose:
+                stdout.append(f"removed '{filename}'")
+        return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def pwd(self, ctx: CommandContext) -> CommandResult:
         while len(ctx.args) > 1:
@@ -1714,6 +1789,9 @@ class CommandLine:
         return CommandResult()
 
     def uniq(self, ctx: CommandContext) -> CommandResult:
+        if "--help" in ctx.args:
+            return CommandResult(0, stdout=self.useage("uniq"))
+
         printdup = False
         skipfield = 0
         skipchars = 0

@@ -1,6 +1,4 @@
-import { useScroll } from "motion/react";
-import { useContext, useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router";
+import { useEffect, useRef, useState } from "react";
 import Gamescreen from "./Gamescreen";
 import WaitingScreen from "./WaitingScreen";
 import Versus from "./Versus";
@@ -10,14 +8,10 @@ import { getFullSessionData } from "../api/sessions";
 import { SessionContext } from "../components/SessionContext";
 
 export default function Game() {
-    const location = useLocation();
     const { sessionId } = useParams();
     const { user } = useAuth()
-    const [sessionData, setSessionData] = useState(null);
     const [players, setPlayers] = useState([]);
-    const [username, setUsername] = useState("");
     const wsRef = useRef(null);
-    const hasPrompted = useRef(false);
     const [log, setLog] = useState([]);
     const [state, setState] = useState("")
     const [interaction, setInteraction] = useState("")
@@ -25,8 +19,6 @@ export default function Game() {
     function addLine(text) {
         setLog(prev => [...prev, text]);
     }
-
-    const hasConnected = useRef(false);
 
     useEffect(() => {
         if (!user || wsRef.current) return;
@@ -43,13 +35,11 @@ export default function Game() {
             }));
 
             const sessionData = await getFullSessionData(sessionId, user.id);
-            console.log(sessionData)
             setState(sessionData["state"]);
         };
 
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            console.log("WS message:", data);
 
             if (data.type === "chat") {
                 addLine(`${data.user}: ${data.message}`);
@@ -66,20 +56,21 @@ export default function Game() {
             }
 
             if (data.type === "command_output") {
-                data.stdout.forEach(line => addLine(line));
-                data.stderr.forEach(line => addLine(line));
+                const stdout = Array.isArray(data.stdout) ? data.stdout : [];
+                const stderr = Array.isArray(data.stderr) ? data.stderr : [];
+                stdout.forEach(line => addLine(line));
+                stderr.forEach(line => addLine(line));
                 if (data.interaction && data.interaction.mode) {
                     setInteraction(data.interaction.mode);
                 } else {
                     setInteraction("");
                 }
-                addLine(data.interaction.prompt ?? "")
+                const prompt = data.interaction?.prompt;
+                if (prompt) addLine(prompt);
             }
 
             if (data.type === "terminal_state") {
-                // if busy (true), then no interaction (false), vise versa
-                console.log(data)
-                setInteraction(!data.busy)
+                setInteraction(data.busy ? "foreground" : "")
             }
         };
 

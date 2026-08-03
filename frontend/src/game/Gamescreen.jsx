@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router";
+import { useState } from "react";
 import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
@@ -33,10 +32,9 @@ export default function Gamescreen({wsRef, log, addLine, interaction}) {
       addLine("> " + input);
       setInput("");
     }
-  }
+    }
 
     const handleTabSwitch = (tab) => {
-        console.log("please")
         switch (tab) {
             case "General":
                 setContent(<GeneralTab />)

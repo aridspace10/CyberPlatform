@@ -1,9 +1,9 @@
 from db.session import get_db
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from game.ProcessManager import ProcessState
+from network.SessionManger import Player, session_manager
 from services.session_service import get_session, get_session_shell
 from sqlalchemy.orm import Session
-
-from .SessionManger import Player, session_manager
 
 router = APIRouter()
 
@@ -23,6 +23,7 @@ async def websocket_endpoint(
             session_id, ses_db.name if ses_db.name else ""
         )
     try:
+        session.ensure_scheduler()
         # Expect join packet first
         join_data = await websocket.receive_json()
         username = join_data.get("username", "anonymous")
@@ -33,7 +34,6 @@ async def websocket_endpoint(
             if shell_db and shell_db.shell:
                 player = Player(websocket, username, user_id)
                 shell = shell_db.shell
-                print(shell)
                 player.shell.commands = shell["cmds"]
                 player.shell.vars = shell["vars"]
                 player.shell.fs.from_dict(shell["fs"])
@@ -45,7 +45,6 @@ async def websocket_endpoint(
 
         while True:
             data = await websocket.receive_json()
-            print(f"Received message: {data}")
 
             msg_type = data.get("type")
             if msg_type == "chat":
@@ -67,14 +66,47 @@ async def websocket_endpoint(
                 raw = data.get("input", "")
 
                 if player.shell.foreground_pid:
-
                     proc = session.process_manager.get_process(
                         player.shell.foreground_pid
                     )
 
                     if proc and proc.program:
-                        proc.program.receive_input(raw)
-
+                        stdout, stderr = proc.program.receive_input(raw)
+                        if proc.status == ProcessState.TERMINATED:
+                            player.shell.foreground_pid = None
+                            await session.send_to(
+                                websocket,
+                                {
+                                    "type": "command_output",
+                                    "stdout": stdout,
+                                    "stderr": stderr,
+                                    "interaction": None,
+                                },
+                            )
+                        else:
+                            await session.send_to(
+                                websocket,
+                                {
+                                    "type": "command_output",
+                                    "stdout": stdout,
+                                    "stderr": stderr,
+                                    "interaction": {
+                                        "mode": "foreground",
+                                        "prompt": proc.program.prompt,
+                                    },
+                                },
+                            )
+                    else:
+                        player.shell.foreground_pid = None
+                        await session.send_to(
+                            websocket,
+                            {
+                                "type": "command_output",
+                                "stdout": [],
+                                "stderr": ["Foreground process is no longer available"],
+                                "interaction": None,
+                            },
+                        )
                 else:
                     cmd = session.commandline.enter_command(raw, player.shell)
 

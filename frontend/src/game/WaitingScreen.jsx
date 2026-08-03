@@ -1,16 +1,11 @@
-import { motion } from "motion/react"
-import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { motion as Motion } from "motion/react"
 import './WaitingScreen.css'
 export default function WaitingScreen({players, onGameStart}) {
-    const location = useLocation();
-    const navigate = useNavigate();
-    const { sessionId } = location.state || {};
     return (
         <div>
             <div className="players">
                 {players.map(player => (
-                    <motion.button
+                    <Motion.button
                         className="player"
                         key={player}
                         initial={{ opacity: 0, scale: 0 }}
@@ -21,11 +16,11 @@ export default function WaitingScreen({players, onGameStart}) {
                         }}
                     >
                         {player}
-                    </motion.button>
+                    </Motion.button>
                 ))}
             </div>
             <div>
-                <motion.button onClick={onGameStart} className="start-btn"> Start the game </motion.button>
+                <Motion.button onClick={onGameStart} className="start-btn"> Start the game </Motion.button>
             </div>
         </div>
     )
