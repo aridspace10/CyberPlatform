@@ -17,11 +17,6 @@ export default function Game() {
     const { user } = useAuth()
     const [players, setPlayers] = useState([]);
     const wsRef = useRef(null);
-<<<<<<< HEAD
-    const [log, setLog] = useState([]);
-    const [state, setState] = useState("")
-    const [interaction, setInteraction] = useState("")
-=======
     const hasPrompted = useRef(false);
     const [commandLog, setCommandLog] = useState([]);
     const [chatLog, setChatLog] = useState([]);
@@ -29,7 +24,7 @@ export default function Game() {
     const [sidebar, setSidebar] = useState(null);
     const [mainbar, setMainbar] = useState(null);
     const [activeTab, setActiveTab] = useState(null);
->>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
+    const [cwd, setCwd] = useState("/root");
 
     function addCommandLine(text) {
         setCommandLog(prev => [...prev, text]);
@@ -75,27 +70,9 @@ export default function Game() {
             }
 
             if (data.type === "command_output") {
-<<<<<<< HEAD
-                const stdout = Array.isArray(data.stdout) ? data.stdout : [];
-                const stderr = Array.isArray(data.stderr) ? data.stderr : [];
-                stdout.forEach(line => addLine(line));
-                stderr.forEach(line => addLine(line));
-                if (data.interaction && data.interaction.mode) {
-                    setInteraction(data.interaction.mode);
-                } else {
-                    setInteraction("");
-                }
-                const prompt = data.interaction?.prompt;
-                if (prompt) addLine(prompt);
-            }
-
-            if (data.type === "terminal_state") {
-                setInteraction(data.busy ? "foreground" : "")
-=======
-                console.log("hey")
+                if (data.cwd) setCwd(data.cwd);
                 data.stdout.forEach(line => addCommandLine(line));
                 data.stderr.forEach(line => addCommandLine(line));
->>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
             }
         };
 
@@ -107,24 +84,6 @@ export default function Game() {
         };
     }, [user, sessionId]);
 
-<<<<<<< HEAD
-    if (state == 'waiting') {
-        return (<WaitingScreen players={players} />)
-    } else if (state == 'running') {
-        return (
-            <SessionContext.Provider value={{ sessionId, wsRef }}>
-                <Gamescreen wsRef={wsRef} log={log} addLine={addLine} interaction={interaction} />
-            </SessionContext.Provider>
-    )
-    } else if (state == 'starting') {
-        return (<Versus players={players} />)
-    } else {
-        return (
-            <h1> Loading... </h1>
-        )
-    }
-}
-=======
     const handleTabSwitch = (tab) => {
         setActiveTab(tab);
     };
@@ -146,7 +105,13 @@ export default function Game() {
             {state === "waiting" && <WaitingScreen players={players} />}
             {state === "running" && (
                 <SessionContext.Provider value={{ sessionId, wsRef }}>
-                    <Gamescreen wsRef={wsRef} commandLog={commandLog} addCommandLine={addCommandLine} />
+                    <Gamescreen
+                        wsRef={wsRef}
+                        commandLog={commandLog}
+                        addCommandLine={addCommandLine}
+                        username={user?.username}
+                        cwd={cwd}
+                    />
                 </SessionContext.Provider>
             )}
             {state === "starting" && <Versus players={players} />}
@@ -154,4 +119,3 @@ export default function Game() {
         </div>
     )
 }
->>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb

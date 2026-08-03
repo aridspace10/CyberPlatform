@@ -8,6 +8,17 @@ from sqlalchemy.orm import Session
 router = APIRouter()
 
 
+def get_current_path(player: Player) -> str:
+    """Return the player's current filesystem path for the terminal prompt."""
+    parts: list[str] = []
+    node = player.shell.fs.current
+    while node is not None:
+        if node.name:
+            parts.append(node.name)
+        node = node.parent
+    return "/" + "/".join(reversed(parts))
+
+
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(
     websocket: WebSocket, session_id: str, db: Session = Depends(get_db)
@@ -80,6 +91,7 @@ async def websocket_endpoint(
                                     "type": "command_output",
                                     "stdout": stdout,
                                     "stderr": stderr,
+                                    "cwd": get_current_path(player),
                                     "interaction": None,
                                 },
                             )
@@ -90,6 +102,7 @@ async def websocket_endpoint(
                                     "type": "command_output",
                                     "stdout": stdout,
                                     "stderr": stderr,
+                                    "cwd": get_current_path(player),
                                     "interaction": {
                                         "mode": "foreground",
                                         "prompt": proc.program.prompt,
@@ -104,6 +117,7 @@ async def websocket_endpoint(
                                 "type": "command_output",
                                 "stdout": [],
                                 "stderr": ["Foreground process is no longer available"],
+                                "cwd": get_current_path(player),
                                 "interaction": None,
                             },
                         )
@@ -116,6 +130,7 @@ async def websocket_endpoint(
                             "type": "command_output",
                             "stdout": cmd.stdout,
                             "stderr": cmd.stderr,
+                            "cwd": get_current_path(player),
                             "interaction": (
                                 None
                                 if not cmd.interaction

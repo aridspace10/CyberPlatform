@@ -1,61 +1,13 @@
-<<<<<<< HEAD
-import { useState } from "react";
-import GeneralTab from "../components/GeneralTab";
-import EnvironmentTab from "../components/EnvironmentTab";
-import SettingsTab from "../components/SettingsTab";
-import Terminal from "./Terminal";
-import "./Gamescreen.css"
-export default function Gamescreen({wsRef, log, addLine, interaction}) {
-  const [input, setInput] = useState("");
-  const [content, setContent] = useState(<GeneralTab />)
-
-  function handleEnter(e) {
-    if (e.key === "Enter") {
-
-      if (!wsRef.current || wsRef.current.readyState !== 1) {
-        addLine("[SYSTEM] Not connected");
-        return;
-      }
-
-      if (input.startsWith("/chat ")) {
-        wsRef.current.send(JSON.stringify({
-          type: "chat",
-          message: input.substring(6)
-        }));
-      }
-      else {
-        wsRef.current.send(JSON.stringify({
-          type: "command",
-          input: input
-        }));
-      }
-
-      addLine("> " + input);
-      setInput("");
-    }
-    }
-
-    const handleTabSwitch = (tab) => {
-        switch (tab) {
-            case "General":
-                setContent(<GeneralTab />)
-                break;
-            case "Settings":
-                setContent(<SettingsTab />)
-                break;
-            case "Environment":
-                setContent(<EnvironmentTab />)
-                break;
-=======
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import Terminal from "./Terminal";
 import "./Gamescreen.css"
-export default function Gamescreen({wsRef, commandLog, addCommandLine}) {
+export default function Gamescreen({wsRef, commandLog, addCommandLine, username, cwd}) {
     const [input, setInput] = useState("");
 
     function handleTerminalEnter(e) {
         if (e.key === "Enter") {
+            if (!input.trim()) return;
             if (!wsRef.current || wsRef.current.readyState !== 1) {
                 addCommandLine("[SYSTEM] Not connected");
                 return;
@@ -64,10 +16,15 @@ export default function Gamescreen({wsRef, commandLog, addCommandLine}) {
                 type: "command",
                 input: input
             }));
-            addCommandLine("> " + input);
+            addCommandLine(`${username || "user"}@cyber:${formatPath(cwd)}$ ${input}`);
             setInput("");
->>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
         }
+    }
+
+    function formatPath(path) {
+        if (!path || path === "/root") return "~";
+        if (path.startsWith("/root/")) return `~${path.slice(5)}`;
+        return path;
     }
 
     return (
@@ -77,35 +34,22 @@ export default function Gamescreen({wsRef, commandLog, addCommandLine}) {
                     {commandLog.map((line, i) => (
                     <div key={i}>{line}</div>
                     ))}
+                    <div className="prompt-row">
+                        <span className="prompt-label">
+                            {username || "user"}@cyber:{formatPath(cwd)}$
+                        </span>
+                        <input
+                            className="prompt"
+                            value={input}
+                            onChange={e => setInput(e.target.value)}
+                            onKeyDown={handleTerminalEnter}
+                            aria-label="Terminal command"
+                            spellCheck="false"
+                            autoFocus
+                        />
+                    </div>
                 </div>
-                <input
-                    className="prompt"
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onKeyDown={handleTerminalEnter}
-                    autoFocus
-                />
             </div>
-<<<<<<< HEAD
-            {content}
-        </div> 
-
-        <div className="terminal">
-            <div className="output">
-                {log.map((line, i) => (
-                <div key={i}>{line}</div>
-                ))}
-            </div>
-            <input
-                className="prompt"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleEnter}
-                disabled={interaction === "foreground"}
-                autoFocus
-            />
-=======
->>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
         </div>
     );
 }
