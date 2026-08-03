@@ -23,7 +23,7 @@ export default function Game() {
     const [state, setState] = useState(null);
     const [sidebar, setSidebar] = useState(null);
     const [mainbar, setMainbar] = useState(null);
-    const [activeTab, setActiveTab] = useState(null);
+    const [activeTab, setActiveTab] = useState("General");
     const [cwd, setCwd] = useState("/root");
 
     function addCommandLine(text) {
@@ -89,7 +89,8 @@ export default function Game() {
     };
 
     return (
-        <div className="game">
+        <SessionContext.Provider value={{ sessionId, wsRef }}>
+          <div className="game">
             <div className="sidebar-page">
                 <div className="sidebar-nav">
                     <button onClick={() => handleTabSwitch("General")}> General </button>
@@ -104,18 +105,17 @@ export default function Game() {
             </div> 
             {state === "waiting" && <WaitingScreen players={players} />}
             {state === "running" && (
-                <SessionContext.Provider value={{ sessionId, wsRef }}>
-                    <Gamescreen
-                        wsRef={wsRef}
-                        commandLog={commandLog}
-                        addCommandLine={addCommandLine}
-                        username={user?.username}
-                        cwd={cwd}
-                    />
-                </SessionContext.Provider>
+                <Gamescreen
+                    wsRef={wsRef}
+                    commandLog={commandLog}
+                    addCommandLine={addCommandLine}
+                    username={user?.username}
+                    cwd={cwd}
+                />
             )}
             {state === "starting" && <Versus players={players} />}
             {!state && <h1>Loading...</h1>}
-        </div>
+          </div>
+        </SessionContext.Provider>
     )
 }
