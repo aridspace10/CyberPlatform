@@ -1,14 +1,9 @@
 from db.session import get_db
-from faker import Faker
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
-from game.filesystem import FileNode
-from game.inode import Inode, NodeType
 from game.ProcessManager import ProcessState
 from network.SessionManger import Player, session_manager
 from services.session_service import get_session, get_session_shell
 from sqlalchemy.orm import Session
-
-fake = Faker()
 
 router = APIRouter()
 
@@ -29,7 +24,6 @@ async def websocket_endpoint(
         )
     try:
         session.ensure_scheduler()
-        print("Scheduler ensured")
         # Expect join packet first
         join_data = await websocket.receive_json()
         username = join_data.get("username", "anonymous")
@@ -40,7 +34,6 @@ async def websocket_endpoint(
             if shell_db and shell_db.shell:
                 player = Player(websocket, username, user_id)
                 shell = shell_db.shell
-                print(shell)
                 player.shell.commands = shell["cmds"]
                 player.shell.vars = shell["vars"]
                 player.shell.fs.from_dict(shell["fs"])
@@ -52,7 +45,6 @@ async def websocket_endpoint(
 
         while True:
             data = await websocket.receive_json()
-            print(f"Received message: {data}")
 
             msg_type = data.get("type")
             if msg_type == "chat":
@@ -63,16 +55,6 @@ async def websocket_endpoint(
                         "message": data.get("message", ""),
                     }
                 )
-
-            elif msg_type == "add_random_file":
-                # Used for testing
-                player = session.players.get(username)
-                inode = Inode(NodeType.FILE)
-                inode.data = fake.paragraph().split("\n")
-                name = f"{fake.word()}.txt"
-                fn = FileNode(session.players[username].shell.fs.current, name, inode)
-                session.players[username].shell.fs.add_file(".", fn)
-                await session.broadcast({"success": True, "name": name})
 
             elif msg_type == "command":
 
@@ -106,20 +88,27 @@ async def websocket_endpoint(
                                 websocket,
                                 {
                                     "type": "command_output",
-                                    "stdout": None,
+                                    "stdout": stdout,
                                     "stderr": stderr,
                                     "interaction": {
                                         "mode": "foreground",
-                                        "prompt": "\n".join(stdout),
+                                        "prompt": proc.program.prompt,
                                     },
                                 },
                             )
+                    else:
+                        player.shell.foreground_pid = None
+                        await session.send_to(
+                            websocket,
+                            {
+                                "type": "command_output",
+                                "stdout": [],
+                                "stderr": ["Foreground process is no longer available"],
+                                "interaction": None,
+                            },
+                        )
                 else:
-                    print("before enter_command")
-
                     cmd = session.commandline.enter_command(raw, player.shell)
-
-                    print("after enter_command")
 
                     await session.send_to(
                         websocket,

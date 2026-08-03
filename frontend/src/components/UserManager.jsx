@@ -13,7 +13,13 @@ export default function UserManager() {
   }
 
   useEffect(() => {
-    loadUsers();
+    let cancelled = false;
+    getUsers().then((data) => {
+      if (!cancelled) setUsers(data);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleCreate() {

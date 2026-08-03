@@ -127,15 +127,23 @@ class FileSystem:
         self.current = saved_current
         return ""
 
-    def delete(self, path: str):
+    def delete(self, path: str, recursive: bool = False) -> FileNode | str:
         saved_current = self.current
-        lst = path.split("/")
-        if (error := self.search("/".join(lst[0:-1]))) != "":
+        parts = path.rstrip("/").split("/")
+        parent_path = "/".join(parts[:-1])
+
+        if (error := self.search(parent_path)) != "":
             self.current = saved_current
             return error
-        for idx, item in enumerate(self.current.items):
-            if (item.name) == lst[-1]:
-                self.current.items.pop(idx)
+
+        result = self.current.delete_child(parts[-1], recurse=recursive)
+        self.current = saved_current
+
+        if result == "":
+            return f"cannot remove '{path}': No such file or directory"
+        if result == "dir":
+            return f"cannot remove '{path}': Is a directory"
+        return result
 
 
 """

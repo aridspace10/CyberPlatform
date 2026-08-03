@@ -18,12 +18,11 @@ export default function Signup() {
     setError("");
     setLoading(true);
     try {
-        console.log(password)
         const data = await signup(username, email, password, cpassword);
         if (typeof data == "object") {
             navigate("/")
         }
-    } catch (err) {
+    } catch {
       setError("ACCESS DENIED — INVALID CREDENTIALS");
     } finally {
       setLoading(false);
@@ -162,4 +161,4 @@ export default function Signup() {
       </div>
     </div>
   );
-} 
+}

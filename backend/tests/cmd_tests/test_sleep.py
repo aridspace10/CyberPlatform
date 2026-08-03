@@ -23,6 +23,20 @@ def test_sleep_error2(cl, shell_empty: ShellState):
 
 
 @pytest.mark.asyncio
+async def test_session_scheduler_is_started_only_once():
+    session = GameSession("scheduler-test")
+
+    first = session.ensure_scheduler()
+    second = session.ensure_scheduler()
+
+    assert first is second
+    assert session.scheduler_task is first
+
+    await session.stop_scheduler()
+    assert session.scheduler_task is None
+
+
+@pytest.mark.asyncio
 async def test_sleep_process_runs_and_terminates():
 
     # Setup machine

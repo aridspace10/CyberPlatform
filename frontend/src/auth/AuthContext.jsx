@@ -1,5 +1,6 @@
-import { createContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createUser, loginUser } from "../api/users";
+import { AuthContext } from "./auth-context";
 import validator from 'validator';
 import passwordValidator from 'password-validator';
 
@@ -14,22 +15,24 @@ schema
   .not().spaces()
   .not().oneOf(['Password1', 'Password!']);
 
-export const AuthContext = createContext();
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => Boolean(localStorage.getItem("token"))
+  );
 
   const API = "http://localhost:8000";
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
+  };
 
   // Load user on app start
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    if (!token) return;
 
     fetch(`${API}/users/me`, {
       headers: {
@@ -69,8 +72,6 @@ export function AuthProvider({ children }) {
 
   const login = async (username, password) => {
     const data = await loginUser(username, password);
-    console.log("Login response:", data);
-    console.log("Token:", data.access_token);
 
     localStorage.setItem("token", data.access_token);
 
@@ -81,15 +82,8 @@ export function AuthProvider({ children }) {
       }
     });
 
-    console.log("Me status:", meRes.status);
     const userData = await meRes.json();
-    console.log("Me response:", userData);
     setUser(userData);
-  };
-
-  const logout = () => {
-    localStorage.removeItem("token");
-    setUser(null);
   };
 
   return (

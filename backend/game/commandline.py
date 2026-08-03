@@ -22,6 +22,7 @@ from game.Parser import (
     SimpleCommand,
     lex,
 )
+from game.Process import ProcessState
 from game.ProcessManager import ProcessManager
 from game.Program import HeredocProgram, RmProgram, SleepProgram
 from game.ShellState import ShellState
@@ -110,7 +111,6 @@ class CommandLine:
         tokens = lex(raw)
         parser = CommandParser(tokens)
         ast = parser.parse()
-        print(ast)
         if isinstance(ast, Sequence):
             return self.execute_sequence(ast.parts, sys)
         else:
@@ -178,15 +178,45 @@ class CommandLine:
                     cmd_result = CommandResult(1, [], [exec_ctx.stdin], "text", None)
                     return cmd_result
             elif redir.op == "<<":
+                heredoc_command = copy.deepcopy(command)
+                heredoc_command.pre_redirs = [
+                    item for item in heredoc_command.pre_redirs if item.op != "<<"
+                ]
+                heredoc_command.post_redirs = [
+                    item for item in heredoc_command.post_redirs if item.op != "<<"
+                ]
+
+                def complete_heredoc(
+                    lines: list[str], pending_command: Command = heredoc_command
+                ):
+                    inode = Inode(NodeType.FILE)
+                    stdin = FileNode(None, "heredoc", inode)
+                    stdin.set_data(lines)
+                    result = self.execute_command(
+                        pending_command,
+                        sys,
+                        ExecutionContext(stdin=stdin),
+                    )
+                    return result.stdout, result.stderr
+
                 proc = self.process_manager.create_process(
                     f"heredoc {redir.target}", parent=1
                 )
-
-                proc.program = HeredocProgram(proc, command, redir.target)
-
+                proc.program = HeredocProgram(
+                    proc,
+                    redir.target,
+                    complete_heredoc,
+                )
+                stdout, stderr = proc.program.start()
                 sys.shell.foreground_pid = proc.pid
-
-                return CommandResult(interaction=Interaction(mode="foreground"))
+                return CommandResult(
+                    stdout=stdout,
+                    stderr=stderr,
+                    interaction=Interaction(
+                        mode="foreground",
+                        prompt=proc.program.prompt,
+                    ),
+                )
             elif redir.op == ">":
                 exec_ctx.stdout = self.get_fd(redir.target, True, sys)
                 if isinstance(exec_ctx.stdout, str):
@@ -1250,29 +1280,38 @@ class CommandLine:
         numbering = False
         if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("cat"))
-        while len(ctx.args) > 1:
+
+        while ctx.args and ctx.args[0].startswith("-") and ctx.args[0] != "-":
             arg = ctx.args.pop(0)
-            if arg[0] == "-":
-                for option in arg[1:]:
-                    match (option):
-                        case "n":
-                            numbering = True
-                        case _:
-                            return CommandResult(
-                                1, stderr=[f"cat: Unknown Argument Given ({option})"]
-                            )
-        filename = ctx.args[0]
-        if filename == "-":
-            content = ctx.stdin
-        else:
-            content = ctx.system.fs.get_file(filename)
-        if content is None or isinstance(content, str):
-            return CommandResult(1, stderr=[f"File {filename} does not exist"])
-        data = content.get_data()
-        for idx, line in enumerate(data):
-            if numbering:
-                line = f"{idx + 1} {line}"
-            stdout.append(line)
+            for option in arg[1:]:
+                match option:
+                    case "n":
+                        numbering = True
+                    case _:
+                        return CommandResult(
+                            1, stderr=[f"cat: Unknown Argument Given ({option})"]
+                        )
+
+        files: list[str | None] = ctx.args or [None]
+        line_number = 1
+        for filename in files:
+            if filename is None or filename == "-":
+                content = ctx.stdin
+            else:
+                content = ctx.system.fs.get_file(filename)
+
+            if content is None or isinstance(content, str):
+                stderr.append(f"File {filename} does not exist")
+                continue
+
+            for line in content.get_data():
+                if numbering:
+                    line = f"{line_number} {line}"
+                    line_number += 1
+                stdout.append(line)
+
+        if stderr:
+            return CommandResult(1, stdout, stderr)
         return CommandResult(0, stdout, stderr)
 
     def head(self, ctx: CommandContext) -> CommandResult:
@@ -1497,58 +1536,77 @@ class CommandLine:
 
         while len(ctx.args) and ctx.args[0][0] == "-":
             arg = ctx.args.pop(0)
-            if arg == "--recursive":
-                recurse = True
+            if arg in ("--recursive", "--interactive", "--verbose"):
+                recurse = recurse or arg == "--recursive"
+                interactive = interactive or arg == "--interactive"
+                verbose = verbose or arg == "--verbose"
             else:
-                options = arg[1:].split()
-                for option in options:
-                    if option == "r" or option == "R":
+                for option in arg[1:]:
+                    if option in ("r", "R"):
                         recurse = True
-                    elif option == "-v":
+                    elif option == "v":
                         verbose = True
                     elif option == "i":
                         interactive = True
-        files = ctx.args
+                    else:
+                        return CommandResult(
+                            1,
+                            stderr=[f"rm: invalid option -- '{option}'"],
+                        )
+
+        files = ctx.args.copy()
+        if not files:
+            return CommandResult(1, stderr=["rm: missing operand"])
+
         targets = []
-        # Expand directories
         if recurse:
-            saved_current = ctx.system.fs.current
             for file in files:
-                ctx.system.fs.search(file)
-                targets.extend(
-                    ctx.system.fs.current.expand_targets([]),
-                )
-                ctx.system.fs.current = saved_current
+                node = ctx.system.fs.get_file(file)
+                if isinstance(node, FileNode):
+                    targets.extend(node.expand_targets(file))
+                else:
+                    targets.append(file)
         else:
             targets = files
-        if not len(files):
-            return CommandResult(1, stderr=["rm: missing operand"])
-        if interactive:
-            # Create the process
-            proc = self.process_manager.create_process(
-                f"sleep {" ".join(ctx.args)}", parent=1
-            )
 
-            proc.program = RmProgram(proc, files, ctx.system)
+        if interactive:
+            proc = self.process_manager.create_process(
+                f"rm {" ".join(files)}", parent=1
+            )
+            proc.program = RmProgram(
+                proc,
+                targets,
+                ctx.system,
+                recursive=recurse,
+            )
             stdout, stderr = proc.program.start()
 
-            ctx.system.shell.foreground_pid = proc.pid
+            if proc.status == ProcessState.TERMINATED:
+                ctx.system.shell.foreground_pid = None
+                return CommandResult(
+                    status=1 if stderr else 0,
+                    stdout=stdout,
+                    stderr=stderr,
+                )
 
+            ctx.system.shell.foreground_pid = proc.pid
             return CommandResult(
-                0,
-                stderr,
-                interaction=Interaction(mode="foreground", prompt="\n".join(stdout)),
+                status=0,
+                stdout=stdout,
+                stderr=stderr,
+                interaction=Interaction(
+                    mode="foreground",
+                    prompt=proc.program.prompt,
+                ),
             )
-        else:
-            for filename in files:
-                result = ctx.system.fs.current.delete_child(filename, recurse)
-                if result == "":
-                    stderr.append(f"rm: {filename} was not found")
-                elif result == "dir":
-                    stderr.append(f"rm: cannot remove '{filename}': Is a directory")
-                elif verbose:
-                    stdout.append("rm: File sucessfully deleted")
-            return CommandResult(0, stdout, stderr)
+
+        for filename in targets:
+            result = ctx.system.fs.delete(filename, recursive=recurse)
+            if isinstance(result, str):
+                stderr.append(f"rm: {result}")
+            elif verbose:
+                stdout.append(f"removed '{filename}'")
+        return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def pwd(self, ctx: CommandContext) -> CommandResult:
         while len(ctx.args) > 1:

@@ -1,14 +1,21 @@
+from typing import Callable
+
 from game.Context import SystemContext
-from game.filesystem import FileNode
-from game.Parser import Command
+from game.inode import NodeType
 from game.Process import Process, ProcessState
+
+ProgramOutput = tuple[list[str], list[str]]
+HeredocComplete = Callable[[list[str]], ProgramOutput]
 
 
 class Program:
-    def start(self) -> tuple[list[str], list[str]]:
+    def __init__(self) -> None:
+        self.prompt: str | None = None
+
+    def start(self) -> ProgramOutput:
         raise NotImplementedError()
 
-    def receive_input(self, text: str) -> tuple[list[str], list[str]]:
+    def receive_input(self, text: str) -> ProgramOutput:
         raise NotImplementedError()
 
     def tick(self):
@@ -17,6 +24,7 @@ class Program:
 
 class SleepProgram(Program):
     def __init__(self, process: Process, ticks: int):
+        super().__init__()
         self.process = process
         self.remaining = ticks
 
@@ -28,53 +36,103 @@ class SleepProgram(Program):
 
 
 class RmProgram(Program):
-    def __init__(self, process: Process, files: list[str], sys: SystemContext):
+    def __init__(
+        self,
+        process: Process,
+        files: list[str],
+        sys: SystemContext,
+        recursive: bool = False,
+    ):
+        super().__init__()
         self.process = process
-        self.files = files
-        self.current_file = None
+        self.files = files.copy()
+        self.current_file: str | None = None
         self.sys = sys
-        self.output = ([], [])
+        self.recursive = recursive
 
-    # Starts the program and returns (stdout, stderr)
-    def start(self) -> tuple[list[str], list[str]]:
+    def start(self) -> ProgramOutput:
         self.process.status = ProcessState.RUNNING
         return self.next_file()
 
-    def next_file(self) -> tuple[list[str], list[str]]:
-        if not self.files:
-            self.process.status = ProcessState.TERMINATED
-            return self.output
+    def next_file(self) -> ProgramOutput:
+        stderr = []
+        self.prompt = None
 
-        self.current_file = self.files.pop(0)
-        fn = self.sys.fs.get_file(self.current_file)
-        if isinstance(fn, str):
-            self.output[1].append(fn)
-            self.next_file()
-        elif isinstance(fn, FileNode):
+        while self.files:
+            self.current_file = self.files.pop(0)
+            fn = self.sys.fs.get_file(self.current_file)
+
+            if fn is None or isinstance(fn, str):
+                stderr.append(f"rm: cannot remove '{self.current_file}': No such file")
+                continue
+
+            kind = "directory" if fn.get_type().value == "directory" else "regular file"
+            self.prompt = f"rm: remove {kind} '{self.current_file}'?"
             self.process.status = ProcessState.WAITING_INPUT
-            self.output[0].append(f"rm: remove regular file '{self.current_file}'?")
-        return self.output
+            return [], stderr
 
-    def receive_input(self, text) -> tuple[list[str], list[str]]:
+        self.current_file = None
+        self.process.status = ProcessState.TERMINATED
+        return [], stderr
+
+    def receive_input(self, text: str) -> ProgramOutput:
         self.process.status = ProcessState.RUNNING
-        self.output = ([], [])
-        assert self.current_file
+        stderr = []
+
+        if self.current_file is None:
+            self.process.status = ProcessState.TERMINATED
+            return [], ["rm: interactive process has no current target"]
+
         if text.lower() in ["y", "yes"]:
-            print(self.current_file)
-            self.sys.fs.delete(self.current_file)
-        return self.next_file()
+            target = self.sys.fs.get_file(self.current_file)
+            if (
+                target is not None
+                and not isinstance(target, str)
+                and target.get_type() == NodeType.DIRECTORY
+                and target.items
+            ):
+                stderr.append(
+                    f"rm: cannot remove '{self.current_file}': Directory not empty"
+                )
+            else:
+                result = self.sys.fs.delete(
+                    self.current_file,
+                    recursive=self.recursive,
+                )
+                if isinstance(result, str):
+                    stderr.append(f"rm: {result}")
+
+        stdout, next_errors = self.next_file()
+        stderr.extend(next_errors)
+        return stdout, stderr
 
 
 class HeredocProgram(Program):
-    def __init__(self, proc: Process, command: Command, delimiter: str):
-        self.proc = proc
-        self.command = command
+    def __init__(
+        self,
+        process: Process,
+        delimiter: str,
+        on_complete: HeredocComplete,
+    ):
+        super().__init__()
+        self.process = process
         self.delimiter = delimiter
-        self.lines = []
+        self.on_complete = on_complete
+        self.lines: list[str] = []
 
-    def on_input(self, line: str):
+    def start(self) -> ProgramOutput:
+        self.process.status = ProcessState.WAITING_INPUT
+        self.prompt = ">"
+        return [], []
+
+    def receive_input(self, line: str) -> ProgramOutput:
         if line == self.delimiter:
-            self.proc.status = ProcessState.TERMINATED
-            return
+            self.prompt = None
+            stdout, stderr = self.on_complete(self.lines)
+            self.process.status = ProcessState.TERMINATED
+            return stdout, stderr
 
         self.lines.append(line)
+        self.process.status = ProcessState.WAITING_INPUT
+        self.prompt = ">"
+        return [], []

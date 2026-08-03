@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from game.filesystem import FileNode, FileSystem
+from game.filenode import FileNode
+from game.filesystem import FileSystem
 from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
 from game.ShellState import ShellState

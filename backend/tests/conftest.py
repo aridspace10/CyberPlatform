@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from game.commandline import CommandLine
@@ -7,7 +9,7 @@ from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
 from game.ShellState import ShellState
 from main import app
-from network.SessionManger import GameSession
+from network.SessionManger import GameSession, session_manager
 
 
 @pytest.fixture
@@ -312,23 +314,20 @@ def shell_sed(fs_sed):
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 class WSSession:
-    def __init__(self, ws):
+    def __init__(self, ws, game_session: GameSession):
         self.ws = ws
+        self.game_session = game_session
 
     def send_command(self, input_str: str):
         self.ws.send_json({"type": "command", "input": input_str})
 
     def send_message(self, text: str):
         self.ws.send_json({"type": "message", "text": text})
-
-    def add_random_file(self):
-        self.ws.send_json({"type": "add_random_file"})
-        msg = self.ws.receive_json()
-        return msg["name"]
 
     def receive(self):
         return self.ws.receive_json()
@@ -344,9 +343,16 @@ class WSSession:
 
 @pytest.fixture
 def session(client):
-    """A ready-to-use WebSocket session fixture."""
-    with client.websocket_connect("/ws/1") as ws:
-        ws.send_json({"username": "jackson", "userID": "1"})
-        ws.receive_json()
-        ws.receive_json()
-        yield WSSession(ws)
+    """A ready-to-use, isolated WebSocket session fixture."""
+    session_id = f"test-{uuid.uuid4().hex}"
+    game_session = GameSession(session_id)
+    session_manager.sessions[session_id] = game_session
+
+    try:
+        with client.websocket_connect(f"/ws/{session_id}") as ws:
+            ws.send_json({"username": "jackson", "userID": "1"})
+            ws.receive_json()
+            ws.receive_json()
+            yield WSSession(ws, game_session)
+    finally:
+        client.portal.call(session_manager.remove_session, session_id)

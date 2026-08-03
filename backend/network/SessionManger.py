@@ -3,7 +3,7 @@ from typing import Dict, Literal
 
 from fastapi import WebSocket
 from game.commandline import CommandLine
-from game.Events import HereDocTerminateEvent, ProcessTerminatedEvent
+from game.Events import ProcessTerminatedEvent
 from game.filesystem import FileSystem
 from game.GameManager import GameManager
 from game.NetworkManager import NetworkManager
@@ -47,7 +47,7 @@ class GameSession:
         self.game_manger = GameManager()
 
         self.scheduler = Scheduler(self.process_manager)
-        self.scheduler_task = None
+        self.scheduler_task: asyncio.Task[None] | None = None
 
         self.network_manager = NetworkManager()
 
@@ -72,15 +72,11 @@ class GameSession:
         }
 
     async def scheduler_loop(self):
-        print("scheduler loop")
         while True:
-
             self.scheduler.tick()
-            print("schule tick")
 
             while self.process_manager.events:
                 event = self.process_manager.events.pop(0)
-                print("Event occured")
                 if isinstance(event, ProcessTerminatedEvent):
                     for player in self.players.values():
                         if player.shell.foreground_pid == event.process.pid:
@@ -96,14 +92,26 @@ class GameSession:
                                         "prompt": None,
                                     },
                                 )
-                elif isinstance(event, HereDocTerminateEvent):
-                    pass
 
             await asyncio.sleep(1)
 
-    def ensure_scheduler(self):
+    def ensure_scheduler(self) -> asyncio.Task[None]:
         if self.scheduler_task is None or self.scheduler_task.done():
             self.scheduler_task = asyncio.create_task(self.scheduler_loop())
+        return self.scheduler_task
+
+    async def stop_scheduler(self) -> None:
+        task = self.scheduler_task
+        if task is None:
+            return
+
+        if not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        self.scheduler_task = None
 
     async def set_state(self, new_state: str):
         self.state = new_state
@@ -129,6 +137,10 @@ class GameSession:
         username = self.connections.pop(websocket, None)
         if not username:
             return
+
+        player = self.players.get(username)
+        if player and player.websocket is websocket:
+            player.websocket = None
 
         await self.broadcast({"type": "system", "message": f"{username} disconnected"})
 
@@ -158,17 +170,18 @@ class SessionManager:
         return self.sessions[session_id]
 
     def add_session(self, session_id: str, name: str):
-        # 1.Setup Session
-        print("ADD_SESSION", session_id)
         new_session = GameSession(session_id)
         new_session.name = name
-        # 2. Setup scheduler
-        print("CREATE TASK")
-        asyncio.create_task(new_session.scheduler_loop())
-
-        # 3. Assign to session manger array
+        new_session.ensure_scheduler()
         self.sessions[session_id] = new_session
         return self.sessions[session_id]
+
+    async def remove_session(self, session_id: str) -> bool:
+        session = self.sessions.pop(session_id, None)
+        if session is None:
+            return False
+        await session.stop_scheduler()
+        return True
 
     async def set_session_state(self, session_id: str, new_state: str) -> bool:
         session = self.get_session(session_id)
