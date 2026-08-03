@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 import asyncio
 from typing import Dict, Literal
 
+=======
+from typing import Dict, Literal, List, Set
+>>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
 from fastapi import WebSocket
 from game.commandline import CommandLine
 from game.Events import ProcessTerminatedEvent
@@ -22,6 +26,7 @@ class Player:
         self.shell = ShellState()
         self.shell.fs = FileSystem()
 
+<<<<<<< HEAD
     def serialize(self) -> dict:
         return {
             "vars": self.shell.vars,
@@ -30,6 +35,8 @@ class Player:
         }
 
 
+=======
+>>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
 class GameSession:
     def __init__(self, session_id: str):
         # Basic Info
@@ -40,6 +47,7 @@ class GameSession:
         # Player and Connecitons
         self.players: Dict[Username, Player] = {}
         self.connections: Dict[WebSocket, Username] = {}
+<<<<<<< HEAD
 
         # Setup machine
         self.process_manager = ProcessManager()
@@ -53,6 +61,13 @@ class GameSession:
 
         self.commandline = CommandLine(self.process_manager, self.network_manager)
 
+=======
+        self.requests: Set[Username] = set()
+
+        self.cmd = CommandLine()
+        self.game_manger: GameManager = GameManager()
+    
+>>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
     def __str__(self) -> str:
         return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
 

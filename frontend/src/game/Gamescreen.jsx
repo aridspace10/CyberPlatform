@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useState } from "react";
 import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
@@ -45,17 +46,47 @@ export default function Gamescreen({wsRef, log, addLine, interaction}) {
             case "Environment":
                 setContent(<EnvironmentTab />)
                 break;
+=======
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router";
+import Terminal from "./Terminal";
+import "./Gamescreen.css"
+export default function Gamescreen({wsRef, commandLog, addCommandLine}) {
+    const [input, setInput] = useState("");
+
+    function handleTerminalEnter(e) {
+        if (e.key === "Enter") {
+            if (!wsRef.current || wsRef.current.readyState !== 1) {
+                addCommandLine("[SYSTEM] Not connected");
+                return;
+            }
+            wsRef.current.send(JSON.stringify({
+                type: "command",
+                input: input
+            }));
+            addCommandLine("> " + input);
+            setInput("");
+>>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
         }
     }
 
-  return (
-    <div className="gamescreen">
-        <div className="sidebar-page">
-            <div className="sidebar-nav">
-                <button onClick={() => handleTabSwitch("General")}> General </button>
-                <button onClick={() => handleTabSwitch("Settings")}> Settings </button>
-                <button onClick={() => handleTabSwitch("Environment")}> Environment </button>
+    return (
+        <div className="gamescreen">
+            <div className="terminal">
+                <div className="output">
+                    {commandLog.map((line, i) => (
+                    <div key={i}>{line}</div>
+                    ))}
+                </div>
+                <input
+                    className="prompt"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={handleTerminalEnter}
+                    autoFocus
+                />
             </div>
+<<<<<<< HEAD
             {content}
         </div> 
 
@@ -73,7 +104,8 @@ export default function Gamescreen({wsRef, log, addLine, interaction}) {
                 disabled={interaction === "foreground"}
                 autoFocus
             />
+=======
+>>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
         </div>
-    </div>
-  );
+    );
 }

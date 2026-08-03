@@ -15,7 +15,7 @@ html, body, #root {
 } */
 
 /* Root / Page Reset */
-.gamescreen {
+.game {
   display: flex;
   flex-direction: row;
   width: 100vw;

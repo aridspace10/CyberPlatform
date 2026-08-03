@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import datetime
+import random
+from game.inode import Inode, NodeType
+from game.Parser import Node, NotNode, OrNode, AndNode, FilterNode, ExecNode
 import fnmatch
 from typing import List, Tuple
 
@@ -15,6 +18,7 @@ class FileNode:
         self.depth = 0
         self.items: list[FileNode] = []
         self.inode: Inode = inode
+        self.needed = False
 
     def to_dict(self) -> dict:
         return {
@@ -84,6 +88,20 @@ class FileNode:
     def append_data(self, data: list[str]) -> None:
         self.inode.append_data(data)
 
+    def random_insert(self, data: str) -> None:
+        lst = data.split("\n")
+        if (len(lst) > 1): 
+            # Insert a whole line or multiple lines
+            cur = self.get_data()
+            if (lst[1] == ""):
+                cur.insert(random.randint(0, len(cur) - 1), data[0])
+            self.set_data(cur)
+            # Will implement multiple lines if needed
+        else:
+            d = self.get_data()
+            idx = random.randint(0, len(self.get_data()) - 1)
+            self.set_data(d[:idx] + [data] + d[idx:])
+            
     def accumualate_depth(self) -> None:
         self.depth += 1
         if self.parent is not None:

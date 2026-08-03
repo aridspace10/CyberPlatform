@@ -44,6 +44,59 @@ def list_sessions():
         ]
     }
 
+<<<<<<< HEAD
+=======
+@router.post("/session_create")
+def session_create():
+    
+
+@router.get("/session/{session_id}/join/{user_id}")
+def session_join(session_id: str, user_id: str, db: Session = Depends(get_db)):
+    session = session_manager.get_session(session_id)
+    if (session == "404"):
+        return {
+            "details": "Session not found"
+        }
+    user = get_user_by_id(db, int(user_id))
+    if (user is None or user.username is None):
+        return {
+            "details": "User not found"
+        }
+    session.requests.add(user.username)
+    return None
+
+@router.get("/session/{session_id}/accept/{user_id}")
+def session_accept(session_id: str, user_id: str, db: Session = Depends(get_db)):
+    # Get Session and User Data
+    session = session_manager.get_session(session_id)
+    if (session == "404"):
+        return {
+            "details": "Session not found"
+        }
+    user = get_user_by_id(db, int(user_id))
+    if (user is None or user.username is None):
+        return {
+            "details": "User not found"
+        }
+    # Remove Request
+    session.requests.remove(user.username)
+    return None
+
+@router.get("/session/{session_id}/decline/{user_id}")
+def session_decline(session_id: str, user_id: str, db: Session = Depends(get_db)):
+    session = session_manager.get_session(session_id)
+    if (session == "404"):
+        return {
+            "details": "Session not found"
+        }
+    user = get_user_by_id(db, int(user_id))
+    if (user is None or user.username is None):
+        return {
+            "details": "User not found"
+        }
+    session.requests.remove(user.username)
+    return None
+>>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
 
 @router.post("/sandbox/{user_id}")
 async def get_sandbox(user_id: str, db: Session = Depends(get_db)):
