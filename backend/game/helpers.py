@@ -74,7 +74,7 @@ def weighted_sample(population, weights, k):
 """
 Put all files in list of filenode from starting directory node
 """
-def get_all_files(self, node: FileNode = None) -> list[FileNode]:
+def get_all_files(self, node: FileNode | None = None) -> list[FileNode]:
     node = node or self.root
     result = []
     for item in node.items:

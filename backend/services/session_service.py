@@ -2,12 +2,9 @@ from typing import List
 
 from db.modals import GameSession, Scenario, ScenarioToSession, SessionShell
 from sqlalchemy.orm import Session
-<<<<<<< HEAD
-=======
 from typing import List 
 from db.modals import GameSession, ScenarioToSession, Scenario, SessionShell, JoinRequest
 from datetime import datetime
->>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
 
 
 ############# GETTERS #############
@@ -63,8 +60,6 @@ def add_session_shell(db: Session, sesID: int, userID: int, shell: dict) -> None
     db.refresh(ses)
     return None
 
-<<<<<<< HEAD
-=======
 def add_join_request(db: Session, sesID: int, userID: int) -> None:
     now = datetime.now()
     req = JoinRequest(SessionID=sesID, UserID=userID, date=now)
@@ -72,7 +67,6 @@ def add_join_request(db: Session, sesID: int, userID: int) -> None:
     db.commit()
     db.refresh(req)
     return None
->>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
 
 ############## UPDATERS ###############
 def update_session_shell(db: Session, sesID: int, userID: int, shell: dict) -> None:

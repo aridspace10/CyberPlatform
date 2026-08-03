@@ -12,6 +12,7 @@ from services.session_service import (
     get_session,
     update_session_shell,
 )
+from services.user_service import get_user_by_id
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api")
@@ -44,10 +45,8 @@ def list_sessions():
         ]
     }
 
-<<<<<<< HEAD
-=======
-@router.post("/session_create")
-def session_create():
+# @router.post("/session_create")
+# def session_create():
     
 
 @router.get("/session/{session_id}/join/{user_id}")
@@ -96,7 +95,6 @@ def session_decline(session_id: str, user_id: str, db: Session = Depends(get_db)
         }
     session.requests.remove(user.username)
     return None
->>>>>>> 242b85d5bcb3b4be280bd170ccc8c8ad2559e8bb
 
 @router.post("/sandbox/{user_id}")
 async def get_sandbox(user_id: str, db: Session = Depends(get_db)):
