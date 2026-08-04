@@ -17,6 +17,9 @@ export async function getFullSessionData(session_id) {
     });
 
     const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.detail || "Could not load the session");
+    }
     return data
 }
 

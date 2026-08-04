@@ -73,6 +73,13 @@ def test_create_session_hands_complete_config_to_game_manager():
         assert runtime.game_manager.commands == ["grep"]
         assert runtime.game_manager.allow_pipes is True
         assert runtime.game_manager.num_rounds == 8
+        assert runtime.game_manager.get_game_data(runtime.name) == {
+            "sessionName": "Versus session",
+            "gameType": "MiniGames",
+            "playType": "Versus",
+            "questions": [],
+            "progress": {"completed": 0, "total": 8},
+        }
 
         db = testing_session()
         scenario = db.query(ScenarioToSession).one()
@@ -99,5 +106,15 @@ def test_single_player_session_starts_running():
         runtime = session_manager.get_session(str(result["session_id"]))
         assert runtime != "404"
         assert runtime.state == "running"
+
+        session_response = client.get(f"/api/session/{result['session_id']}")
+        assert session_response.status_code == 200
+        assert session_response.json()["gameData"]["sessionName"] == (
+            "SinglePlayer session"
+        )
+        assert session_response.json()["gameData"]["progress"] == {
+            "completed": 0,
+            "total": 8,
+        }
 
         client.portal.call(session_manager.remove_session, str(result["session_id"]))

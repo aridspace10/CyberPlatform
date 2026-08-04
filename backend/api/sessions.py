@@ -245,11 +245,15 @@ async def get_scenarios(db: Session = Depends(get_db)):
 @router.get("/session/{session_id}")
 def get_session_data(session_id: int, db: Session = Depends(get_db)):
     session = session_manager.get_session(str(session_id))
-    print(session)
     if session == "404":
-        return {"details": "Not Found"}
+        raise HTTPException(status_code=404, detail="Session not found")
 
-    return {"details": "Found", "name": session.name, "state": session.state}
+    return {
+        "details": "Found",
+        "name": session.name,
+        "state": session.state,
+        "gameData": session.game_manager.get_game_data(session.name),
+    }
 
 
 @router.get("/db/session/{session_id}")

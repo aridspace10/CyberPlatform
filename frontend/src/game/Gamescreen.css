@@ -34,6 +34,13 @@ html, body, #root {
   overflow: hidden;
 }
 
+.game-stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
 /* ============================================
    Terminal (LEFT side — main area)
    ============================================ */
@@ -102,7 +109,7 @@ html, body, #root {
   width: 280px;
   height: 100%;
   background-color: #111;
-  border-left: 1px solid #2a2a2a;
+  border-right: 1px solid #2a2a2a;
   box-sizing: border-box;
   overflow: hidden;
 }

@@ -70,6 +70,8 @@ class GameManager:
         self.num_rounds = 0
         self.shell = ShellState()
         self.minigames = []
+        self.questions: list[dict] = []
+        self.completed_questions = 0
 
     def set_config(self, config: dict) -> None:
         """Store the complete session-creation contract for game setup.
@@ -98,6 +100,8 @@ class GameManager:
         self.shell = ShellState()
         self.shell.commands = list(self.commands)
         self.minigames = []
+        self.questions = []
+        self.completed_questions = 0
 
     def get_shell(self) -> dict:
         """Return a serializable copy of the configured starting shell."""
@@ -105,6 +109,19 @@ class GameManager:
             "vars": copy.deepcopy(self.shell.vars),
             "cmds": list(self.shell.commands),
             "fs": self.shell.fs.to_dict(),
+        }
+
+    def get_game_data(self, session_name: str | None = None) -> dict:
+        """Return the UI-facing session and minigame progress data."""
+        return {
+            "sessionName": session_name or self.session_name,
+            "gameType": self.game_type,
+            "playType": self.play_type,
+            "questions": copy.deepcopy(self.questions),
+            "progress": {
+                "completed": self.completed_questions,
+                "total": self.num_rounds,
+            },
         }
 
     def auto_generate_fs(self, files: int, dirs: int):

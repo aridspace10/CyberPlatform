@@ -73,6 +73,7 @@ class GameSession:
             "state": self.state,
             "session": self.session_id,
             "name": self.name,
+            "gameData": self.game_manager.get_game_data(self.name),
         }
 
     async def scheduler_loop(self):

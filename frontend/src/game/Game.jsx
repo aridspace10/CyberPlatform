@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Gamescreen from "./Gamescreen";
 import WaitingScreen from "./WaitingScreen";
 import Versus from "./Versus";
+import GameDataPanel from "./GameDataPanel";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { getFullSessionData } from "../api/sessions";
@@ -17,12 +18,10 @@ export default function Game() {
     const { user } = useAuth()
     const [players, setPlayers] = useState([]);
     const wsRef = useRef(null);
-    const hasPrompted = useRef(false);
     const [commandLog, setCommandLog] = useState([]);
     const [chatLog, setChatLog] = useState([]);
     const [state, setState] = useState(null);
-    const [sidebar, setSidebar] = useState(null);
-    const [mainbar, setMainbar] = useState(null);
+    const [gameData, setGameData] = useState(null);
     const [activeTab, setActiveTab] = useState("General");
     const [cwd, setCwd] = useState("/root");
 
@@ -50,6 +49,7 @@ export default function Game() {
 
             const sessionData = await getFullSessionData(sessionId, user.id);
             setState(sessionData["state"]);
+            setGameData(sessionData.gameData);
         };
 
         socket.onmessage = (event) => {
@@ -62,6 +62,7 @@ export default function Game() {
             if (data.type === "lobby_update") {
                 setPlayers(data.players);
                 setState(data.state);
+                if (data.gameData) setGameData(data.gameData);
                 return;
             }
 
@@ -104,18 +105,21 @@ export default function Game() {
                 {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} />}
             </div>
 
-            {state === "waiting" && <WaitingScreen players={players} />}
-            {state === "running" && (
-                <Gamescreen
-                    wsRef={wsRef}
-                    commandLog={commandLog}
-                    addCommandLine={addCommandLine}
-                    username={user?.username}
-                    cwd={cwd}
-                />
-            )}
-            {state === "starting" && <Versus players={players} />}
-            {!state && <h1>Loading...</h1>}
+            <main className="game-stage">
+                {state === "waiting" && <WaitingScreen players={players} />}
+                {state === "running" && (
+                    <Gamescreen
+                        wsRef={wsRef}
+                        commandLog={commandLog}
+                        addCommandLine={addCommandLine}
+                        username={user?.username}
+                        cwd={cwd}
+                    />
+                )}
+                {state === "starting" && <Versus players={players} />}
+                {!state && <h1>Loading...</h1>}
+            </main>
+            <GameDataPanel gameData={gameData} />
           </div>
         </SessionContext.Provider>
     )
