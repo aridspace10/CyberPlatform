@@ -2,7 +2,7 @@ import Terminal from "./game/Terminal";
 import Homepage from "./Homepage";
 import Game from "./game/Game";
 import "./app.css"
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import UserManager from "./components/UserManager";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import { AuthProvider } from "./auth/AuthContext";
@@ -25,7 +25,11 @@ export default function App() {
                             <Game />
                         </ProtectedRoute>
                     } />
-                    <Route path="/session-create" element={<SessionCreation/>} /> 
+                    <Route path="/session-create" element={
+                        <ProtectedRoute>
+                            <SessionCreation />
+                        </ProtectedRoute>
+                    } />
                     {/* Dev pathways */}
                     <Route path="/terminal" element={<Terminal />} />
                     <Route path="/users" element={<UserManager />} />

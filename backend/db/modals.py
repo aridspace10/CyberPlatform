@@ -25,7 +25,7 @@ class GameSession(Base):
 
 class SessionShell(Base):
     __tablename__ = "Session_Shell"
-    SessionID: Mapped[int] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
+    SessionID: Mapped[int] = mapped_column(ForeignKey("session.id"), primary_key=True)
     UserID: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     shell: Mapped[Optional[dict]] = mapped_column(JSON)
 
@@ -47,6 +47,6 @@ class User(Base):
 
 class JoinRequest(Base):
     __tablename__ = "joinRequest"
-    SessionID: Mapped[int] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
+    SessionID: Mapped[int] = mapped_column(ForeignKey("session.id"), primary_key=True)
     UserID: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     date: Mapped[DateTime] = mapped_column(DateTime)

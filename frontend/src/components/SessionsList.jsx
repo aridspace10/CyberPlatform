@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import "./SessionsList.css"
 
 export default function SessionList() {
@@ -8,7 +8,7 @@ export default function SessionList() {
   const [sessions, setSessions] = useState([]);
 
   const handleEnter = async (sessionId) => {
-    navigate(`/game`, {state: {sessionId: sessionId}});
+    navigate(`/game/${sessionId}`);
   }
 
   useEffect(() => {

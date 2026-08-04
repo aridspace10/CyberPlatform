@@ -89,7 +89,7 @@ export default function Game() {
     };
 
     return (
-        <SessionContext.Provider value={{ sessionId, wsRef }}>
+        <SessionContext.Provider value={{ sessionId, wsRef, addCommandLine }}>
           <div className="game">
             <div className="sidebar-page">
                 <div className="sidebar-nav">
@@ -102,7 +102,8 @@ export default function Game() {
                 {activeTab === "Settings" && <SettingsTab />}
                 {activeTab === "Environment" && <EnvironmentTab />}
                 {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} />}
-            </div> 
+            </div>
+
             {state === "waiting" && <WaitingScreen players={players} />}
             {state === "running" && (
                 <Gamescreen

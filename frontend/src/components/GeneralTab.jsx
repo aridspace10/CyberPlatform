@@ -3,13 +3,14 @@ import { useNavigate } from "react-router";
 import "./Tabs.css"
 
 export default function GeneralTab() {
-    const { sessionId } = useSession();
+    const { sessionId, addCommandLine } = useSession();
     const navigate = useNavigate();
 
     const handleSave = async () => {
         await fetch(`http://localhost:8000/api/sessions/${sessionId}/save`, {
             method: "POST"
         })
+        addCommandLine("[SYSTEM] Game Saved")
     }
 
     const handleReset = () => {

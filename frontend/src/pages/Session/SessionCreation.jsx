@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./SessionCreation.css"
+import { createSession } from "../../api/sessions";
 import { useAuth } from "../../auth/useAuth";
 import Switch from "../../components/Switch";
 import CommandBlock from "../../components/CommandBlock";
@@ -12,7 +14,10 @@ export default function SessionCreation() {
     const [allowPipes, setAllowPipes] = useState(false);
     const [commandStates, setCommandStates] = useState({});
     const [rounds, setRounds] = useState(5);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState("");
     const { user } = useAuth()
+    const navigate = useNavigate();
 
     const typeOptions = ["SinglePlayer", "Versus"];
     const gameOptions = ["MiniGames"]
@@ -57,8 +62,13 @@ export default function SessionCreation() {
     };
 
     const handleCreate = async () => {
+        if (!name.trim()) {
+            setError("Enter a session name");
+            return;
+        }
+
         const config = {
-            "name": name,
+            "name": name.trim(),
             "playType": playType,
             "gameType": gameType,
             "creatorID": user.id,
@@ -69,14 +79,16 @@ export default function SessionCreation() {
             }
         }
 
-        const res = await fetch(`http://localhost:8000/api/session_create`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ config })
-        });
-
-        const data = await res.json();
-        return data
+        setSubmitting(true);
+        setError("");
+        try {
+            const data = await createSession(config);
+            navigate(`/game/${data.session_id}`);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setSubmitting(false);
+        }
     }
 
     const handleDeselectAll = () => setCommandStates({});
@@ -120,7 +132,10 @@ export default function SessionCreation() {
                         ))}
                     </select>
 
-                    <button className="submit-btn" onClick={handleCreate}>Create Session</button>
+                    {error && <p role="alert">{error}</p>}
+                    <button className="submit-btn" onClick={handleCreate} disabled={submitting}>
+                        {submitting ? "Creating..." : "Create Session"}
+                    </button>
                 </div>
 
                 <div className="create-right-side">

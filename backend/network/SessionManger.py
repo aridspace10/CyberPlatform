@@ -44,7 +44,9 @@ class GameSession:
         # Setup machine
         self.process_manager = ProcessManager()
         self.process_manager.boot()
-        self.game_manger = GameManager()
+        self.game_manager = GameManager()
+        # Keep the old misspelled attribute working while callers migrate.
+        self.game_manger = self.game_manager
 
         self.scheduler = Scheduler(self.process_manager)
         self.scheduler_task: asyncio.Task[None] | None = None
@@ -55,8 +57,6 @@ class GameSession:
 
         self.requests: Set[Username] = set()
 
-        self.game_manger: GameManager = GameManager()
-    
     def __str__(self) -> str:
         return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
 

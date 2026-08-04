@@ -1,3 +1,4 @@
+import copy
 import random
 from .ShellState import ShellState
 from .helpers import biased_random, biased_randint, get_all_files, weighted_sample
@@ -56,11 +57,55 @@ SINGLECMD_GAMES: dict[str, list[type]] = {
 
 class GameManager:
     def __init__(self):
-        self.init_config = {}
+        self.init_config: dict = {}
+        self.gen_config: dict = {}
+        self.session_name = ""
+        self.play_type = "SinglePlayer"
+        self.game_type = ""
+        self.creator_id: int | None = None
+        self.command_config: dict[str, dict] = {}
+        self.commands: list[str] = []
+        self.options: dict = {}
+        self.allow_pipes = False
+        self.num_rounds = 0
+        self.shell = ShellState()
+        self.minigames = []
 
     def set_config(self, config: dict) -> None:
-        self.init_config = config
-        self.generate_config()
+        """Store the complete session-creation contract for game setup.
+
+        Actual round generation is intentionally a separate step.  Creating a
+        session should not start consuming the configuration before players
+        have reached the appropriate game screen.
+        """
+        self.init_config = copy.deepcopy(config)
+        self.gen_config = copy.deepcopy(config)
+
+        self.session_name = config.get("name", "")
+        self.play_type = config.get("playType", "SinglePlayer")
+        self.game_type = config.get("gameType", config.get("name", ""))
+        self.creator_id = config.get("creatorID")
+        self.command_config = copy.deepcopy(config.get("commands", {}))
+        self.commands = [
+            command
+            for command, state in self.command_config.items()
+            if state.get("selected", False)
+        ]
+        self.options = copy.deepcopy(config.get("options", {}))
+        self.allow_pipes = bool(self.options.get("allowPipes", False))
+        self.num_rounds = int(self.options.get("rounds", 0))
+
+        self.shell = ShellState()
+        self.shell.commands = list(self.commands)
+        self.minigames = []
+
+    def get_shell(self) -> dict:
+        """Return a serializable copy of the configured starting shell."""
+        return {
+            "vars": copy.deepcopy(self.shell.vars),
+            "cmds": list(self.shell.commands),
+            "fs": self.shell.fs.to_dict(),
+        }
 
     def auto_generate_fs(self, files: int, dirs: int):
         # Base Case

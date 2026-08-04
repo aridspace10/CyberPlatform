@@ -1,8 +1,11 @@
+from typing import Dict, Literal
+
+from db.modals import GameSession as DatabaseGameSession
 from db.modals import Scenario, ScenarioToSession, SessionShell
 from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from network.SessionManger import session_manager
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from services.session_service import (
     add_session,
     add_session_scenario,
@@ -20,6 +23,37 @@ router = APIRouter(prefix="/api")
 
 class StateUpdate(BaseModel):
     state: str
+
+
+class CommandSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    selected: bool = False
+    options: list[str] = Field(default_factory=list)
+
+
+class GameOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowPipes: bool = False
+    rounds: int = Field(default=5, ge=1, le=20)
+
+
+class SessionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=100)
+    playType: Literal["SinglePlayer", "Versus"]
+    gameType: str = Field(min_length=1)
+    creatorID: int
+    commands: Dict[str, CommandSelection] = Field(default_factory=dict)
+    options: GameOptions
+
+
+class SessionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    config: SessionConfig
 
 
 # ################### HELPERS ###################
@@ -45,9 +79,64 @@ def list_sessions():
         ]
     }
 
-# @router.post("/session_create")
-# def session_create():
-    
+@router.post("/session_create", status_code=201)
+async def session_create(body: SessionCreate, db: Session = Depends(get_db)):
+    """Persist a session and register its complete config with GameManager."""
+    config = body.config
+
+    if get_user_by_id(db, config.creatorID) is None:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    scenario = get_scenario_byname(db, config.gameType)
+    if scenario is None:
+        raise HTTPException(status_code=404, detail="Game type not found")
+
+    initial_state = "running" if config.playType == "SinglePlayer" else "waiting"
+    config_data = config.model_dump()
+    runtime_session = None
+
+    try:
+        database_session = DatabaseGameSession(
+            name=config.name,
+            creatorID=config.creatorID,
+            state=initial_state,
+        )
+        db.add(database_session)
+        db.flush()
+
+        runtime_session = session_manager.add_session(
+            str(database_session.id), config.name
+        )
+        runtime_session.state = initial_state
+        runtime_session.game_manager.set_config(config_data)
+
+        db.add(
+            ScenarioToSession(
+                scenarioID=scenario.id,
+                sessionID=database_session.id,
+                config=runtime_session.game_manager.gen_config,
+            )
+        )
+        db.add(
+            SessionShell(
+                SessionID=database_session.id,
+                UserID=config.creatorID,
+                shell=runtime_session.game_manager.get_shell(),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        if runtime_session is not None:
+            await session_manager.remove_session(runtime_session.session_id)
+        raise
+
+    return {
+        "session_id": database_session.id,
+        "state": initial_state,
+        "play_type": config.playType,
+    }
+
 
 @router.get("/session/{session_id}/join/{user_id}")
 def session_join(session_id: str, user_id: str, db: Session = Depends(get_db)):
