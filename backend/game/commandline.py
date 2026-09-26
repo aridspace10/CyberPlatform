@@ -82,7 +82,13 @@ class CommandLine:
             "ping": self.ping,
             "ps": self.ps,
             "sleep": self.sleep,
+            "cut": self.cut,
         }
+
+    def safe_args_param_pop(self, ctx: CommandContext, param: str) -> str:
+        if ctx.args:
+            return ctx.args.pop(0)
+        raise ValueError(f"{ctx.command}: parameter expected for {param}")
 
     def get_fd(self, path: str, removing: bool, sys: SystemContext) -> FileNode | str:
         lst = path.split("/")
@@ -357,6 +363,72 @@ class CommandLine:
         ctx.system.shell.foreground_pid = proc.pid
 
         return CommandResult(interaction=Interaction(mode="foreground"))
+
+    def cut(self, ctx: CommandContext) -> CommandResult:
+        delimiter = "\t"
+        fields: list[int] | None = None
+        files: list[str] = []
+        only_delim = False
+
+        try:
+            while ctx.args:
+                arg = ctx.args.pop(0)
+                if arg == "--":
+                    files.extend(ctx.args)
+                    ctx.args.clear()
+                    break
+                elif arg == "-d":
+                    delimiter = self.safe_args_param_pop(ctx, "-d")
+                    if len(delimiter) > 1:
+                        raise ValueError("cut: delimiter must be a single character")
+                    delimiter = delimiter or "\0"
+                elif arg == "-f":
+                    if fields is not None:
+                        raise ValueError("cut: only one field list may be specified")
+                    value = self.safe_args_param_pop(ctx, "-f")
+                    try:
+                        fields = [int(field) for field in value.split(",")]
+                    except ValueError:
+                        raise ValueError("cut: bad value given for -f") from None
+                    if any(field < 1 for field in fields):
+                        raise ValueError("cut: fields are numbered from 1")
+                elif arg == "-s":
+                    only_delim = True
+                elif arg == "-" or not arg.startswith("-"):
+                    files.append(arg)
+                else:
+                    raise ValueError(f"cut: unknown option '{arg}'")
+
+            if fields is None:
+                raise ValueError("cut: a field list must be specified with -f")
+        except ValueError as error:
+            return CommandResult(1, stderr=[str(error)])
+
+        fields = sorted(set(fields))
+        stdout = []
+        stderr = []
+        for filename in files or ["-"]:
+            node = ctx.stdin if filename == "-" else ctx.system.fs.get_file(filename)
+            if node is None:
+                stderr.append(f"cut: {filename} does not exist")
+                continue
+            if isinstance(node, str):
+                stderr.append(f"cut: {filename}: {node}")
+                continue
+            if node.get_type() == NodeType.DIRECTORY:
+                stderr.append(f"cut: {filename}: Is a directory")
+                continue
+
+            for line in node.get_data():
+                if delimiter not in line:
+                    if not only_delim:
+                        stdout.append(line)
+                    continue
+                parts = line.split(delimiter)
+                selected = [parts[field - 1] for field in fields if field <= len(parts)]
+                stdout.append(delimiter.join(selected))
+
+        return CommandResult(1 if stderr else 0, stdout=stdout, stderr=stderr)
 
     def ps(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
