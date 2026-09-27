@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CyberPlatform: Debug command shell",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_shell.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

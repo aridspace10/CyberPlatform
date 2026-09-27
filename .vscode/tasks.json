@@ -1,0 +1,35 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CyberPlatform: Command shell",
+            "type": "process",
+            "command": "${command:python.interpreterPath}",
+            "args": ["${workspaceFolder}/run_shell.py"],
+            "options": {"cwd": "${workspaceFolder}"},
+            "presentation": {"reveal": "always", "focus": true, "panel": "dedicated"},
+            "problemMatcher": []
+        },
+        {
+            "label": "CyberPlatform: Test one command",
+            "type": "process",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "-m", "pytest", "tests/cmd_tests/test_${input:commandName}.py",
+                "-q", "--no-cov"
+            ],
+            "options": {"cwd": "${workspaceFolder}/backend"},
+            "group": "test",
+            "presentation": {"reveal": "always", "panel": "dedicated"},
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "commandName",
+            "type": "promptString",
+            "description": "Command with an existing cmd_tests/test_<command>.py file",
+            "default": "mkdir"
+        }
+    ]
+}
