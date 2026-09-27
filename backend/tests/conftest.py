@@ -39,8 +39,17 @@ def network_manager():
 
 
 @pytest.fixture
-def cl(process_manager, network_manager):
-    return CommandLine(process_manager, network_manager)
+def cl(process_manager, network_manager, monkeypatch):
+    command_line = CommandLine(process_manager, network_manager)
+    enter_command = command_line.enter_command
+
+    def traced_enter_command(raw, shell):
+        # Print before execution so exceptions still show the command to replay.
+        print(f"\nDev shell command: {raw}")
+        return enter_command(raw, shell)
+
+    monkeypatch.setattr(command_line, "enter_command", traced_enter_command)
+    return command_line
 
 
 # Basic helpers to create a filesystem with one file
