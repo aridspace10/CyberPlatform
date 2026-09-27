@@ -1284,8 +1284,8 @@ class CommandLine:
         changeaccess = True
         changemod = True
         date = datetime.datetime.now()
-        stdout = []
-        stderr = []
+        stdout: list[str] = []
+        stderr: list[str] = []
         while ctx.args:
             arg = ctx.args.pop(0)
             if arg == "-":
@@ -1331,6 +1331,7 @@ class CommandLine:
             ty = ctx.system.fs.search(file)
             if ty.startswith("No directory named") and len(file.split("/")) > 1:
                 stderr.append(ty)
+                ctx.system.fs.current = sc
                 continue
             if ty != "":
                 if not create:
@@ -1744,7 +1745,7 @@ class CommandLine:
             return CommandResult(1, stderr=[f"mkdir: {err}"])
         if verbose:
             return CommandResult(0, stdout=[f"mkdir: sucessfully created {name}"])
-        return CommandResult(1)
+        return CommandResult(0)
 
     def ls(self, ctx: CommandContext) -> CommandResult:
         deep, detail = False, 0
