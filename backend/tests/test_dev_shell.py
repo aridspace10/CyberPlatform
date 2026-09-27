@@ -11,20 +11,20 @@ from game.dev_shell import DevShell, repl, run_line
 LAUNCHER = Path(__file__).resolve().parents[2] / "run_shell.py"
 
 
-def run_console(tmp_path, *args, input_text=""):
+def run_console(console_workdir, *args, input_text=""):
     return subprocess.run(
         [sys.executable, str(LAUNCHER), *args],
         input=input_text,
         capture_output=True,
         text=True,
-        cwd=tmp_path,
+        cwd=console_workdir,
         timeout=10,
     )
 
 
-def test_interactive_session_preserves_files_directory_and_pipes(tmp_path):
+def test_interactive_session_preserves_files_directory_and_pipes(console_workdir):
     result = run_console(
-        tmp_path,
+        console_workdir,
         "--empty",
         input_text=(
             "mkdir -p work/demo\ncd work/demo\necho hello > example.txt\n"
@@ -35,13 +35,13 @@ def test_interactive_session_preserves_files_directory_and_pipes(tmp_path):
     assert result.stderr == ""
     assert "cyber:/root/work/demo$ hello\n" in result.stdout
     assert "cyber:/root/work/demo$ root/work/demo\n" in result.stdout
-    assert not (tmp_path / "work").exists()
-    assert not (tmp_path / "app.db").exists()
+    assert not (console_workdir / "work").exists()
+    assert not (console_workdir / "app.db").exists()
 
 
-def test_foreground_responses_and_heredoc_content_use_the_same_session(tmp_path):
+def test_foreground_responses_and_heredoc_content_use_the_same_session(console_workdir):
     result = run_console(
-        tmp_path,
+        console_workdir,
         "--empty",
         input_text=(
             "cat << EOF > example.txt\nhello\n\n:exit\nEOF\n"
@@ -57,9 +57,9 @@ def test_foreground_responses_and_heredoc_content_use_the_same_session(tmp_path)
 
 
 @pytest.mark.parametrize("empty", [False, True])
-def test_reset_restores_starting_state_and_eof_exits(tmp_path, empty):
+def test_reset_restores_starting_state_and_eof_exits(console_workdir, empty):
     result = run_console(
-        tmp_path,
+        console_workdir,
         *(["--empty"] if empty else []),
         input_text="mkdir scratch\ncd scratch\necho changed > file.txt\n:reset\nls\n",
     )
@@ -72,9 +72,9 @@ def test_reset_restores_starting_state_and_eof_exits(tmp_path, empty):
     assert ("notes.txt" in after_reset) is not empty
 
 
-def test_repeated_commands_keep_state_and_print_status(tmp_path):
+def test_repeated_commands_keep_state_and_print_status(console_workdir):
     result = run_console(
-        tmp_path,
+        console_workdir,
         "--empty",
         "--status",
         "-c",
@@ -91,39 +91,40 @@ def test_repeated_commands_keep_state_and_print_status(tmp_path):
     assert result.stderr == "[status=0]\n" * 4
 
 
-def test_command_mode_returns_engine_failure_status(tmp_path):
-    result = run_console(tmp_path, "-c", "missing-command")
+def test_command_mode_returns_engine_failure_status(console_workdir):
+    result = run_console(console_workdir, "-c", "missing-command")
     assert result.returncode == 1
     assert result.stdout == ""
     assert result.stderr == "Unknown command given\n"
 
 
-def test_command_mode_does_not_hang_on_unanswered_prompt(tmp_path):
-    result = run_console(tmp_path, "-c", "rm -i notes.txt")
+def test_command_mode_does_not_hang_on_unanswered_prompt(console_workdir):
+    result = run_console(console_workdir, "-c", "rm -i notes.txt")
     assert result.returncode == 2
     assert "waiting for input" in result.stderr
 
 
-def test_command_mode_accepts_responses_as_later_inputs(tmp_path):
+def test_command_mode_accepts_responses_as_later_inputs(console_workdir):
     result = run_console(
-        tmp_path, "-c", "rm -i notes.txt", "-c", "n", "-c", "cat notes.txt"
+        console_workdir, "-c", "rm -i notes.txt", "-c", "n", "-c", "cat notes.txt"
     )
     assert result.returncode == 0
     assert result.stdout == "hello world\ntesting command fixes\n"
     assert result.stderr == ""
 
 
-def test_help_uses_correct_working_directory_and_preserves_newlines(tmp_path):
-    result = run_console(tmp_path, "-c", "mkdir --help")
+def test_help_uses_correct_working_directory_and_preserves_newlines(console_workdir):
+    result = run_console(console_workdir, "-c", "mkdir --help")
     expected = (LAUNCHER.parent / "static/help/mkdir.txt").read_text()
     assert result.returncode == 0
     assert result.stderr == ""
     assert result.stdout == expected.rstrip("\n") + "\n"
 
 
-def test_blank_input_and_error_do_not_end_the_console(tmp_path):
+def test_blank_input_and_error_do_not_end_the_console(console_workdir):
     result = run_console(
-        tmp_path, input_text="\n   \nmissing-command\n:status\necho recovered\n:exit\n"
+        console_workdir,
+        input_text="\n   \nmissing-command\n:status\necho recovered\n:exit\n",
     )
     assert result.returncode == 0
     assert result.stderr == "Unknown command given\n"
@@ -144,9 +145,9 @@ def test_console_waits_for_scheduler_then_accepts_next_command(monkeypatch, caps
     assert capsys.readouterr().out == "ready\n"
 
 
-def test_launcher_waits_for_real_sleep_before_next_input(tmp_path):
+def test_launcher_waits_for_real_sleep_before_next_input(console_workdir):
     started = time.monotonic()
-    result = run_console(tmp_path, "-c", "sleep 1", "-c", "echo awake")
+    result = run_console(console_workdir, "-c", "sleep 1", "-c", "echo awake")
     assert time.monotonic() - started >= 1
     assert result.returncode == 0
     assert result.stdout == "awake\n"

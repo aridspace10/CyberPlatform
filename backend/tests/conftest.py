@@ -1,4 +1,6 @@
 import uuid
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +12,14 @@ from game.ProcessManager import ProcessManager
 from game.ShellState import ShellState
 from main import app
 from network.SessionManger import GameSession, session_manager
+
+
+@pytest.fixture
+def console_workdir():
+    # Windows sandbox and user runs can share a username but have different SIDs.
+    # Avoid pytest-of-<username>, which may belong to the other account.
+    with TemporaryDirectory(prefix="cyberplatform-console-") as directory:
+        yield Path(directory)
 
 
 @pytest.fixture
