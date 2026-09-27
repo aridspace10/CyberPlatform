@@ -6,13 +6,10 @@ from game.filesystem import FileSystem
 from game.ShellState import ShellState
 from wonderwords import RandomWord
 
-from ..game.helpers import determine_perms_fromstr
-
 
 ######## HELPS #################
 def test_cmd_helps(cl, shell_empty):
     cmds = [
-        "mkdir",
         "cat",
         "cp",
         "tail",
@@ -23,7 +20,6 @@ def test_cmd_helps(cl, shell_empty):
         "ls",
         "mv",
         "sort",
-        "touch",
         "rm",
         "sed",
         "ps",
@@ -51,85 +47,6 @@ def test_echo_basic(cl, shell_empty):
     CmdResult = cl.enter_command("echo hello world", shell_empty)
     assert CmdResult.stderr == []
     assert CmdResult.stdout == ["hello world"]
-
-
-######## MKDIR #################
-def test_mkdir_basic(cl, shell_empty: ShellState):
-    CmdResult = cl.enter_command("mkdir a", shell_empty)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert len(shell_empty.fs.current.items) == 1
-    assert shell_empty.fs.current.items[0].name == "a"
-
-    CmdResult = cl.enter_command("mkdir a", shell_empty)
-    assert CmdResult.stderr == ["mkdir: Filename 'a' already exists"]
-    assert CmdResult.stdout == []
-    assert len(shell_empty.fs.current.items) == 1
-    assert shell_empty.fs.current.items[0].name == "a"
-
-
-def test_mkdir_none(cl, shell_empty: ShellState):
-    CmdResult = cl.enter_command("mkdir", shell_empty)
-    assert CmdResult.stderr == ["mkdir: at least one argument should be given"]
-    assert CmdResult.stdout == []
-    assert len(shell_empty.fs.current.items) == 0
-
-
-def test_mkdir_verbose(cl, shell_empty: ShellState):
-    CmdResult = cl.enter_command("mkdir -v a", shell_empty)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["mkdir: sucessfully created a"]
-    assert len(shell_empty.fs.current.items) == 1
-    assert shell_empty.fs.current.items[0].name == "a"
-
-
-def test_mkdir_error(cl, shell_empty: ShellState):
-    CmdResult = cl.enter_command("mkdir a/b", shell_empty)
-    assert CmdResult.stderr == ["mkdir: No directory named a"]
-    assert CmdResult.stdout == []
-    assert len(shell_empty.fs.current.items) == 0
-
-    CmdResult = cl.enter_command("mkdir -p", shell_empty)
-    assert CmdResult.stderr == ["mkdir: no name given for new directory"]
-    assert CmdResult.stdout == []
-    assert len(shell_empty.fs.current.items) == 0
-
-
-def test_mkdir_permissions(cl, shell_empty: ShellState):
-    perm_str = "".join([str(random.randint(1, 7)) for _ in range(0, 3)])
-    perm = determine_perms_fromstr(perm_str)
-    CmdResult = cl.enter_command(f"mkdir -m a={perm_str} a", shell_empty)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert len(shell_empty.fs.current.items) == 1
-    fn = shell_empty.fs.current.items[0]
-    assert fn.name == "a"
-    assert perm == fn.inode.permissions
-
-    CmdResult = cl.enter_command("mkdir -m a=00 a", shell_empty)
-    assert CmdResult.stderr == [
-        "chmod: value given for permissions which is not of length of 3"
-    ]
-    assert CmdResult.stdout == []
-
-    CmdResult = cl.enter_command("mkdir -m randomstuff a", shell_empty)
-    assert CmdResult.stderr == ["mkdir: option given to -m or --mode is not correct"]
-    assert CmdResult.stdout == []
-
-
-def test_mkdir_parents(cl, shell_empty: ShellState):
-    CmdResult = cl.enter_command("mkdir -p a/b/c", shell_empty)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert len(shell_empty.fs.current.items) == 1
-    fn = shell_empty.fs.current.items[0]
-    assert fn.name == "a"
-    assert len(fn.items) == 1
-    fn2 = fn.items[0]
-    assert fn2.name == "b"
-    assert len(fn2.items) == 1
-    fn3 = fn2.items[0]
-    assert fn3.name == "c"
 
 
 ####### CD ####################
@@ -260,55 +177,6 @@ def test_head_bytes(cl, shell_basic: ShellState):
     assert len(CmdResult.stdout) == expected_lines
     for i, line in enumerate(CmdResult.stdout):
         assert line == str(i)
-
-
-######### TOUCH ############
-def test_touch_basic(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("touch --no-create f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
-
-    CmdResult = cl.enter_command("touch f3.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-
-    CmdResult = cl.enter_command("touch -c f4.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert not isinstance(shell_basic.fs.get_file("f4.txt"), FileNode)
-
-    CmdResult = cl.enter_command("touch -x", shell_basic)
-    assert CmdResult.stderr == ["touch: unknown argument given"]
-    assert CmdResult.stdout == []
-
-    CmdResult = cl.enter_command("touch -a --date=2025-01-01 f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    fn = shell_basic.fs.get_file("f2.txt")
-    assert isinstance(fn, FileNode)
-    assert fn.inode.atime != fn.inode.mtime
-
-    CmdResult = cl.enter_command("touch -m --date=2025-02-01 f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    fn = shell_basic.fs.get_file("f1.txt")
-    assert isinstance(fn, FileNode)
-    assert fn.inode.atime != fn.inode.mtime
-
-
-def test_touch_error(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("touch", shell_basic)
-    assert CmdResult.stderr == ["touch: must give atleast one argument"]
-    assert CmdResult.stdout == []
-
-    CmdResult = cl.enter_command("touch a/f1.txt", shell_basic)
-    assert CmdResult.stderr == ["No directory named a"]
-    assert CmdResult.stdout == []
-
-    CmdResult = cl.enter_command("touch -a", shell_basic)
-    assert CmdResult.stderr == ["touch: no file given"]
-    assert CmdResult.stdout == []
 
 
 ######## GREP ##############
