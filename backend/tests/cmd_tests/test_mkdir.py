@@ -3,16 +3,14 @@
 Run from backend with:
     python -m pytest tests/cmd_tests/test_mkdir.py -o addopts= -p no:cacheprovider
 
-Required mode syntax: three octal digits (-m/--mode/--mode=). Legacy a=NNN
-coverage is retained below. Regressions remain ordinary failures until fixed.
+Required mode syntax: three octal digits (-m/--mode/--mode=).
+Regressions remain ordinary failures until fixed.
 Shared helpers inspect children directly to avoid lookup and cwd side effects.
 """
 
-import random
 from copy import deepcopy
 
 import pytest
-from game.helpers import determine_perms_fromstr
 from game.inode import NodeType
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import (
@@ -323,28 +321,6 @@ def test_mkdir_error(cl, shell_empty: ShellState):
     assert CmdResult.stderr == ["mkdir: no name given for new directory"]
     assert CmdResult.stdout == []
     assert len(shell_empty.fs.current.items) == 0
-
-
-def test_mkdir_permissions(cl, shell_empty: ShellState):
-    perm_str = "".join([str(random.randint(1, 7)) for _ in range(0, 3)])
-    perm = determine_perms_fromstr(perm_str)
-    CmdResult = cl.enter_command(f"mkdir -m a={perm_str} a", shell_empty)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert len(shell_empty.fs.current.items) == 1
-    fn = shell_empty.fs.current.items[0]
-    assert fn.name == "a"
-    assert perm == fn.inode.permissions
-
-    CmdResult = cl.enter_command("mkdir -m a=00 a", shell_empty)
-    assert CmdResult.stderr == [
-        "chmod: value given for permissions which is not of length of 3"
-    ]
-    assert CmdResult.stdout == []
-
-    CmdResult = cl.enter_command("mkdir -m randomstuff a", shell_empty)
-    assert CmdResult.stderr == ["mkdir: option given to -m or --mode is not correct"]
-    assert CmdResult.stdout == []
 
 
 def test_mkdir_parents(cl, shell_empty: ShellState):

@@ -1706,25 +1706,25 @@ class CommandLine:
         verbose, parent = False, False
         if not len(ctx.args):
             return CommandResult(
-                0, stderr=["mkdir: at least one argument should be given"]
+                1, stderr=["mkdir: at least one argument should be given"]
             )
-        name = ""
-        while len(ctx.args) > 0:
-            arg = ctx.args.pop(0)
+        names: list[str] = []
+        while len(ctx.args):
+            arg: str = ctx.args.pop(0)
             if arg[0] == "-":
-                if arg == "-m" or arg == "--mode":
-                    arg = ctx.args.pop(0)
-                    if arg.startswith("a="):
-                        perms = determine_perms_fromstr(arg[2:])
-                        if isinstance(perms, str):
-                            return CommandResult(1, stderr=[perms])
+                if arg == "-m" or arg == "--mode" or arg.startswith("--mode="):
+                    if (arg in ["-m", "--mode"]):
+                        if (not len(ctx.args)):
+                            return CommandResult(
+                                1, stderr=[f"mkdir: parameter required for {arg}"]
+                            )
+                        arg = ctx.args.pop(0)
                     else:
-                        return CommandResult(
-                            1,
-                            stderr=[
-                                "mkdir: option given to -m or --mode is not correct"
-                            ],
-                        )
+                        
+                        arg = arg.split("=")[1]
+                    perms = determine_perms_fromstr(arg)
+                    if isinstance(perms, str):
+                        return CommandResult(1, stderr=[perms])
                 elif arg == "-v" or arg == "--verbose":
                     verbose = True
                 elif arg == "-p" or arg == "--parents":
@@ -1734,18 +1734,24 @@ class CommandLine:
                 else:
                     return CommandResult(1, stderr=["mkdir: unknown argument given"])
             else:
-                name = arg
-        if name == "":
+                names.append(arg)
+        if len(names) == 0:
             return CommandResult(1, stderr=["mkdir: no name given for new directory"])
-
         saved_current = ctx.system.fs.current
-        err = ctx.system.fs.add_directory(name, parent, perms)
-        ctx.system.fs.current = saved_current
-        if err:
-            return CommandResult(1, stderr=[f"mkdir: {err}"])
-        if verbose:
-            return CommandResult(0, stdout=[f"mkdir: sucessfully created {name}"])
-        return CommandResult(0)
+        stdout = []
+        stderr = []
+        status = 0
+        for name in names:
+            err = ctx.system.fs.add_directory(name, parent, perms)
+            ctx.system.fs.current = saved_current
+            if err:
+                if parent:
+                    continue
+                stderr.append(f"mkdir: {err}")
+                status = 1
+            if verbose:
+                stdout.append(f"mkdir: sucessfully created {name}")
+        return CommandResult(status, stdout, stderr)
 
     def ls(self, ctx: CommandContext) -> CommandResult:
         deep, detail = False, 0
