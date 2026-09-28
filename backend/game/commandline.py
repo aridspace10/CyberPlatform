@@ -1721,7 +1721,7 @@ class CommandLine:
                         arg = ctx.args.pop(0)
                     else:
                         
-                        arg = arg.split("=")[1]
+                        arg = arg.split("=", 1)[1]
                     perms = determine_perms_fromstr(arg)
                     if isinstance(perms, str):
                         return CommandResult(1, stderr=[perms])
@@ -1745,7 +1745,7 @@ class CommandLine:
             err = ctx.system.fs.add_directory(name, parent, perms)
             ctx.system.fs.current = saved_current
             if err:
-                if parent:
+                if parent and err.endswith("already exists"):
                     continue
                 stderr.append(f"mkdir: {err}")
                 status = 1
