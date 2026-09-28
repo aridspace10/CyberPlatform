@@ -48,7 +48,13 @@ class FileSystem:
     def search(self, path: str, creating: bool = False) -> str:
         if path == "/":
             return ""
+        
         lst = path.split("/")
+        saved = self.current
+
+        if path.startswith("/"):
+            self.current = self.filehead
+
         while len(lst) > 0 and lst != [""]:
             cur = lst.pop(0)
             # if we are staying still
@@ -61,6 +67,7 @@ class FileSystem:
                     continue
 
             if self.current.get_type() == NodeType.FILE:
+                self.current = saved
                 return f"{self.current.name} is not a directory"
 
             if self.current.access(cur) is None and creating:
@@ -68,6 +75,7 @@ class FileSystem:
                 self.current.add_child(cur, inode)
             node = self.current.access(cur)
             if node is None:
+                self.current = saved
                 return f"No directory named {cur}"
             if node.inode.type == NodeType.SYMLINK:
                 target = node.inode.data
@@ -101,12 +109,17 @@ class FileSystem:
     ) -> str:
         if permissions is None:
             permissions = {}
+        if (path == "." or path == "/"):
+            return ""
         error = ""
         saved_current = self.current
         lst = path.split("/")
         if (error := self.search("/".join(lst[0:-1]), creating)) != "":
             self.current = saved_current
             return error
+        if (self.current.get_type() == NodeType.FILE):
+            self.current = saved_current
+            return f"{path} is a file"
         inode = Inode(NodeType.DIRECTORY)
         inode.permissions = permissions
         error = self.current.add_child(lst[-1], inode)
