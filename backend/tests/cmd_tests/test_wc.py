@@ -1,4 +1,6 @@
 from game.ShellState import ShellState
+from tests.cmd_tests.creation_helpers import assert_failure, assert_success
+from tests.cmd_tests.path_helpers import assert_directory_error
 
 # ---------- BASIC ----------
 
@@ -136,3 +138,32 @@ def test_wc_l_no_final_newline(cl, shell_no_final_newline: ShellState):
     CmdResult = cl.enter_command("wc -l t.txt", shell_no_final_newline)
     assert CmdResult.stderr == []
     assert CmdResult.stdout == ["1"]
+
+
+def test_wc_dot_paths_read_file(run_dot_command, dot_prefix):
+    result = run_dot_command(f"wc -l {dot_prefix}data.txt")
+    assert_success(result, ["3"])
+
+
+def test_wc_dot_paths_reject_directory(run_dot_command, dot_directory):
+    operand, _ = dot_directory
+    result = run_dot_command(f"wc -l {operand}")
+    assert_directory_error(result)
+
+
+def test_wc_dot_paths_reject_invalid_traversal(run_dot_command, invalid_dot_path):
+    result = run_dot_command(f"wc -l {invalid_dot_path}")
+    assert_failure(result)
+
+
+def test_wc_dot_paths_preserve_literal_dot_names(run_dot_command):
+    result = run_dot_command("wc -l ./..backup")
+    assert_success(result, ["1"])
+
+
+def test_wc_dot_paths_read_parent_file(run_dot_command, dot_shell):
+    current = dot_shell.fs.current
+    parent = current.parent if current.parent is not None else current
+    lines = list(parent.access("data.txt").inode.data)
+    result = run_dot_command("wc -l ../data.txt")
+    assert_success(result, [str(len(lines))])

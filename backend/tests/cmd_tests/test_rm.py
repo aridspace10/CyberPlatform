@@ -1,5 +1,48 @@
+import pytest
 from game.Process import ProcessState
 from game.ShellState import ShellState
+from tests.cmd_tests.creation_helpers import assert_failure, assert_success
+from tests.cmd_tests.path_helpers import tree_state
+from tests.command_helpers import assert_help
+
+
+def test_rm_dot_paths_remove_only_requested_file(
+    run_dot_command, dot_shell, dot_prefix
+):
+    current = dot_shell.fs.current
+    source = current.access("data.txt")
+    before = tree_state(dot_shell)
+    result = run_dot_command(f"rm {dot_prefix}data.txt", unchanged=False)
+    assert current.access("data.txt") is None
+    assert len(tree_state(dot_shell)) == len(before) - 1
+    assert all(row[0] != id(source) for row in tree_state(dot_shell))
+    assert_success(result)
+
+
+def test_rm_dot_paths_recursive_child(run_dot_command, dot_shell, dot_prefix):
+    current = dot_shell.fs.current
+    data = current.access("data.txt")
+    result = run_dot_command(f"rm -r {dot_prefix}branch", unchanged=False)
+    assert current.access("branch") is None
+    assert current.access("data.txt") is data
+    assert_success(result)
+
+
+@pytest.mark.parametrize("option", ["", "-r", "-ri"])
+@pytest.mark.parametrize(
+    "operand", [".", "..", "./.", "branch/..", "branch/../..", "/.."]
+)
+def test_rm_dot_paths_refuse_dot_and_parent(
+    run_dot_command, dot_shell, operand, option
+):
+    result = run_dot_command(f"rm {option} {operand}")
+    assert result.interaction is None
+    assert dot_shell.foreground_pid is None
+    assert_failure(result)
+
+
+def test_rm_dot_paths_reject_invalid_traversal(run_dot_command, invalid_dot_path):
+    assert_failure(run_dot_command(f"rm {invalid_dot_path}"))
 
 
 def test_rm_basic(cl, shell_fouritems: ShellState):
@@ -87,3 +130,7 @@ def test_rm_nested_delete_restores_filesystem_pointer(cl, shell_basic: ShellStat
     assert result.stderr == []
     assert shell_basic.fs.current is directory
     assert shell_basic.fs.get_file("f3.txt") is None
+
+
+def test_rm_help(cl, shell_empty):
+    assert_help(cl, shell_empty, "rm")

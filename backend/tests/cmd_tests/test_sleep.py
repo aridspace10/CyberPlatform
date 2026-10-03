@@ -4,6 +4,27 @@ import pytest
 from game.ProcessManager import ProcessState
 from game.ShellState import ShellState
 from network.SessionManger import GameSession
+from tests.cmd_tests.creation_helpers import assert_failure
+from tests.command_helpers import assert_help
+
+
+@pytest.mark.parametrize("duration", [".", ".."])
+def test_sleep_dot_paths_are_invalid_durations(
+    run_dot_command, dot_shell, cl, duration
+):
+    processes = dict(cl.process_manager.processes)
+    result = run_dot_command(f"sleep {duration}")
+    assert dot_shell.foreground_pid is None
+    assert cl.process_manager.processes == processes
+    assert_failure(result)
+
+
+def test_sleep_dot_paths_preserve_directory_while_starting(run_dot_command, dot_shell):
+    result = run_dot_command("sleep 1")
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.interaction is not None
+    assert dot_shell.foreground_pid is not None
 
 
 ###### non async ##############
@@ -238,3 +259,7 @@ async def test_multiple_sleep_processes():
             await scheduler_task
         except asyncio.CancelledError:
             pass
+
+
+def test_sleep_help(cl, shell_empty):
+    assert_help(cl, shell_empty, "sleep")

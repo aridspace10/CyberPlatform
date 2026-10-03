@@ -12,6 +12,8 @@ from game.ProcessManager import ProcessManager
 from game.ShellState import ShellState
 from main import app
 from network.SessionManger import GameSession, session_manager
+from tests.cmd_tests.creation_helpers import child
+from tests.cmd_tests.path_helpers import assert_tree, canonical_path, tree_state
 
 
 @pytest.fixture
@@ -375,3 +377,92 @@ def session(client):
             yield WSSession(ws, game_session)
     finally:
         client.portal.call(session_manager.remove_session, session_id)
+
+
+@pytest.fixture(params=["root", "nested"])
+def dot_shell(shell_empty, request):
+    """Exercise root clamping and real parent traversal with distinct file data."""
+    root = shell_empty.fs.filehead
+    work = child(root, "work", NodeType.DIRECTORY)
+    current = root if request.param == "root" else work
+    for directory in (root, work):
+        data = child(directory, "data.txt", NodeType.FILE)
+        data.inode.set_data(
+            ["beta:2", "alpha:1", "alpha:1"]
+            if directory is current
+            else ["wrong-directory:9"]
+        )
+        child(directory, ".hidden", NodeType.FILE).inode.set_data(["hidden:4"])
+        child(directory, "..backup", NodeType.FILE).inode.set_data(["literal:5"])
+        branch = child(directory, "branch", NodeType.DIRECTORY)
+        child(branch, "leaf.txt", NodeType.FILE).inode.set_data(["leaf:3"])
+    shell_empty.fs.current = current
+    shell_empty.fs.cwd = canonical_path(current)
+    shell_empty.cwd = canonical_path(current)
+    assert_tree(shell_empty)
+    return shell_empty
+
+
+@pytest.fixture(params=["dot", "repeated-dot", "parent", "absolute", "above-root"])
+def dot_prefix(dot_shell, request):
+    """Equivalent prefixes resolving to the original working directory."""
+    base = canonical_path(dot_shell.fs.current).strip("/")
+    absolute = f"/{base}/" if base else "/"
+    return {
+        "dot": "./",
+        "repeated-dot": "././",
+        "parent": "branch/./../",
+        "absolute": absolute + "branch/../",
+        "above-root": "../../" + (base + "/" if base else ""),
+    }[request.param]
+
+
+@pytest.fixture(
+    params=[".", "..", "branch/.", "branch/..", "./branch/../..", "/..", "../../.."]
+)
+def dot_directory(dot_shell, request):
+    current = dot_shell.fs.current
+    parent = current.parent if current.parent is not None else current
+    targets = {
+        ".": current,
+        "..": parent,
+        "branch/.": current.access("branch"),
+        "branch/..": current,
+        "./branch/../..": parent,
+        "/..": dot_shell.fs.filehead,
+        "../../..": dot_shell.fs.filehead,
+    }
+    return request.param, targets[request.param]
+
+
+@pytest.fixture(
+    params=["missing/../data.txt", "data.txt/../data.txt", "data.txt/./data.txt"]
+)
+def invalid_dot_path(request):
+    # Dot components cannot erase a missing or non-directory traversal component.
+    return request.param
+
+
+@pytest.fixture
+def run_dot_command(cl, dot_shell):
+    def run(command, *, unchanged=True, navigates_to=None):
+        fs = dot_shell.fs
+        before = tree_state(dot_shell)
+        current, fs_cwd, shell_cwd = fs.current, fs.cwd, dot_shell.cwd
+        result = cl.enter_command(command, dot_shell)
+        assert_tree(dot_shell)
+        if unchanged:
+            assert (
+                tree_state(dot_shell) == before
+            ), f"{command!r} changed the filesystem"
+        if navigates_to is None:
+            assert fs.current is current, f"{command!r} changed fs.current"
+            assert fs.cwd == fs_cwd, f"{command!r} changed fs.cwd"
+            assert dot_shell.cwd == shell_cwd, f"{command!r} changed shell.cwd"
+        else:
+            assert fs.current is navigates_to
+            assert fs.cwd == canonical_path(navigates_to)
+            assert dot_shell.cwd == canonical_path(navigates_to)
+        return result
+
+    return run

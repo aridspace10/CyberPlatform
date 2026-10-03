@@ -19,6 +19,7 @@ from tests.cmd_tests.creation_helpers import (
     assert_success,
     node_at,
 )
+from tests.cmd_tests.path_helpers import tree_state
 
 
 @pytest.mark.parametrize("command,node_type", [("mkdir", NodeType.DIRECTORY)])
@@ -358,3 +359,58 @@ def test_mkdir_help(cl, shell_empty):
     with open("../static/help/mkdir.txt") as help_file:
         assert result.stderr == []
         assert result.stdout == help_file.readlines()
+
+
+def test_mkdir_dot_paths_create_in_resolved_parent(
+    run_dot_command, dot_shell, dot_prefix
+):
+    current = dot_shell.fs.current
+    result = run_dot_command(f"mkdir {dot_prefix}created", unchanged=False)
+    created = current.access("created")
+    assert created is not None
+    assert created.parent is current
+    assert created.inode.type == NodeType.DIRECTORY
+    assert_success(result)
+
+
+def test_mkdir_dot_paths_create_in_parent(run_dot_command, dot_shell):
+    current = dot_shell.fs.current
+    parent = current.parent if current.parent is not None else current
+    result = run_dot_command("mkdir ../created", unchanged=False)
+    created = parent.access("created")
+    assert created is not None
+    assert created.parent is parent
+    assert created.inode.type == NodeType.DIRECTORY
+    if parent is not current:
+        assert current.access("created") is None
+    assert_success(result)
+
+
+@pytest.mark.parametrize("option", ["", "-p"])
+def test_mkdir_dot_paths_existing_directory(run_dot_command, dot_directory, option):
+    operand, _ = dot_directory
+    result = run_dot_command(f"mkdir {option} {operand}")
+    if option:
+        assert_success(result)
+    else:
+        assert_failure(result)
+
+
+@pytest.mark.parametrize("option", ["", "-p"])
+@pytest.mark.parametrize("operand", ["data.txt/../created", "data.txt/./created"])
+def test_mkdir_dot_paths_cannot_traverse_file(run_dot_command, option, operand):
+    assert_failure(run_dot_command(f"mkdir {option} {operand}"))
+
+
+def test_mkdir_dot_paths_parents_preserve_intermediate_directory(
+    run_dot_command, dot_shell
+):
+    current = dot_shell.fs.current
+    before = tree_state(dot_shell)
+    # Walk through newly created components in order; lexical normalization
+    # would incorrectly discard the intermediate directory.
+    result = run_dot_command("mkdir -p ./created/../sibling", unchanged=False)
+    assert current.access("created") is not None
+    assert current.access("sibling") is not None
+    assert len(tree_state(dot_shell)) == len(before) + 2
+    assert_success(result)
