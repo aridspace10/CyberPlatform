@@ -97,16 +97,20 @@ class CommandLine:
         if len(lst) > 1 and (error := sys.fs.search("/".join(lst[0:-1]))) != "":
             sys.fs.current = saved_current
             return error
+        name = lst[-1]
+        if (name == "." or name == ".."):
+            sys.fs.current = saved_current
+            return f"Cannot complete operation for {name}"
         for _idx, item in enumerate(sys.fs.current.items):
-            if item.name == lst[-1]:
+            if item.name == name:
                 if removing:
                     item.set_data([])
                 sys.fs.current = saved_current
                 return item
         inode = Inode(NodeType.FILE)
-        sys.fs.current.add_child(lst[-1], inode)
+        sys.fs.current.add_child(name, inode)
         sys.fs.search_withaccess(
-            lst[-1]
+            name
         )  # search with access will set new filenode as ctx.system.fs.current
         result = sys.fs.current
         sys.fs.current = saved_current
