@@ -1274,18 +1274,29 @@ class CommandLine:
             return CommandResult(0, stdout=[str(ctx.system.fs.lcs)])
         return CommandResult(0, stdout=" ".join(ctx.args).split("\n"))
 
+    @staticmethod
+    def _parse_touch_date(
+        date_text: str, date_format: str = "%Y-%m-%d"
+    ) -> datetime.datetime | CommandResult:
+        """Parse a touch date or return a command error for invalid input."""
+        try:
+            return datetime.datetime.strptime(date_text, date_format)
+        except ValueError:
+            return CommandResult(1, stderr=[f"touch: invalid date '{date_text}'"])
+
     def touch(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("touch"))
         if not len(ctx.args):
             return CommandResult(1, stderr=["touch: must give atleast one argument"])
-        files = []
+        files: list[str] = []
         create = True
-        changeaccess = True
-        changemod = True
+        changeaccess = False
+        changemod = False
         date = datetime.datetime.now()
         stdout: list[str] = []
         stderr: list[str] = []
+        status: int = 0
         while ctx.args:
             arg = ctx.args.pop(0)
             if arg == "-":
@@ -1294,27 +1305,38 @@ class CommandLine:
                 if arg[1] == "-":
                     if arg == "--no-create":
                         create = False
-                    if arg.startswith("--date="):
-                        date = datetime.datetime.strptime(arg.split("=")[1], "%Y-%m-%d")
+                    elif arg.startswith("--date="):
+                        date = self._parse_touch_date(arg.split("=", 1)[1])
+                    elif arg == "--date":
+                        if not len(ctx.args):
+                            return CommandResult(
+                                1, stderr=["touch: no parameter given for --date"]
+                            )
+                        date = self._parse_touch_date(ctx.args.pop(0))
+                    else:
+                        return CommandResult(1, stderr=[f"touch: unknown parameter is given ({arg})"])
                 else:
                     for option in arg[1:]:
                         match option:
                             case "c":
                                 create = False
-                                break
                             case "a":
                                 changeaccess = True
-                                changemod = False
                             case "m":
-                                changeaccess = False
                                 changemod = True
                             case "d":
-                                date = datetime.datetime.strptime(
-                                    ctx.args.pop(0), "%Y-%m-%d"
-                                )
+                                if not len(ctx.args):
+                                    return CommandResult(
+                                        1, stderr=["touch: no parameter given for -d"]
+                                    )
+                                date = self._parse_touch_date(ctx.args.pop(0))
                                 break
                             case "t":
-                                date = datetime.datetime.strptime(
+                                if not len(ctx.args):
+                                    return CommandResult(
+                                        1, stderr=["touch: no parameter given for -t"]
+                                    )
+                                date = self._parse_touch_date(
                                     ctx.args.pop(0), "%Y%m%d%H%M"
                                 )
                                 break
@@ -1324,28 +1346,43 @@ class CommandLine:
                                 )
             else:
                 files.append(arg)
+            if isinstance(date, CommandResult):
+                return date
         if not len(files):
             return CommandResult(1, stderr=["touch: no file given"])
+        if not changeaccess and not changemod:
+            changeaccess = changemod = True
+        fs = ctx.system.fs
         for file in files:
-            sc = ctx.system.fs.current
-            ty = ctx.system.fs.search(file)
-            if ty.startswith("No directory named") and len(file.split("/")) > 1:
-                stderr.append(ty)
-                ctx.system.fs.current = sc
-                continue
-            if ty != "":
+            fn = fs.resolve(file)
+            if isinstance(fn, str):
                 if not create:
                     continue
-                ctx.system.fs.current = sc
-                ctx.system.fs.add_file(file)
-                ctx.system.fs.search(file)
-            fn = ctx.system.fs.current
-            ctx.system.fs.current = sc
+
+                resolved_parent = fs.resolve_parent(file)
+                if isinstance(resolved_parent, str):
+                    stderr.append(f"touch: {file}: {resolved_parent}")
+                    status = 1
+                    continue
+
+                parent, filename = resolved_parent
+                error = parent.add_child(filename, Inode(NodeType.FILE))
+                if error:
+                    stderr.append(f"touch: {file}: {error}")
+                    status = 1
+                    continue
+
+                fn = parent.access(filename)
+                if fn is None:
+                    stderr.append(f"touch: {file}: unable to create file")
+                    status = 1
+                    continue
+
             if changeaccess:
                 fn.inode.atime = date
             if changemod:
                 fn.inode.mtime = date
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def cat(self, ctx: CommandContext) -> CommandResult:
         stdout = []
