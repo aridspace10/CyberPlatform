@@ -1,3 +1,5 @@
+import posixpath
+
 from game.filenode import FileNode
 from game.inode import Inode, NodeType
 
@@ -46,9 +48,12 @@ class FileSystem:
         return self.current.list_content("", deep, detail, extras)
 
     def search(self, path: str, creating: bool = False) -> str:
-        if path == "/":
-            return ""
         lst = path.split("/")
+        saved = self.current
+
+        if path.startswith("/"):
+            self.current = self.filehead
+
         while len(lst) > 0 and lst != [""]:
             cur = lst.pop(0)
             # if we are staying still
@@ -58,16 +63,19 @@ class FileSystem:
             if cur == "..":
                 if self.current.parent is not None:
                     self.current = self.current.parent
-                    continue
+                continue
 
             if self.current.get_type() == NodeType.FILE:
-                return f"{self.current.name} is not a directory"
+                non_directory = self.current.name
+                self.current = saved
+                return f"{non_directory} is not a directory"
 
             if self.current.access(cur) is None and creating:
                 inode = Inode(NodeType.DIRECTORY)
                 self.current.add_child(cur, inode)
             node = self.current.access(cur)
             if node is None:
+                self.current = saved
                 return f"No directory named {cur}"
             if node.inode.type == NodeType.SYMLINK:
                 target = node.inode.data
@@ -101,12 +109,17 @@ class FileSystem:
     ) -> str:
         if permissions is None:
             permissions = {}
+        if path == "." or path == "/":
+            return ""
         error = ""
         saved_current = self.current
         lst = path.split("/")
         if (error := self.search("/".join(lst[0:-1]), creating)) != "":
             self.current = saved_current
             return error
+        if self.current.get_type() == NodeType.FILE:
+            self.current = saved_current
+            return f"{path} is a file"
         inode = Inode(NodeType.DIRECTORY)
         inode.permissions = permissions
         error = self.current.add_child(lst[-1], inode)
@@ -144,6 +157,36 @@ class FileSystem:
         if result == "dir":
             return f"cannot remove '{path}': Is a directory"
         return result
+
+    def resolve(self, path: str) -> FileNode | str:
+        """Return an existing node or error while preserving the current node."""
+        saved_current = self.current
+
+        try:
+            error = self.search(path)
+
+            if error:
+                return error
+
+            return self.current
+        finally:
+            self.current = saved_current
+
+    def resolve_parent(self, path: str) -> tuple[FileNode, str] | str:
+        parent_path, filename = posixpath.split(path)
+
+        if filename in ("", ".", ".."):
+            return f"Invalid filename: {path}"
+
+        parent = self.resolve(parent_path or ".")
+
+        if isinstance(parent, str):
+            return parent
+
+        if parent.get_type() != NodeType.DIRECTORY:
+            return f"{parent_path} is not a directory"
+
+        return parent, filename
 
 
 """

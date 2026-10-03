@@ -1,4 +1,6 @@
 import uuid
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +12,14 @@ from game.ProcessManager import ProcessManager
 from game.ShellState import ShellState
 from main import app
 from network.SessionManger import GameSession, session_manager
+
+
+@pytest.fixture
+def console_workdir():
+    # Windows sandbox and user runs can share a username but have different SIDs.
+    # Avoid pytest-of-<username>, which may belong to the other account.
+    with TemporaryDirectory(prefix="cyberplatform-console-") as directory:
+        yield Path(directory)
 
 
 @pytest.fixture
@@ -29,8 +39,17 @@ def network_manager():
 
 
 @pytest.fixture
-def cl(process_manager, network_manager):
-    return CommandLine(process_manager, network_manager)
+def cl(process_manager, network_manager, monkeypatch):
+    command_line = CommandLine(process_manager, network_manager)
+    enter_command = command_line.enter_command
+
+    def traced_enter_command(raw, shell):
+        # Print before execution so exceptions still show the command to replay.
+        print(f"\nDev shell command: {raw}")
+        return enter_command(raw, shell)
+
+    monkeypatch.setattr(command_line, "enter_command", traced_enter_command)
+    return command_line
 
 
 # Basic helpers to create a filesystem with one file

@@ -46,7 +46,8 @@ def assert_created(shell, path, node_type):
     node = node_at(shell, path)
     assert isinstance(node, FileNode), f"{path} was not created"
     assert node.inode.type == node_type
-    parent = node_at(shell, path.rsplit("/", 1)[0])
+    parent_path, _, _ = path.rpartition("/")
+    parent = node_at(shell, parent_path) if parent_path else shell.fs.filehead
     assert node.parent is parent
     assert sum(item.name == node.name for item in parent.items) == 1
     return node
