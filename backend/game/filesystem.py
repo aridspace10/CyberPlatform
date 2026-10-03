@@ -1,5 +1,6 @@
 from game.filenode import FileNode
 from game.inode import Inode, NodeType
+import posixpath
 
 
 class FileSystem:
@@ -168,6 +169,22 @@ class FileSystem:
             return self.current
         finally:
             self.current = saved_current
+
+    def resolve_parent(self, path: str) -> tuple[FileNode, str] | str:
+        parent_path, filename = posixpath.split(path)
+
+        if filename in ("", ".", ".."):
+            return f"Invalid filename: {path}"
+
+        parent = self.resolve(parent_path or ".")
+
+        if isinstance(parent, str):
+            return parent
+
+        if parent.get_type() != NodeType.DIRECTORY:
+            return f"{parent_path} is not a directory"
+
+        return parent, filename
 
 
 """
