@@ -55,6 +55,9 @@ class FileSystem:
             self.current = self.filehead
 
         while len(lst) > 0 and lst != [""]:
+            if (self.current.get_type() == NodeType.FILE):
+                return f"{self.current.name} is not a directory"
+
             cur = lst.pop(0)
             # if we are staying still
             if cur == "" or cur == ".":
