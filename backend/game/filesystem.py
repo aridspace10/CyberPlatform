@@ -46,9 +46,6 @@ class FileSystem:
         return self.current.list_content("", deep, detail, extras)
 
     def search(self, path: str, creating: bool = False) -> str:
-        if path == "/":
-            return ""
-        
         lst = path.split("/")
         saved = self.current
 
@@ -109,7 +106,7 @@ class FileSystem:
     ) -> str:
         if permissions is None:
             permissions = {}
-        if (path == "." or path == "/"):
+        if path == "." or path == "/":
             return ""
         error = ""
         saved_current = self.current
@@ -117,7 +114,7 @@ class FileSystem:
         if (error := self.search("/".join(lst[0:-1]), creating)) != "":
             self.current = saved_current
             return error
-        if (self.current.get_type() == NodeType.FILE):
+        if self.current.get_type() == NodeType.FILE:
             self.current = saved_current
             return f"{path} is a file"
         inode = Inode(NodeType.DIRECTORY)
@@ -157,6 +154,20 @@ class FileSystem:
         if result == "dir":
             return f"cannot remove '{path}': Is a directory"
         return result
+
+    def resolve(self, path: str) -> FileNode | str:
+        """Return an existing node or error while preserving the current node."""
+        saved_current = self.current
+
+        try:
+            error = self.search(path)
+
+            if error:
+                return error
+
+            return self.current
+        finally:
+            self.current = saved_current
 
 
 """
