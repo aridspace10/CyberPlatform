@@ -35,6 +35,7 @@ from tests.cmd_tests.creation_helpers import (
         ("parent/new", "work/parent/new"),
         ("./parent/new", "work/parent/new"),
         ("../other/new", "other/new"),
+        ("../../new", "new"),
         ("/other/new", "other/new"),
     ],
 )

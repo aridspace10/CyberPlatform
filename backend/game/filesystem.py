@@ -1,6 +1,7 @@
+import posixpath
+
 from game.filenode import FileNode
 from game.inode import Inode, NodeType
-import posixpath
 
 
 class FileSystem:
@@ -62,7 +63,7 @@ class FileSystem:
             if cur == "..":
                 if self.current.parent is not None:
                     self.current = self.current.parent
-                    continue
+                continue
 
             if self.current.get_type() == NodeType.FILE:
                 non_directory = self.current.name

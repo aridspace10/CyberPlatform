@@ -29,6 +29,7 @@ from tests.cmd_tests.creation_helpers import (
         ("parent/new", "work/parent/new"),
         ("./parent/new", "work/parent/new"),
         ("../other/new", "other/new"),
+        ("../../new", "new"),
         ("/other/new", "other/new"),
     ],
 )
@@ -103,7 +104,7 @@ def test_mkdir_parents_creates_all_components_and_is_idempotent(
     assert_success(second)
 
 
-@pytest.mark.parametrize("operand", ["parent", ".", "/"])
+@pytest.mark.parametrize("operand", ["parent", ".", "..", "../..", "/"])
 def test_mkdir_parents_accepts_existing_directories_without_changes(
     run_creation, creation_shell, operand
 ):
@@ -169,6 +170,20 @@ def test_mkdir_verbose_reports_every_created_directory(
     assert len(result.stdout) == 2
     assert "first" in result.stdout[0]
     assert "parent/second" in result.stdout[1]
+
+
+def test_mkdir_verbose_reports_only_created_operands(run_creation, creation_shell):
+    result = run_creation("mkdir -v first parent last")
+
+    assert_created(creation_shell, "work/first", NodeType.DIRECTORY)
+    assert_created(creation_shell, "work/last", NodeType.DIRECTORY)
+    assert node_at(creation_shell, "work/parent") is not None
+    assert result.status == 1
+    assert result.stderr
+    assert result.stdout == [
+        "mkdir: sucessfully created first",
+        "mkdir: sucessfully created last",
+    ]
 
 
 @pytest.mark.parametrize(

@@ -1314,7 +1314,9 @@ class CommandLine:
                             )
                         date = self._parse_touch_date(ctx.args.pop(0))
                     else:
-                        return CommandResult(1, stderr=[f"touch: unknown parameter is given ({arg})"])
+                        return CommandResult(
+                            1, stderr=[f"touch: unknown parameter is given ({arg})"]
+                        )
                 else:
                     for option in arg[1:]:
                         match option:
@@ -1750,14 +1752,14 @@ class CommandLine:
             arg: str = ctx.args.pop(0)
             if arg[0] == "-":
                 if arg == "-m" or arg == "--mode" or arg.startswith("--mode="):
-                    if (arg in ["-m", "--mode"]):
-                        if (not len(ctx.args)):
+                    if arg in ["-m", "--mode"]:
+                        if not len(ctx.args):
                             return CommandResult(
                                 1, stderr=[f"mkdir: parameter required for {arg}"]
                             )
                         arg = ctx.args.pop(0)
                     else:
-                        
+
                         arg = arg.split("=", 1)[1]
                     perms = determine_perms_fromstr(arg)
                     if isinstance(perms, str):
@@ -1791,7 +1793,7 @@ class CommandLine:
             if err:
                 stderr.append(f"mkdir: {err}")
                 status = 1
-            if verbose:
+            if verbose and not err:
                 stdout.append(f"mkdir: sucessfully created {name}")
         return CommandResult(status, stdout, stderr)
 
