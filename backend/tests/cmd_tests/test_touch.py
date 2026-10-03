@@ -346,7 +346,7 @@ def test_touch_error(cl, shell_basic: ShellState):
     assert CmdResult.stdout == []
 
     CmdResult = cl.enter_command("touch a/f1.txt", shell_basic)
-    assert CmdResult.stderr == ["No directory named a"]
+    assert CmdResult.stderr == ["touch: a/f1.txt: No directory named a"]
     assert CmdResult.stdout == []
 
     CmdResult = cl.enter_command("touch -a", shell_basic)

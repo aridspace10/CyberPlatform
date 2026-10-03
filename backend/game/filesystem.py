@@ -65,8 +65,9 @@ class FileSystem:
                     continue
 
             if self.current.get_type() == NodeType.FILE:
+                non_directory = self.current.name
                 self.current = saved
-                return f"{self.current.name} is not a directory"
+                return f"{non_directory} is not a directory"
 
             if self.current.access(cur) is None and creating:
                 inode = Inode(NodeType.DIRECTORY)
