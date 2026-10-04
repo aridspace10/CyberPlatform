@@ -413,11 +413,11 @@ class CommandLine:
         stdout = []
         stderr = []
         for filename in files or ["-"]:
-            node = ctx.stdin if filename == "-" else ctx.system.fs.get_file(filename)
-            if node is None:
-                stderr.append(f"cut: {filename} does not exist")
-                continue
+            node = ctx.stdin if filename == "-" else ctx.system.fs.resolve(filename)
             if isinstance(node, str):
+                if "/" not in filename and node.startswith("No directory named "):
+                    stderr.append(f"cut: {filename} does not exist")
+                    continue
                 stderr.append(f"cut: {filename}: {node}")
                 continue
             if node.get_type() == NodeType.DIRECTORY:
