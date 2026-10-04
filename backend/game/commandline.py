@@ -1973,8 +1973,12 @@ class CommandLine:
             else:
                 file = arg
         if file != "":
-            ctx.system.fs.search_withaccess(file)
-            ctx.stdin = ctx.system.fs.current
+            tmp = ctx.system.fs.resolve(file)
+            if isinstance(tmp, str):
+                return CommandResult(1, stderr=[f"uniq: {tmp}"])
+            if (tmp.get_type() != NodeType.FILE):
+                return CommandResult(1, stderr=[f"uniq: ../../..: Is a directory"])
+            ctx.stdin = tmp
         data = ctx.stdin.get_data()
         processed = []
         for line in data:
