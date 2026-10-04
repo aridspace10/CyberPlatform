@@ -16,6 +16,7 @@ def test_uniq_dot_paths_reject_directory(run_dot_command, dot_directory):
     operand, _ = dot_directory
     result = run_dot_command(f"uniq {operand}")
     assert_directory_error(result)
+    assert result.stderr == [f"uniq: {operand}: Is a directory"]
 
 
 def test_uniq_dot_paths_reject_invalid_traversal(run_dot_command, invalid_dot_path):

@@ -104,6 +104,7 @@ def test_sort_dot_paths_reject_directory(run_dot_command, dot_directory):
     operand, _ = dot_directory
     result = run_dot_command(f"sort {operand}")
     assert_directory_error(result)
+    assert result.stderr == [f"sort: {operand}: Is a directory"]
 
 
 def test_sort_dot_paths_reject_invalid_traversal(run_dot_command, invalid_dot_path):
@@ -131,7 +132,13 @@ def test_sort_dot_paths_output_file(run_dot_command, dot_shell, dot_prefix):
 
 def test_sort_dot_paths_reject_directory_output(run_dot_command, dot_directory):
     operand, _ = dot_directory
-    assert_failure(run_dot_command(f"sort -o {operand} ./data.txt"))
+    result = run_dot_command(f"sort -o {operand} ./data.txt")
+    assert_failure(result)
+    assert result.stderr == [f"sort: {operand}: Is a directory"]
+
+
+def test_sort_dot_paths_reject_invalid_output(run_dot_command, invalid_dot_path):
+    assert_failure(run_dot_command(f"sort -o {invalid_dot_path} ./data.txt"))
 
 
 def test_sort_dot_paths_read_parent_file(run_dot_command, dot_shell):

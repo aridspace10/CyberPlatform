@@ -333,9 +333,10 @@ class CommandLine:
 
     def sleep(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
-            return CommandResult(stdout=self.useage("sleep"))
+            return CommandResult(1, stdout=self.useage("sleep"))
         if not len(ctx.args):
-            return CommandResult(stderr=["sleep: Missing Argument"])
+            return CommandResult(1, stderr=["sleep: Missing Argument"])
+        status = 0
         val = ctx.args[0]
         last = val[-1]
         ty = "s"
@@ -347,7 +348,7 @@ class CommandLine:
         try:
             val = int(val)
         except ValueError:
-            return CommandResult(stderr=[f"expected int, got {val}"])
+            return CommandResult(1, stderr=[f"expected int, got {val}"])
 
         # Modify val for selected type
         if ty == "m":
@@ -366,7 +367,7 @@ class CommandLine:
 
         ctx.system.shell.foreground_pid = proc.pid
 
-        return CommandResult(interaction=Interaction(mode="foreground"))
+        return CommandResult(status, interaction=Interaction(mode="foreground"))
 
     def cut(self, ctx: CommandContext) -> CommandResult:
         delimiter = "\t"
@@ -1981,8 +1982,10 @@ class CommandLine:
             tmp = ctx.system.fs.resolve(file)
             if isinstance(tmp, str):
                 return CommandResult(1, stderr=[f"uniq: {tmp}"])
-            if (tmp.get_type() != NodeType.FILE):
-                return CommandResult(1, stderr=[f"uniq: ../../..: Is a directory"])
+            if tmp.get_type() == NodeType.DIRECTORY:
+                return CommandResult(1, stderr=[f"uniq: {file}: Is a directory"])
+            if tmp.get_type() != NodeType.FILE:
+                return CommandResult(1, stderr=[f"uniq: {file}: Not a regular file"])
             ctx.stdin = tmp
         data = ctx.stdin.get_data()
         processed = []
@@ -2055,12 +2058,16 @@ class CommandLine:
             else:
                 file = arg
         if file == "" or file == "-":
-            content = ctx.stdin.get_data()
+            content = list(ctx.stdin.get_data())
         else:
-            saved_current = ctx.system.fs.current
-            ctx.system.fs.search(file)
-            content = ctx.system.fs.current.get_data()
-            ctx.system.fs.current = saved_current
+            tmp = ctx.system.fs.resolve(file)
+            if isinstance(tmp, str):
+                return CommandResult(1, stderr=[f"sort: {tmp}"])
+            if tmp.get_type() == NodeType.DIRECTORY:
+                return CommandResult(1, stderr=[f"sort: {file}: Is a directory"])
+            if tmp.get_type() != NodeType.FILE:
+                return CommandResult(1, stderr=[f"sort: {file}: Not a regular file"])
+            content = list(tmp.get_data())
         for idx, line in enumerate(content):
             if igblanks:
                 content[idx] = line.lstrip()
@@ -2099,12 +2106,20 @@ class CommandLine:
                     r.append(modified.pop(vid))
             modified = r
         if output:
-            saved_current = ctx.system.fs.current
-            # If file don't exist already
-            if ctx.system.fs.search(output) != "":
-                ctx.system.fs.add_file(output)
-                ctx.system.fs.search(output)
-            ctx.system.fs.current.set_data(modified)
-            ctx.system.fs.current = saved_current
+            target = ctx.system.fs.resolve(output)
+            if isinstance(target, str):
+                destination = ctx.system.fs.resolve_parent(output)
+                if isinstance(destination, str):
+                    return CommandResult(1, stderr=[f"sort: {output}: {destination}"])
+                parent, name = destination
+                error = parent.add_child(name, Inode(NodeType.FILE))
+                if error:
+                    return CommandResult(1, stderr=[f"sort: {output}: {error}"])
+                target = parent.access(name)
+            elif target.get_type() == NodeType.DIRECTORY:
+                return CommandResult(1, stderr=[f"sort: {output}: Is a directory"])
+            elif target.get_type() != NodeType.FILE:
+                return CommandResult(1, stderr=[f"sort: {output}: Not a regular file"])
+            target.set_data(modified)
             return CommandResult(0)
         return CommandResult(0, stdout=modified)
