@@ -826,7 +826,7 @@ class CommandLine:
     def wc(self, ctx: CommandContext) -> CommandResult:
         stdout = []
         stderr = []
-
+        status = 0
         words = bytes_flag = chars = lines = False
         files = []
 
@@ -853,24 +853,24 @@ class CommandLine:
         total_chars = 0
         total_bytes = 0
 
-        cur = ctx.system.fs.current
         for file in files:
             if file == "-":
-                ctx.system.fs.current = ctx.stdin
+                node = ctx.stdin
             else:
                 # Get filenode
-                if err := ctx.system.fs.search(file):
-                    stderr.append(err)
+                node = ctx.system.fs.resolve(file)
+                if isinstance(node, str):
+                    stderr.append(node)
+                    status = 1
                     continue
 
                 # Check for file
-                if ctx.system.fs.current.get_type() == NodeType.DIRECTORY:
+                if node.get_type() == NodeType.DIRECTORY:
                     stderr.append(f"wc: cannot perform operation on directory ({file})")
+                    status = 1
                     continue
 
-            node = ctx.system.fs.current
             data = node.get_data()
-            ctx.system.fs.current = cur
 
             lcount = len(data)
             if data and not node.inode.has_trailing_newline:
@@ -922,7 +922,7 @@ class CommandLine:
 
             stdout.append(" ".join(parts))
 
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def cp(self, ctx: CommandContext) -> CommandResult:
         verbose = False
@@ -1539,6 +1539,7 @@ class CommandLine:
             return CommandResult(0, stdout=self.useage("tail"))
         stdout = []
         stderr = []
+        status = 0
         lines = -1
         byte = -1
         ahead = False
@@ -1601,6 +1602,7 @@ class CommandLine:
                 lines = int(arg[1:])
             else:
                 return CommandResult(1, stderr=[f"tail: unknown argument given {arg}"])
+
         files = ctx.args
         if len(files) == 0:
             files = ["-"]
@@ -1617,16 +1619,19 @@ class CommandLine:
                 content = ctx.stdin
                 ty = content.get_type()
             else:
-                ty = ctx.system.fs.search_withaccess(file)
-                content = ctx.system.fs.current
-                ctx.system.fs.current = saved_current
+                content = ctx.system.fs.resolve(file)
+                if isinstance(content, str):
+                    return CommandResult(1, stderr=[f"tail: {file} can not be found"])
+                ty = content.get_type()
 
             # Check is file
             if ty == NodeType.DIRECTORY:
+                status = 1 
                 stderr.append(f"tail: {file} is a directory")
                 continue
 
             if ty is None:
+                status = 1
                 stderr.append(f"tail: cannot open '{file}'")
                 continue
 
@@ -1661,7 +1666,7 @@ class CommandLine:
                     decoded = trimmed.decode("utf-8", errors="ignore")
                     for line in decoded.split("\n"):
                         stdout.append(line)
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def rm(self, ctx: CommandContext) -> CommandResult:
         recurse, verbose, interactive = False, False, False
