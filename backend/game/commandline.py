@@ -538,14 +538,14 @@ class CommandLine:
         stdout = []
         stderr = []
         for start in starting:
-            if err := ctx.system.fs.search(start):
-                stderr.append(err)
+            start_node = ctx.system.fs.resolve(start)
+            if isinstance(start_node, str):
+                stderr.append(start_node)
                 continue
 
-            start_node = ctx.system.fs.current  # AFTER search
             toprints, execs = start_node.find(node, ".")
             stdout.extend(toprints)
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def sed(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
