@@ -559,6 +559,7 @@ class CommandLine:
             )
         files = []
         expressions = []
+        status = 0
         backup = ""
         suppress_print = False
         while len(ctx.args) and ctx.args[0][0] == "-":
@@ -592,28 +593,34 @@ class CommandLine:
             else:
                 files.append(arg)
 
-        cur = ctx.system.fs.current
         stdout = []
         stderr = []
         for file in files:
-            # Get file data
-            if err := ctx.system.fs.search(file):
-                stderr.append(f"sed: {err}")
+            source = ctx.system.fs.resolve(file)
+            if isinstance(source, str):
+                stderr.append(f"sed: {source}")
+                status = 1
+                continue
+            if source.get_type() == NodeType.DIRECTORY:
+                stderr.append(f"sed: {file}: Is a directory")
+                status = 1
+                continue
+            if source.get_type() != NodeType.FILE:
+                stderr.append(f"sed: {file}: Not a regular file")
+                status = 1
                 continue
 
-            old = ctx.system.fs.current.get_data()
+            old = list(source.get_data())
 
             # Save backup if request
             if backup not in ("", "-i"):
                 inode = Inode(NodeType.FILE)
                 inode.set_data(old)
-                assert ctx.system.fs.current.parent is not None
-                ctx.system.fs.current.parent.add_child(
-                    backup.replace("-i", ctx.system.fs.current.name, 1), inode
-                )
+                assert source.parent is not None
+                source.parent.add_child(backup.replace("-i", source.name, 1), inode)
 
             # Apply commands to line
-            new = old
+            new = old.copy()
             printed = []
             for expression in expressions:
                 # Setup
@@ -715,8 +722,9 @@ class CommandLine:
                         index += 1
                     for i, line in enumerate(new):
                         if single is not None:
-                            if (not rev_single and single != i) or (
-                                rev_single and single == i
+                            selected = len(new) - 1 if single == -1 else single
+                            if (not rev_single and selected != i) or (
+                                rev_single and selected == i
                             ):
                                 continue
                         elif between != []:
@@ -816,13 +824,12 @@ class CommandLine:
                 else:
                     return CommandResult(1, stderr=["sed: unknown expression given"])
             if backup:
-                ctx.system.fs.current.set_data(new)
+                source.set_data(new)
             elif suppress_print:
                 stdout.extend(printed)
             else:
                 stdout.extend(new)
-            ctx.system.fs.current = cur
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def wc(self, ctx: CommandContext) -> CommandResult:
         stdout = []
