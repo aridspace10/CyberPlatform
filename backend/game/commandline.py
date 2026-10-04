@@ -1217,7 +1217,6 @@ class CommandLine:
             return CommandResult(1, stderr=["grep: pattern not given"])
         if not len(files):
             files = ["-"]
-        saved_current = ctx.system.fs.current
         if matchwhole:
             match_cond_func = match_whole_word
         elif matchline:
@@ -1249,16 +1248,15 @@ class CommandLine:
                         return
 
         for file in files:
-            saved_current = ctx.system.fs.current
             if file == "-":
                 ty = ctx.stdin.get_type()
-                ctx.system.fs.current = ctx.stdin
+                file_node = ctx.stdin
             else:
-                err = ctx.system.fs.search(file)
-                if err:
+                file_node = ctx.system.fs.resolve(file)
+                if isinstance(file_node, str):
                     stderr.append(f"grep: {file} can not be found")
                     continue
-                ty = ctx.system.fs.current.get_type()
+                ty = file_node.get_type()
             if ty == NodeType.DIRECTORY:
                 if recursive:
 
@@ -1269,19 +1267,19 @@ class CommandLine:
                             else:
                                 search_file(item)
 
-                    pointer = ctx.system.fs.current
-                    recursively_search(pointer)
+                    recursively_search(file_node)
                 else:
                     stderr.append("Can't recursivly search directory without -r option")
             elif ty == NodeType.FILE:
-                search_file(ctx.system.fs.current)
+                search_file(file_node)
             else:
                 stderr.append(f"Can't open file/directory given: {file}")
-            ctx.system.fs.current = saved_current
         if countmatch:
-            return CommandResult(0, stdout=[str(len(stdout))])
+            return CommandResult(
+                1 if stderr else 0, stdout=[str(len(stdout))], stderr=stderr
+            )
         else:
-            return CommandResult(0, stdout, stderr)
+            return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def chmod(self, ctx: CommandContext) -> CommandResult:
         recurse = False
