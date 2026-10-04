@@ -275,7 +275,10 @@ class CommandLine:
                             )
                         word += sys.shell.vars[part.name]
                 args.append(word)
-            return self.execute(args, fdin, sys)
+            try:
+                return self.execute(args, fdin, sys)
+            except:
+                return CommandResult(1, stderr=["Uncaught Exception"])
         else:
             # save state
             saved_cwd = sys.shell.cwd
