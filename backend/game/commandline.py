@@ -1958,34 +1958,32 @@ class CommandLine:
                             return CommandResult(2, stderr=["Unknown Argument Given"])
         target = ctx.args[0]
         destination = ctx.args[1]
-        saved_current = ctx.system.fs.current
-        if (err := ctx.system.fs.search(target)) != "" and linkty == "hard":
-            return CommandResult(1, stderr=[err])
-        target_inode = ctx.system.fs.current.inode
-        # Check cause inode of dir is nothing
-        if ctx.system.fs.current.inode.type == NodeType.DIRECTORY and linkty == "hard":
-            ctx.system.fs.current = saved_current
-            return CommandResult(1, stderr=["Cannot hard link directory"])
-        # Reset Pointer
-        ctx.system.fs.current = saved_current
-        # Search for the destination and check it doesn't exist
-        if ctx.system.fs.search(destination) == "":
-            ctx.system.fs.current = saved_current
-            return CommandResult(1, stderr=[f"ln: {destination}: File exists"])
-        # Reset pointer after search
-        ctx.system.fs.current = saved_current
-        ctx.system.fs.add_file(destination)
-        new_file = ctx.system.fs.get_file(destination)
-        if new_file is None or isinstance(new_file, str):
-            return CommandResult(1, stderr=["Could not create link"])
+        target_inode = None
         if linkty == "hard":
-            new_file.inode = target_inode
-            target_inode.link_count += 1
+            source = ctx.system.fs.resolve(target)
+            if isinstance(source, str):
+                return CommandResult(1, stderr=[source])
+            if source.get_type() == NodeType.DIRECTORY:
+                return CommandResult(1, stderr=["Cannot hard link directory"])
+            target_inode = source.inode
+
+        resolved_destination = ctx.system.fs.resolve_parent(destination)
+        if isinstance(resolved_destination, str):
+            return CommandResult(1, stderr=[f"ln: {resolved_destination}"])
+        parent, name = resolved_destination
+        if parent.access(name) is not None:
+            return CommandResult(1, stderr=[f"ln: {destination}: File exists"])
+
+        if linkty == "hard":
+            inode = target_inode
         else:
             inode = Inode(NodeType.SYMLINK)
             inode.set_data([target])
-            new_file.inode = inode
-        ctx.system.fs.current = saved_current
+
+        if error := parent.add_child(name, inode):
+            return CommandResult(1, stderr=[f"ln: {error}"])
+        if linkty == "hard":
+            inode.link_count += 1
         return CommandResult()
 
     def uniq(self, ctx: CommandContext) -> CommandResult:
