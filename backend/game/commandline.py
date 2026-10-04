@@ -1883,10 +1883,22 @@ class CommandLine:
         if not ctx.args:
             return CommandResult(1, stderr=["cd: must give argument"])
         arg = ctx.args[0]
+        sc = ctx.system.fs.current
         if error := ctx.system.fs.search(arg):
+            ctx.system.fs.current = sc
             return CommandResult(1, stderr=["cd:" + error])
-        ctx.system.shell.cwd += "/" + arg
-        ctx.system.fs.cwd += "/" + arg
+        if (ctx.system.fs.current.get_type() != NodeType.DIRECTORY):
+            name = ctx.system.fs.current.name
+            ctx.system.fs.current = sc
+            return CommandResult(1, stderr=[f"cd: {name} is not a directory"])
+        parts = []
+        node = ctx.system.fs.current
+        while node.parent is not None:
+            parts.append(node.name)
+            node = node.parent
+        cwd = "/" + "/".join(reversed(parts))
+        ctx.system.shell.cwd = cwd
+        ctx.system.fs.cwd = cwd
         return CommandResult(0)
 
     def ln(self, ctx: CommandContext) -> CommandResult:
