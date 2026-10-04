@@ -933,117 +933,143 @@ class CommandLine:
         return CommandResult(status, stdout, stderr)
 
     def cp(self, ctx: CommandContext) -> CommandResult:
-        verbose = False
-        # interactive = False
-        # clobbar = True
+        if "--help" in ctx.args:
+            return CommandResult(0, stdout=self.useage("cp"))
+
+        args = list(ctx.args)
         recursive = False
         verbose = False
-        # dereference = True
-        # hardlink = False
-        # symlink = False
-        # preserve = False
-        # update = False
-        files = []
-        stdout = []
-        stderr = []
-
-        if "--help" in ctx.args:
-            return CommandResult(stdout=self.useage("cp"))
-
-        while len(ctx.args) > 1:
-            arg = ctx.args[0]
-            if arg[0] == "-":
-                for option in arg[1:]:
-                    match (option):
-                        # case "n":
-                        #     clobbar = False
-                        # case "i":
-                        #     interactive = True
-                        case "r":
-                            recursive = True
-                        case "R":
-                            recursive = False
-                        # case "u":
-                        #     update = True
-                        # case "L":
-                        #     dereference = True
-                        # case "d":
-                        #     dereference = False
-                        case "v":
-                            verbose = True
-            else:
-                files.append(arg)
-            ctx.args = ctx.args[1:]
-        target = ctx.args[0]
-        tmp = ctx.system.fs.current
-        destination_created = False
-        if ctx.system.fs.search(target):
-            # Directory/file doesn't exist
-            if len(files) == 1:
-                destination_created = True
-                # peek at source type before creating destination
-                ctx.system.fs.search(files[0])
-                source_peek = ctx.system.fs.current
-                ctx.system.fs.current = tmp
-
-                if source_peek.get_type() == NodeType.DIRECTORY:
-                    ctx.system.fs.add_directory(target)
+        while args and args[0].startswith("-") and args[0] != "-":
+            option_arg = args.pop(0)
+            for option in option_arg[1:]:
+                if option in ("r", "R"):
+                    recursive = option == "r"
+                elif option == "v":
+                    verbose = True
                 else:
-                    ctx.system.fs.add_file(target)
-                ctx.system.fs.search(target)
-            else:
+                    return CommandResult(
+                        1, stderr=[f"cp: unknown argument ({option}) given"]
+                    )
+        if len(args) < 2:
+            return CommandResult(1, stderr=["cp: expected at least two arguments"])
+
+        sources, target_path = args[:-1], args[-1]
+        fs = ctx.system.fs
+        stdout: list[str] = []
+        stderr: list[str] = []
+        target = fs.resolve(target_path)
+        target_exists = not isinstance(target, str)
+        target_parent = None
+        target_name = None
+        if not target_exists:
+            parent_info = fs.resolve_parent(target_path)
+            if isinstance(parent_info, str):
+                return CommandResult(1, stderr=[f"cp: {parent_info}"])
+            target_parent, target_name = parent_info
+            existing_child = target_parent.access(target_name)
+            if existing_child is not None:
+                target = existing_child
+                target_exists = True
+            elif len(sources) > 1:
                 return CommandResult(
-                    1, stderr=[f"cp: target '{target}' is not a directory"]
+                    1, stderr=[f"cp: target '{target_path}' is not a directory"]
                 )
 
-        target_fnode = ctx.system.fs.current
-        target_ty = target_fnode.get_type()
-        ctx.system.fs.current = tmp
-        for file in files:
-            ctx.system.fs.current = tmp
-            ctx.system.fs.search(file)
-            source_fnode = ctx.system.fs.current
-            source_ty = source_fnode.get_type()
-            if source_ty == NodeType.DIRECTORY and not recursive:
-                stderr.append(f"cp: -r not specified; omitting directory '{file}'")
+        resolved_sources: list[tuple[str, FileNode]] = []
+        for source_path in sources:
+            source = fs.resolve(source_path)
+            if isinstance(source, str):
+                return CommandResult(
+                    1, stderr=[f"cp: cannot stat '{source_path}': {source}"]
+                )
+            resolved_sources.append((source_path, source))
+
+        target_type = target.get_type() if target_exists else None
+        for source_path, source in resolved_sources:
+            if target_exists and source is target:
+                return CommandResult(
+                    1,
+                    stderr=[
+                        f"cp: '{source_path}' and '{target_path}' are the same file"
+                    ],
+                )
+            if source.get_type() != NodeType.DIRECTORY:
                 continue
-            if source_ty == NodeType.DIRECTORY:
-                if target_ty == NodeType.FILE:
-                    stderr.append(
-                        f"cp: cannot overwrite non-directory '{target}' "
-                        f"with directory '{file}'"
+            if not recursive:
+                stderr.append(
+                    f"cp: -r not specified; omitting directory '{source_path}'"
+                )
+                continue
+            if target_exists and target_type == NodeType.FILE:
+                return CommandResult(
+                    1,
+                    stderr=[
+                        f"cp: cannot overwrite non-directory '{target_path}' "
+                        f"with directory '{source_path}'"
+                    ],
+                )
+            ancestor = target if target_exists else target_parent
+            while ancestor is not None:
+                if ancestor is source:
+                    return CommandResult(
+                        1,
+                        stderr=[
+                            f"cp: cannot copy a directory, '{source_path}', "
+                            f"into itself, '{target_path}'"
+                        ],
                     )
+                ancestor = ancestor.parent
+
+        def clone_with_name(node: FileNode, name: str, parent: FileNode) -> FileNode:
+            clone = copy.deepcopy(node)
+            clone.name = name
+            clone.parent = parent
+
+            def reset_parents(item: FileNode) -> None:
+                for child in item.items:
+                    child.parent = item
+                    reset_parents(child)
+
+            reset_parents(clone)
+            return clone
+
+        for source_path, source in resolved_sources:
+            source_type = source.get_type()
+            if source_type == NodeType.DIRECTORY and not recursive:
+                continue
+            if target_exists and target_type == NodeType.DIRECTORY:
+                copied = clone_with_name(source, source.name, target)
+                if target.access(copied.name) is not None:
+                    return CommandResult(
+                        1,
+                        stdout,
+                        stderr
+                        + [
+                            f"cp: cannot create '{target_path}/{copied.name}': "
+                            "File exists"
+                        ],
+                    )
+                target.items.append(copied)
+            elif target_exists and target_type == NodeType.FILE:
+                if source_type != NodeType.FILE:
                     continue
-                elif target_ty == NodeType.DIRECTORY:
-                    if destination_created:
-                        target_fnode.items.extend(copy.deepcopy(source_fnode.items))
-                    else:
-                        target_fnode.items.append(copy.deepcopy(source_fnode))
-                    if verbose:
-                        stdout.append(f"cp: Copied '{file}' to '{target}'")
-                elif target_ty == NodeType.SYMLINK:
-                    pass
-            elif source_ty == NodeType.FILE:
-                if target_ty == NodeType.FILE:
-                    target_fnode.inode = source_fnode.inode
-                    if verbose:
-                        stdout.append(f"cp: Copied '{file}' to '{target}'")
-                elif target_ty == NodeType.DIRECTORY:
-                    target_fnode.items.append(source_fnode)
-                    if verbose:
-                        stdout.append(f"cp: Copied '{file}' to '{target}'")
-                elif target_ty == NodeType.SYMLINK:
-                    pass
-            elif source_ty == NodeType.SYMLINK:
-                if target_ty == NodeType.FILE:
-                    pass
-                elif target_ty == NodeType.DIRECTORY:
-                    pass
-                elif target_ty == NodeType.SYMLINK:
-                    pass
-            ctx.system.fs.current = tmp
-        ctx.system.fs.current = tmp
-        return CommandResult(1, stdout, stderr)
+                target.inode = copy.deepcopy(source.inode)
+            else:
+                if target_parent is None or target_name is None:
+                    return CommandResult(
+                        1,
+                        stdout,
+                        stderr + [f"cp: invalid destination '{target_path}'"],
+                    )
+                copied = clone_with_name(source, target_name, target_parent)
+                target_parent.items.append(copied)
+                target = copied
+                target_type = copied.get_type()
+                target_exists = True
+            if verbose:
+                stdout.append(f"cp: Copied '{source_path}' to '{target_path}'")
+
+        return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def mv(self, ctx: CommandContext) -> CommandResult:
         verbose = False
