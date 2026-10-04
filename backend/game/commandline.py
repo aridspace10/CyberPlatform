@@ -1393,6 +1393,7 @@ class CommandLine:
     def cat(self, ctx: CommandContext) -> CommandResult:
         stdout = []
         stderr = []
+        status = 0
         numbering = False
         if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("cat"))
@@ -1414,10 +1415,16 @@ class CommandLine:
             if filename == "-":
                 content = ctx.stdin
             else:
-                content = ctx.system.fs.get_file(filename)
+                content = ctx.system.fs.resolve(filename)
 
             if content is None or isinstance(content, str):
                 stderr.append(f"File {filename} does not exist")
+                status = 1
+                continue
+
+            if content.get_type() == NodeType.DIRECTORY:
+                stderr.append(f"cat: Non directory is given")
+                status = 1
                 continue
 
             for line in content.get_data():
@@ -1426,9 +1433,7 @@ class CommandLine:
                     line_number += 1
                 stdout.append(line)
 
-        if stderr:
-            return CommandResult(1, stdout, stderr)
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def head(self, ctx: CommandContext) -> CommandResult:
         lines = 10
