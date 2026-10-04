@@ -53,9 +53,70 @@ def test_mv_dot_paths_reject_invalid_destination(run_dot_command, invalid_dot_pa
     assert_failure(run_dot_command(f"mv ./data.txt {invalid_dot_path}"))
 
 
+@pytest.mark.parametrize(
+    ("source", "target", "node_name"),
+    [
+        ("data.txt", "archive", "data.txt"),
+        ("branch", "archive.txt", "branch"),
+    ],
+)
+def test_mv_missing_target_keeps_source_type(
+    run_dot_command, dot_shell, source, target, node_name
+):
+    current = dot_shell.fs.current
+    original = current.access(node_name)
+
+    assert_success(run_dot_command(f"mv {source} {target}", unchanged=False))
+
+    assert current.access(node_name) is None
+    assert current.access(target) is original
+    assert original.parent is current
+
+
+def test_mv_replaces_existing_file(run_dot_command, dot_shell):
+    current = dot_shell.fs.current
+    source = current.access("data.txt")
+    old_target = current.access(".hidden")
+
+    assert_success(run_dot_command("mv data.txt .hidden", unchanged=False))
+
+    assert current.access("data.txt") is None
+    assert current.access(".hidden") is source
+    assert all(item is not old_target for item in current.items)
+    assert source.parent is current
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "mv branch branch/child",
+        "mv branch branch/.",
+        "mv data.txt branch data.txt",
+    ],
+)
+def test_mv_rejects_invalid_destination_relationship(run_dot_command, command):
+    assert_failure(run_dot_command(command))
+
+
+def test_mv_multiple_sources_keep_parent_links(run_dot_command, dot_shell):
+    current = dot_shell.fs.current
+    branch = current.access("branch")
+    data = current.access("data.txt")
+    hidden = current.access(".hidden")
+
+    assert_success(
+        run_dot_command("mv ./data.txt ./.hidden ./branch", unchanged=False)
+    )
+
+    assert branch.access("data.txt") is data
+    assert branch.access(".hidden") is hidden
+    assert data.parent is branch
+    assert hidden.parent is branch
+
+
 def test_mv_rename(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("mv f1.txt", shell_basic)
-    assert CmdResult.stderr == ["cp: expected at least two arguments"]
+    assert CmdResult.stderr == ["mv: expected at least two arguments"]
     assert CmdResult.stdout == []
     # rename
     CmdResult = cl.enter_command("mv f1.txt abc.txt", shell_basic)

@@ -1043,70 +1043,85 @@ class CommandLine:
         stderr = []
         if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("mv"))
-        if len(ctx.args) < 2:
-            stderr.append("cp: expected at least two arguments")
-        files = []
-        while len(ctx.args) and len(ctx.args[0]) and ctx.args[0][0] == "-":
-            arg = ctx.args.pop(0)
+        args = ctx.args.copy()
+        while args and args[0].startswith("-") and args[0] != "-":
+            arg = args.pop(0)
             for option in arg[1:]:
                 if option == "v":
                     verbose = True
-        files = ctx.args[:-1]
-        target = ctx.args[-1]
-        tmp = ctx.system.fs.current
-        if len(files) == 1:
-            ftype = ctx.system.fs.search_withaccess(files[0])
-            if ftype is None:
-                return CommandResult(0, stderr=[f"mv: could not find file {files[0]}"])
-            ttype = NodeType.DIRECTORY if len(target.split(".")) == 1 else NodeType.FILE
-            if ftype == ttype:
-                if verbose:
-                    stdout.append(f"Renamed {ctx.system.fs.current.name} -> {target}")
-                ctx.system.fs.current.name = target
-                ctx.system.fs.current = tmp
-                return CommandResult(0, stdout, stderr)
-            elif ftype == NodeType.FILE and ttype == NodeType.DIRECTORY:
-                if (
-                    ctx.system.fs.current.parent is None
-                ):  # literally impossible to be true
-                    return CommandResult(2)  # pragma: no cover
-                ctx.system.fs.current = ctx.system.fs.current.parent
-                saved = None
-                for idx, item in enumerate(ctx.system.fs.current.items):
-                    if item.name == files[0]:
-                        saved = item
-                        ctx.system.fs.current.items.pop(idx)
-                        break
-                if saved is None:
+                else:
                     return CommandResult(
-                        2, stderr=[f"mv: could not find file {target}"]
+                        1, stderr=[f"mv: unknown argument ({option}) given"]
                     )
-                ctx.system.fs.search(target)
-                ctx.system.fs.current.items.append(saved)
-                if verbose:
-                    stdout.append(f"Moved {files[0]} to {target}")
-                ctx.system.fs.current = tmp
-                return CommandResult(0, stdout, stderr)
-        # multiple files were given
-        ctx.system.fs.search(target)
-        targetfnode = ctx.system.fs.current
-        ctx.system.fs.current = tmp
+        if len(args) < 2:
+            return CommandResult(1, stderr=["mv: expected at least two arguments"])
+
+        files, target = args[:-1], args[-1]
+        fs = ctx.system.fs
+        target_node = fs.resolve(target)
+        target_directory = (
+            not isinstance(target_node, str)
+            and target_node.get_type() == NodeType.DIRECTORY
+        )
+        if len(files) > 1 and not target_directory:
+            return CommandResult(
+                1, stderr=[f"mv: target '{target}' is not a directory"]
+            )
+
+        if target_directory:
+            destination_parent = target_node
+            destination_name = None
+        else:
+            destination = fs.resolve_parent(target)
+            if isinstance(destination, str):
+                return CommandResult(1, stderr=[f"mv: {target}: {destination}"])
+            destination_parent, destination_name = destination
+
         for file in files:
-            ftype = ctx.system.fs.search(file)
-            if ftype != "":
+            source = fs.resolve_parent(file)
+            if isinstance(source, str):
                 stderr.append(f"mv: could not find file {file}")
-            fnode = ctx.system.fs.current
-            if fnode.parent is None:
                 continue
-            fnode.parent.items = [
-                item for item in fnode.parent.items if item.name != fnode.name
+            source_parent, source_name = source
+            source_node = source_parent.access(source_name)
+            if source_node is None:
+                stderr.append(f"mv: could not find file {file}")
+                continue
+
+            parent = destination_parent
+            name = source_name if destination_name is None else destination_name
+            if source_node.get_type() == NodeType.DIRECTORY:
+                ancestor = parent
+                while ancestor is not None and ancestor is not source_node:
+                    ancestor = ancestor.parent
+                if ancestor is source_node:
+                    stderr.append(f"mv: cannot move '{file}' into itself")
+                    continue
+
+            existing = parent.access(name)
+            if existing is source_node:
+                stderr.append(f"mv: '{file}' and '{target}' are the same file")
+                continue
+            if existing is not None:
+                if (
+                    source_node.get_type() != NodeType.FILE
+                    or existing.get_type() != NodeType.FILE
+                ):
+                    stderr.append(f"mv: cannot overwrite '{target}' with '{file}'")
+                    continue
+                parent.items = [item for item in parent.items if item is not existing]
+
+            source_parent.items = [
+                item for item in source_parent.items if item is not source_node
             ]
-            ctx.system.fs.current = targetfnode
-            ctx.system.fs.current.items.append(fnode)
+            source_node.name = name
+            source_node.parent = parent
+            parent.items.append(source_node)
             if verbose:
-                stdout.append(f"Moved {file} to {target}")
-            ctx.system.fs.current = tmp
-        return CommandResult(0, stdout, stderr)
+                action = "Moved" if target_directory else "Renamed"
+                connector = "to" if target_directory else "->"
+                stdout.append(f"{action} {file} {connector} {target}")
+        return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def grep(self, ctx: CommandContext) -> CommandResult:
         case_insentive = False
