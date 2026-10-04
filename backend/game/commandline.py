@@ -1490,6 +1490,7 @@ class CommandLine:
         files = []
         stdout = []
         stderr = []
+        status = 0
         while ctx.args:
             arg = ctx.args.pop(0)
             if arg == "-":
@@ -1521,19 +1522,21 @@ class CommandLine:
                 files.append(arg)
         if not len(files):
             files = [ctx.stdin]
-        saved_current = ctx.system.fs.current
         for file in files:
             if isinstance(file, FileNode):
                 content = file
                 ty = content.get_type()
             else:
-                ty = ctx.system.fs.search_withaccess(file)
-                content = ctx.system.fs.current
+                content = ctx.system.fs.resolve(file)
+                if isinstance(content, str):
+                    stderr.append(f"head: {file}: {content}")
+                    status = 1
+                    continue
+                ty = content.get_type()
             if ty == NodeType.DIRECTORY:
                 stderr.append(f"head: {file} is a directory")
+                status = 1
                 continue
-            if content is None or isinstance(content, str):
-                return CommandResult(1)
             counter = 0
             data = content.get_data()
             if data == "":
@@ -1563,8 +1566,7 @@ class CommandLine:
                     counter += 1
                     if b == -1 and counter >= lines:
                         break
-            ctx.system.fs.current = saved_current
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def tail(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
