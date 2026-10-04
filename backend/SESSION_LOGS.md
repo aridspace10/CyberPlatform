@@ -25,8 +25,19 @@ directory like access to session data, and avoid typing credentials into command
 Authentication and join packets are not recorded. Exception messages and
 tracebacks may include values from command input.
 
+In the session's **General** tab, a member can download a ZIP containing their
+own activity and error records. The download endpoint requires the user's bearer
+token and verifies their session membership; it filters both logs to that user's
+ID so another player's commands and tracebacks are not included. Users can attach
+the downloaded ZIP to a support report.
+
 Logs remain on disk across disconnects and server restarts. They currently have no
 automatic expiry; operators should archive or remove session directories older
 than their chosen retention period. A 30-day retention period is a reasonable
 starting point for a development deployment. Keep any logs needed to investigate
 an active issue before pruning them.
+
+For a hosted frontend, set `VITE_BACKEND_URL` at build time to the backend's
+public HTTP(S) origin. Set `CYBERPLATFORM_CORS_ORIGINS` on the backend to a
+comma-separated list of the frontend origins that may call it. The defaults keep
+local development on `http://localhost:5173` and `http://localhost:8000`.

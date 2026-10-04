@@ -1,4 +1,6 @@
-const API = "http://localhost:8000/api";
+import { API_URL } from "./config";
+
+const API = API_URL;
 
 export async function enterTutorial(user_id) {
     const res = await fetch(`${API}/sandbox/${user_id}`, {
@@ -35,4 +37,25 @@ export async function createSession(config) {
         throw new Error(data.detail || "Could not create the session");
     }
     return data;
+}
+
+export async function downloadSessionDiagnostics(sessionId) {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API}/session/${sessionId}/diagnostics`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Could not download session diagnostics");
+    }
+
+    const downloadUrl = URL.createObjectURL(await res.blob());
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `session-${sessionId}-diagnostics.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
 }

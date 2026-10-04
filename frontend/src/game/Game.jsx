@@ -11,6 +11,7 @@ import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
 import ChatTab from "../components/ChatTab"
+import { WEBSOCKET_URL } from "../api/config";
 import "./Gamescreen.css"
 
 export default function Game() {
@@ -36,9 +37,7 @@ export default function Game() {
     useEffect(() => {
         if (!user || wsRef.current) return;
 
-        const socket = new WebSocket(
-            `ws://localhost:8000/ws/${sessionId}`
-        );
+        const socket = new WebSocket(`${WEBSOCKET_URL}/ws/${sessionId}`);
 
         socket.onopen = async () => {
             socket.send(JSON.stringify({

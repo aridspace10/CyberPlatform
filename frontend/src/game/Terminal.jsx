@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./Terminal.css";
+import { WEBSOCKET_URL } from "../api/config";
 
 export default function Terminal() {
 
@@ -34,9 +35,7 @@ export default function Terminal() {
     if (!username) return;
     if (wsRef.current) return;
 
-    const socket = new WebSocket(
-      `ws://localhost:8000/ws/${sessionId}`
-    );
+    const socket = new WebSocket(`${WEBSOCKET_URL}/ws/${sessionId}`);
 
     socket.onopen = () => {
       socket.send(JSON.stringify({

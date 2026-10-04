@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import re
@@ -11,6 +12,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zipfile import ZIP_DEFLATED, ZipFile
 
 _locks_guard = threading.Lock()
 _session_locks: dict[Path, threading.Lock] = {}
@@ -113,6 +115,36 @@ class SessionLogger:
                 ),
             },
         )
+
+    def export_user_archive(self, user_id: str) -> bytes:
+        """Return only this user's activity and errors as a downloadable ZIP."""
+        archive_buffer = io.BytesIO()
+        with self._lock:
+            with ZipFile(archive_buffer, mode="w", compression=ZIP_DEFLATED) as archive:
+                for path in (self.activity_path, self.error_path):
+                    records = self._read_user_records(path, str(user_id))
+                    archive.writestr(path.name, records)
+        return archive_buffer.getvalue()
+
+    @staticmethod
+    def _read_user_records(path: Path, user_id: str) -> str:
+        try:
+            with path.open("r", encoding="utf-8") as log_file:
+                records = []
+                for line in log_file:
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    belongs_to_user = (
+                        isinstance(record, dict)
+                        and str(record.get("user_id")) == user_id
+                    )
+                    if belongs_to_user:
+                        records.append(line)
+                return "".join(records)
+        except OSError:
+            return ""
 
     def _append(self, path: Path, record: dict[str, Any]) -> None:
         try:
