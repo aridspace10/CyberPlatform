@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import datetime
-import random
-from game.inode import Inode, NodeType
-from game.Parser import Node, NotNode, OrNode, AndNode, FilterNode, ExecNode
 import fnmatch
+import random
 from typing import List, Tuple
 
 from game.inode import Inode, NodeType
@@ -232,22 +230,42 @@ class FileNode:
             extras = {}
 
         content: list[list] = []
-        items = self.items
-        if "showhiddenall" in extras:
-            items.append(self)
-            if self.parent is not None:
-                items.append(self.parent)
+        items: list[tuple[FileNode, str | None]] = [
+            (item, None) for item in self.items
+        ]
 
-        for item in items:
-            if (item.name[0] == ".") and (
-                "showhiddenall" not in extras or "showhidden" not in extras
+        if "showhiddenall" in extras:
+            # Dot entries are virtual. At root, '..' refers back to root.
+            items.append((self, "."))
+            items.append((self.parent if self.parent is not None else self, ".."))
+
+        if self.get_type() == NodeType.FILE:
+            itemname = prev or self.name
+            row = []
+            if "inode" in extras:
+                row.append(str(self.inode.id))
+            if detail:
+                row.extend(
+                    [
+                        self.get_permission_str(self),
+                        "1",
+                        "user",
+                        "user",
+                        str(self.get_size()),
+                        self.inode.mtime.strftime("%b"),
+                        str(self.inode.mtime.day),
+                        str(self.inode.mtime.year),
+                    ]
+                )
+            row.append(itemname)
+            return [row]
+        for item, virtual_name in items:
+            if virtual_name is None and item.name.startswith(".") and (
+                "showhiddenall" not in extras and "showhidden" not in extras
             ):
                 continue
-            if item == self:
-                itemname = "."
-            elif item == self.parent:
-                itemname = ".."
-            else:
+            itemname = virtual_name
+            if itemname is None:
                 itemname = prev + "/" + item.name if prev else item.name
             tmp = []
 
@@ -276,7 +294,7 @@ class FileNode:
             if (
                 item.get_type() == NodeType.DIRECTORY
                 and deep
-                and itemname not in [".", ".."]
+                and virtual_name is None
             ):
                 deep -= 1
                 content.extend(item.list_content(prev + "/" + item.name, deep))

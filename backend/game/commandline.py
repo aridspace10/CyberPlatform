@@ -1853,6 +1853,8 @@ class CommandLine:
         saved_current = ctx.system.fs.current
         lines = ctx.system.fs.list_files(target, -1 if deep else 0, detail, extra)
         ctx.system.fs.current = saved_current
+        if isinstance(lines, str):
+            return CommandResult(1, stderr=[f"ls: {target}: {lines}"])
         for line in lines:
             stdout.append(" ".join(line))
         return CommandResult(0, stdout, stderr)

@@ -45,7 +45,8 @@ class FileSystem:
         if path != "":
             if (error := self.search(path)) != "":
                 return error
-        return self.current.list_content("", deep, detail, extras)
+        display_path = path if self.current.get_type() != NodeType.DIRECTORY else ""
+        return self.current.list_content(display_path, deep, detail, extras)
 
     def search(self, path: str, creating: bool = False) -> str:
         lst = path.split("/")
