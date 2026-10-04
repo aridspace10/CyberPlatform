@@ -1844,13 +1844,13 @@ class CommandLine:
         stderr = []
         status = 0
         for name in names:
-            if parent:
-                existing = ctx.system.fs.resolve(name)
-                if (
-                    isinstance(existing, FileNode)
-                    and existing.get_type() == NodeType.DIRECTORY
-                ):
+            existing = ctx.system.fs.resolve(name)
+            if isinstance(existing, FileNode):
+                if parent and existing.get_type() == NodeType.DIRECTORY:
                     continue
+                stderr.append(f"mkdir: Filename '{name}' already exists")
+                status = 1
+                continue
             err = ctx.system.fs.add_directory(name, parent, perms)
             ctx.system.fs.current = saved_current
             if err:
