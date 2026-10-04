@@ -1286,14 +1286,20 @@ class CommandLine:
         verbose = False
         stdout = []
         stderr = []
-        if len(ctx.args) == 1 and ctx.args[0] == "--help":
+        if ctx.args == ["--help"]:
             return CommandResult(0, stdout=self.useage("chmod"))
-        if len(ctx.args) < 2 and ctx.args[0] != "--help":
-            stderr.append("chmod: expected at least two arguments")
-            return CommandResult(1, stderr=stderr)
-        while len(ctx.args) > 2:
-            arg = ctx.args[0]
-            if arg[0] == "-":
+        args = ctx.args
+        index = 0
+        while index < len(args):
+            arg = args[index]
+            if arg == "--":
+                index += 1
+                break
+            if arg == "--recursive":
+                recurse = True
+            elif arg == "--verbose":
+                verbose = True
+            elif arg.startswith("-") and arg != "-":
                 for option in arg[1:]:
                     if option == "R":
                         recurse = True
@@ -1301,23 +1307,26 @@ class CommandLine:
                         verbose = True
                     else:
                         return CommandResult(1, stderr=["chmod: Unknown output given"])
+            else:
+                break
+            index += 1
 
-            ctx.args = ctx.args[1:]
-        permissions = ctx.args[0]
-        d = determine_perms_fromstr(permissions)
+        operands = args[index:]
+        if len(operands) < 2:
+            return CommandResult(1, stderr=["chmod: expected at least two arguments"])
+        d = determine_perms_fromstr(operands[0])
         if isinstance(d, str):
             return CommandResult(1, stderr=[d])
-        file = ctx.args[1]
-        saved_current = ctx.system.fs.current
-        if (error := ctx.system.fs.search(file)) != "":
-            ctx.system.fs.current = saved_current
-            stderr.append(f"chmod: {error}")
-            return CommandResult(1, stderr=stderr)
-        temp = ctx.system.fs.current.update_permissions(d, recurse)
-        if verbose:
-            stdout.extend(temp)
-        ctx.system.fs.current = saved_current
-        return CommandResult(0, stdout, stderr)
+
+        for file in operands[1:]:
+            target = ctx.system.fs.resolve(file)
+            if isinstance(target, str):
+                stderr.append(f"chmod: {target}")
+                continue
+            changes = target.update_permissions(d, recurse)
+            if verbose:
+                stdout.extend(changes)
+        return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def echo(self, ctx: CommandContext) -> CommandResult:
         output = " ".join(ctx.args)
