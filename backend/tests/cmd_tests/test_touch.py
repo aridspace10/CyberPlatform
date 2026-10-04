@@ -25,6 +25,7 @@ from tests.cmd_tests.creation_helpers import (
     assert_success,
     node_at,
 )
+from tests.cmd_tests.path_helpers import assert_tree
 
 
 @pytest.mark.parametrize("command,node_type", [("touch", NodeType.FILE)])
@@ -360,3 +361,47 @@ def test_touch_help(cl, shell_empty):
     with open("../static/help/touch.txt") as help_file:
         assert result.stderr == []
         assert result.stdout == help_file.readlines()
+
+
+def test_touch_dot_paths_create_in_resolved_parent(
+    run_dot_command, dot_shell, dot_prefix
+):
+    current = dot_shell.fs.current
+    result = run_dot_command(f"touch {dot_prefix}created.txt", unchanged=False)
+    created = current.access("created.txt")
+    assert created is not None
+    assert created.parent is current
+    assert created.inode.type == NodeType.FILE
+    assert_success(result)
+
+
+def test_touch_dot_paths_create_in_parent(run_dot_command, dot_shell):
+    current = dot_shell.fs.current
+    parent = current.parent if current.parent is not None else current
+    result = run_dot_command("touch ../created.txt", unchanged=False)
+    created = parent.access("created.txt")
+    assert created is not None
+    assert created.parent is parent
+    assert created.inode.type == NodeType.FILE
+    if parent is not current:
+        assert current.access("created.txt") is None
+    assert_success(result)
+
+
+def test_touch_dot_paths_update_directory_itself(
+    run_dot_command, dot_shell, dot_directory
+):
+    operand, target = dot_directory
+    nodes = assert_tree(dot_shell)
+    before = {id(node): (node.inode.atime, node.inode.mtime) for node in nodes}
+    result = run_dot_command(f"touch -d 2024-02-29 {operand}")
+    for node in nodes:
+        expected = (
+            (REQUESTED_TIME, REQUESTED_TIME) if node is target else before[id(node)]
+        )
+        assert (node.inode.atime, node.inode.mtime) == expected
+    assert_success(result)
+
+
+def test_touch_dot_paths_reject_invalid_traversal(run_dot_command, invalid_dot_path):
+    assert_failure(run_dot_command(f"touch {invalid_dot_path}"))

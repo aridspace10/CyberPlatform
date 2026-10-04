@@ -97,16 +97,20 @@ class CommandLine:
         if len(lst) > 1 and (error := sys.fs.search("/".join(lst[0:-1]))) != "":
             sys.fs.current = saved_current
             return error
+        name = lst[-1]
+        if (name == "." or name == ".."):
+            sys.fs.current = saved_current
+            return f"Cannot complete operation for {name}"
         for _idx, item in enumerate(sys.fs.current.items):
-            if item.name == lst[-1]:
+            if item.name == name:
                 if removing:
                     item.set_data([])
                 sys.fs.current = saved_current
                 return item
         inode = Inode(NodeType.FILE)
-        sys.fs.current.add_child(lst[-1], inode)
+        sys.fs.current.add_child(name, inode)
         sys.fs.search_withaccess(
-            lst[-1]
+            name
         )  # search with access will set new filenode as ctx.system.fs.current
         result = sys.fs.current
         sys.fs.current = saved_current
@@ -329,9 +333,10 @@ class CommandLine:
 
     def sleep(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
-            return CommandResult(stdout=self.useage("sleep"))
+            return CommandResult(1, stdout=self.useage("sleep"))
         if not len(ctx.args):
-            return CommandResult(stderr=["sleep: Missing Argument"])
+            return CommandResult(1, stderr=["sleep: Missing Argument"])
+        status = 0
         val = ctx.args[0]
         last = val[-1]
         ty = "s"
@@ -343,7 +348,7 @@ class CommandLine:
         try:
             val = int(val)
         except ValueError:
-            return CommandResult(stderr=[f"expected int, got {val}"])
+            return CommandResult(1, stderr=[f"expected int, got {val}"])
 
         # Modify val for selected type
         if ty == "m":
@@ -362,7 +367,7 @@ class CommandLine:
 
         ctx.system.shell.foreground_pid = proc.pid
 
-        return CommandResult(interaction=Interaction(mode="foreground"))
+        return CommandResult(status, interaction=Interaction(mode="foreground"))
 
     def cut(self, ctx: CommandContext) -> CommandResult:
         delimiter = "\t"
@@ -408,11 +413,11 @@ class CommandLine:
         stdout = []
         stderr = []
         for filename in files or ["-"]:
-            node = ctx.stdin if filename == "-" else ctx.system.fs.get_file(filename)
-            if node is None:
-                stderr.append(f"cut: {filename} does not exist")
-                continue
+            node = ctx.stdin if filename == "-" else ctx.system.fs.resolve(filename)
             if isinstance(node, str):
+                if "/" not in filename and node.startswith("No directory named "):
+                    stderr.append(f"cut: {filename} does not exist")
+                    continue
                 stderr.append(f"cut: {filename}: {node}")
                 continue
             if node.get_type() == NodeType.DIRECTORY:
@@ -533,14 +538,14 @@ class CommandLine:
         stdout = []
         stderr = []
         for start in starting:
-            if err := ctx.system.fs.search(start):
-                stderr.append(err)
+            start_node = ctx.system.fs.resolve(start)
+            if isinstance(start_node, str):
+                stderr.append(start_node)
                 continue
 
-            start_node = ctx.system.fs.current  # AFTER search
             toprints, execs = start_node.find(node, ".")
             stdout.extend(toprints)
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def sed(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
@@ -554,6 +559,7 @@ class CommandLine:
             )
         files = []
         expressions = []
+        status = 0
         backup = ""
         suppress_print = False
         while len(ctx.args) and ctx.args[0][0] == "-":
@@ -587,28 +593,34 @@ class CommandLine:
             else:
                 files.append(arg)
 
-        cur = ctx.system.fs.current
         stdout = []
         stderr = []
         for file in files:
-            # Get file data
-            if err := ctx.system.fs.search(file):
-                stderr.append(f"sed: {err}")
+            source = ctx.system.fs.resolve(file)
+            if isinstance(source, str):
+                stderr.append(f"sed: {source}")
+                status = 1
+                continue
+            if source.get_type() == NodeType.DIRECTORY:
+                stderr.append(f"sed: {file}: Is a directory")
+                status = 1
+                continue
+            if source.get_type() != NodeType.FILE:
+                stderr.append(f"sed: {file}: Not a regular file")
+                status = 1
                 continue
 
-            old = ctx.system.fs.current.get_data()
+            old = list(source.get_data())
 
             # Save backup if request
             if backup not in ("", "-i"):
                 inode = Inode(NodeType.FILE)
                 inode.set_data(old)
-                assert ctx.system.fs.current.parent is not None
-                ctx.system.fs.current.parent.add_child(
-                    backup.replace("-i", ctx.system.fs.current.name, 1), inode
-                )
+                assert source.parent is not None
+                source.parent.add_child(backup.replace("-i", source.name, 1), inode)
 
             # Apply commands to line
-            new = old
+            new = old.copy()
             printed = []
             for expression in expressions:
                 # Setup
@@ -710,8 +722,9 @@ class CommandLine:
                         index += 1
                     for i, line in enumerate(new):
                         if single is not None:
-                            if (not rev_single and single != i) or (
-                                rev_single and single == i
+                            selected = len(new) - 1 if single == -1 else single
+                            if (not rev_single and selected != i) or (
+                                rev_single and selected == i
                             ):
                                 continue
                         elif between != []:
@@ -811,18 +824,17 @@ class CommandLine:
                 else:
                     return CommandResult(1, stderr=["sed: unknown expression given"])
             if backup:
-                ctx.system.fs.current.set_data(new)
+                source.set_data(new)
             elif suppress_print:
                 stdout.extend(printed)
             else:
                 stdout.extend(new)
-            ctx.system.fs.current = cur
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def wc(self, ctx: CommandContext) -> CommandResult:
         stdout = []
         stderr = []
-
+        status = 0
         words = bytes_flag = chars = lines = False
         files = []
 
@@ -849,24 +861,24 @@ class CommandLine:
         total_chars = 0
         total_bytes = 0
 
-        cur = ctx.system.fs.current
         for file in files:
             if file == "-":
-                ctx.system.fs.current = ctx.stdin
+                node = ctx.stdin
             else:
                 # Get filenode
-                if err := ctx.system.fs.search(file):
-                    stderr.append(err)
+                node = ctx.system.fs.resolve(file)
+                if isinstance(node, str):
+                    stderr.append(node)
+                    status = 1
                     continue
 
                 # Check for file
-                if ctx.system.fs.current.get_type() == NodeType.DIRECTORY:
+                if node.get_type() == NodeType.DIRECTORY:
                     stderr.append(f"wc: cannot perform operation on directory ({file})")
+                    status = 1
                     continue
 
-            node = ctx.system.fs.current
             data = node.get_data()
-            ctx.system.fs.current = cur
 
             lcount = len(data)
             if data and not node.inode.has_trailing_newline:
@@ -918,120 +930,146 @@ class CommandLine:
 
             stdout.append(" ".join(parts))
 
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def cp(self, ctx: CommandContext) -> CommandResult:
-        verbose = False
-        # interactive = False
-        # clobbar = True
+        if "--help" in ctx.args:
+            return CommandResult(0, stdout=self.useage("cp"))
+
+        args = list(ctx.args)
         recursive = False
         verbose = False
-        # dereference = True
-        # hardlink = False
-        # symlink = False
-        # preserve = False
-        # update = False
-        files = []
-        stdout = []
-        stderr = []
-
-        if "--help" in ctx.args:
-            return CommandResult(stdout=self.useage("cp"))
-
-        while len(ctx.args) > 1:
-            arg = ctx.args[0]
-            if arg[0] == "-":
-                for option in arg[1:]:
-                    match (option):
-                        # case "n":
-                        #     clobbar = False
-                        # case "i":
-                        #     interactive = True
-                        case "r":
-                            recursive = True
-                        case "R":
-                            recursive = False
-                        # case "u":
-                        #     update = True
-                        # case "L":
-                        #     dereference = True
-                        # case "d":
-                        #     dereference = False
-                        case "v":
-                            verbose = True
-            else:
-                files.append(arg)
-            ctx.args = ctx.args[1:]
-        target = ctx.args[0]
-        tmp = ctx.system.fs.current
-        destination_created = False
-        if ctx.system.fs.search(target):
-            # Directory/file doesn't exist
-            if len(files) == 1:
-                destination_created = True
-                # peek at source type before creating destination
-                ctx.system.fs.search(files[0])
-                source_peek = ctx.system.fs.current
-                ctx.system.fs.current = tmp
-
-                if source_peek.get_type() == NodeType.DIRECTORY:
-                    ctx.system.fs.add_directory(target)
+        while args and args[0].startswith("-") and args[0] != "-":
+            option_arg = args.pop(0)
+            for option in option_arg[1:]:
+                if option in ("r", "R"):
+                    recursive = option == "r"
+                elif option == "v":
+                    verbose = True
                 else:
-                    ctx.system.fs.add_file(target)
-                ctx.system.fs.search(target)
-            else:
+                    return CommandResult(
+                        1, stderr=[f"cp: unknown argument ({option}) given"]
+                    )
+        if len(args) < 2:
+            return CommandResult(1, stderr=["cp: expected at least two arguments"])
+
+        sources, target_path = args[:-1], args[-1]
+        fs = ctx.system.fs
+        stdout: list[str] = []
+        stderr: list[str] = []
+        target = fs.resolve(target_path)
+        target_exists = not isinstance(target, str)
+        target_parent = None
+        target_name = None
+        if not target_exists:
+            parent_info = fs.resolve_parent(target_path)
+            if isinstance(parent_info, str):
+                return CommandResult(1, stderr=[f"cp: {parent_info}"])
+            target_parent, target_name = parent_info
+            existing_child = target_parent.access(target_name)
+            if existing_child is not None:
+                target = existing_child
+                target_exists = True
+            elif len(sources) > 1:
                 return CommandResult(
-                    1, stderr=[f"cp: target '{target}' is not a directory"]
+                    1, stderr=[f"cp: target '{target_path}' is not a directory"]
                 )
 
-        target_fnode = ctx.system.fs.current
-        target_ty = target_fnode.get_type()
-        ctx.system.fs.current = tmp
-        for file in files:
-            ctx.system.fs.current = tmp
-            ctx.system.fs.search(file)
-            source_fnode = ctx.system.fs.current
-            source_ty = source_fnode.get_type()
-            if source_ty == NodeType.DIRECTORY and not recursive:
-                stderr.append(f"cp: -r not specified; omitting directory '{file}'")
+        resolved_sources: list[tuple[str, FileNode]] = []
+        for source_path in sources:
+            source = fs.resolve(source_path)
+            if isinstance(source, str):
+                return CommandResult(
+                    1, stderr=[f"cp: cannot stat '{source_path}': {source}"]
+                )
+            resolved_sources.append((source_path, source))
+
+        target_type = target.get_type() if target_exists else None
+        for source_path, source in resolved_sources:
+            if target_exists and source is target:
+                return CommandResult(
+                    1,
+                    stderr=[
+                        f"cp: '{source_path}' and '{target_path}' are the same file"
+                    ],
+                )
+            if source.get_type() != NodeType.DIRECTORY:
                 continue
-            if source_ty == NodeType.DIRECTORY:
-                if target_ty == NodeType.FILE:
-                    stderr.append(
-                        f"cp: cannot overwrite non-directory '{target}' "
-                        f"with directory '{file}'"
+            if not recursive:
+                stderr.append(
+                    f"cp: -r not specified; omitting directory '{source_path}'"
+                )
+                continue
+            if target_exists and target_type == NodeType.FILE:
+                return CommandResult(
+                    1,
+                    stderr=[
+                        f"cp: cannot overwrite non-directory '{target_path}' "
+                        f"with directory '{source_path}'"
+                    ],
+                )
+            ancestor = target if target_exists else target_parent
+            while ancestor is not None:
+                if ancestor is source:
+                    return CommandResult(
+                        1,
+                        stderr=[
+                            f"cp: cannot copy a directory, '{source_path}', "
+                            f"into itself, '{target_path}'"
+                        ],
                     )
+                ancestor = ancestor.parent
+
+        def clone_with_name(node: FileNode, name: str, parent: FileNode) -> FileNode:
+            clone = copy.deepcopy(node)
+            clone.name = name
+            clone.parent = parent
+
+            def reset_parents(item: FileNode) -> None:
+                for child in item.items:
+                    child.parent = item
+                    reset_parents(child)
+
+            reset_parents(clone)
+            return clone
+
+        for source_path, source in resolved_sources:
+            source_type = source.get_type()
+            if source_type == NodeType.DIRECTORY and not recursive:
+                continue
+            if target_exists and target_type == NodeType.DIRECTORY:
+                copied = clone_with_name(source, source.name, target)
+                if target.access(copied.name) is not None:
+                    return CommandResult(
+                        1,
+                        stdout,
+                        stderr
+                        + [
+                            f"cp: cannot create '{target_path}/{copied.name}': "
+                            "File exists"
+                        ],
+                    )
+                target.items.append(copied)
+            elif target_exists and target_type == NodeType.FILE:
+                if source_type != NodeType.FILE:
                     continue
-                elif target_ty == NodeType.DIRECTORY:
-                    if destination_created:
-                        target_fnode.items.extend(copy.deepcopy(source_fnode.items))
-                    else:
-                        target_fnode.items.append(copy.deepcopy(source_fnode))
-                    if verbose:
-                        stdout.append(f"cp: Copied '{file}' to '{target}'")
-                elif target_ty == NodeType.SYMLINK:
-                    pass
-            elif source_ty == NodeType.FILE:
-                if target_ty == NodeType.FILE:
-                    target_fnode.inode = source_fnode.inode
-                    if verbose:
-                        stdout.append(f"cp: Copied '{file}' to '{target}'")
-                elif target_ty == NodeType.DIRECTORY:
-                    target_fnode.items.append(source_fnode)
-                    if verbose:
-                        stdout.append(f"cp: Copied '{file}' to '{target}'")
-                elif target_ty == NodeType.SYMLINK:
-                    pass
-            elif source_ty == NodeType.SYMLINK:
-                if target_ty == NodeType.FILE:
-                    pass
-                elif target_ty == NodeType.DIRECTORY:
-                    pass
-                elif target_ty == NodeType.SYMLINK:
-                    pass
-            ctx.system.fs.current = tmp
-        ctx.system.fs.current = tmp
-        return CommandResult(1, stdout, stderr)
+                target.inode = copy.deepcopy(source.inode)
+            else:
+                if target_parent is None or target_name is None:
+                    return CommandResult(
+                        1,
+                        stdout,
+                        stderr + [f"cp: invalid destination '{target_path}'"],
+                    )
+                copied = clone_with_name(source, target_name, target_parent)
+                target_parent.items.append(copied)
+                target = copied
+                target_type = copied.get_type()
+                target_exists = True
+            if verbose:
+                stdout.append(f"cp: Copied '{source_path}' to '{target_path}'")
+
+        return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def mv(self, ctx: CommandContext) -> CommandResult:
         verbose = False
@@ -1039,70 +1077,85 @@ class CommandLine:
         stderr = []
         if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("mv"))
-        if len(ctx.args) < 2:
-            stderr.append("cp: expected at least two arguments")
-        files = []
-        while len(ctx.args) and len(ctx.args[0]) and ctx.args[0][0] == "-":
-            arg = ctx.args.pop(0)
+        args = ctx.args.copy()
+        while args and args[0].startswith("-") and args[0] != "-":
+            arg = args.pop(0)
             for option in arg[1:]:
                 if option == "v":
                     verbose = True
-        files = ctx.args[:-1]
-        target = ctx.args[-1]
-        tmp = ctx.system.fs.current
-        if len(files) == 1:
-            ftype = ctx.system.fs.search_withaccess(files[0])
-            if ftype is None:
-                return CommandResult(0, stderr=[f"mv: could not find file {files[0]}"])
-            ttype = NodeType.DIRECTORY if len(target.split(".")) == 1 else NodeType.FILE
-            if ftype == ttype:
-                if verbose:
-                    stdout.append(f"Renamed {ctx.system.fs.current.name} -> {target}")
-                ctx.system.fs.current.name = target
-                ctx.system.fs.current = tmp
-                return CommandResult(0, stdout, stderr)
-            elif ftype == NodeType.FILE and ttype == NodeType.DIRECTORY:
-                if (
-                    ctx.system.fs.current.parent is None
-                ):  # literally impossible to be true
-                    return CommandResult(2)  # pragma: no cover
-                ctx.system.fs.current = ctx.system.fs.current.parent
-                saved = None
-                for idx, item in enumerate(ctx.system.fs.current.items):
-                    if item.name == files[0]:
-                        saved = item
-                        ctx.system.fs.current.items.pop(idx)
-                        break
-                if saved is None:
+                else:
                     return CommandResult(
-                        2, stderr=[f"mv: could not find file {target}"]
+                        1, stderr=[f"mv: unknown argument ({option}) given"]
                     )
-                ctx.system.fs.search(target)
-                ctx.system.fs.current.items.append(saved)
-                if verbose:
-                    stdout.append(f"Moved {files[0]} to {target}")
-                ctx.system.fs.current = tmp
-                return CommandResult(0, stdout, stderr)
-        # multiple files were given
-        ctx.system.fs.search(target)
-        targetfnode = ctx.system.fs.current
-        ctx.system.fs.current = tmp
+        if len(args) < 2:
+            return CommandResult(1, stderr=["mv: expected at least two arguments"])
+
+        files, target = args[:-1], args[-1]
+        fs = ctx.system.fs
+        target_node = fs.resolve(target)
+        target_directory = (
+            not isinstance(target_node, str)
+            and target_node.get_type() == NodeType.DIRECTORY
+        )
+        if len(files) > 1 and not target_directory:
+            return CommandResult(
+                1, stderr=[f"mv: target '{target}' is not a directory"]
+            )
+
+        if target_directory:
+            destination_parent = target_node
+            destination_name = None
+        else:
+            destination = fs.resolve_parent(target)
+            if isinstance(destination, str):
+                return CommandResult(1, stderr=[f"mv: {target}: {destination}"])
+            destination_parent, destination_name = destination
+
         for file in files:
-            ftype = ctx.system.fs.search(file)
-            if ftype != "":
+            source = fs.resolve_parent(file)
+            if isinstance(source, str):
                 stderr.append(f"mv: could not find file {file}")
-            fnode = ctx.system.fs.current
-            if fnode.parent is None:
                 continue
-            fnode.parent.items = [
-                item for item in fnode.parent.items if item.name != fnode.name
+            source_parent, source_name = source
+            source_node = source_parent.access(source_name)
+            if source_node is None:
+                stderr.append(f"mv: could not find file {file}")
+                continue
+
+            parent = destination_parent
+            name = source_name if destination_name is None else destination_name
+            if source_node.get_type() == NodeType.DIRECTORY:
+                ancestor = parent
+                while ancestor is not None and ancestor is not source_node:
+                    ancestor = ancestor.parent
+                if ancestor is source_node:
+                    stderr.append(f"mv: cannot move '{file}' into itself")
+                    continue
+
+            existing = parent.access(name)
+            if existing is source_node:
+                stderr.append(f"mv: '{file}' and '{target}' are the same file")
+                continue
+            if existing is not None:
+                if (
+                    source_node.get_type() != NodeType.FILE
+                    or existing.get_type() != NodeType.FILE
+                ):
+                    stderr.append(f"mv: cannot overwrite '{target}' with '{file}'")
+                    continue
+                parent.items = [item for item in parent.items if item is not existing]
+
+            source_parent.items = [
+                item for item in source_parent.items if item is not source_node
             ]
-            ctx.system.fs.current = targetfnode
-            ctx.system.fs.current.items.append(fnode)
+            source_node.name = name
+            source_node.parent = parent
+            parent.items.append(source_node)
             if verbose:
-                stdout.append(f"Moved {file} to {target}")
-            ctx.system.fs.current = tmp
-        return CommandResult(0, stdout, stderr)
+                action = "Moved" if target_directory else "Renamed"
+                connector = "to" if target_directory else "->"
+                stdout.append(f"{action} {file} {connector} {target}")
+        return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def grep(self, ctx: CommandContext) -> CommandResult:
         case_insentive = False
@@ -1164,7 +1217,6 @@ class CommandLine:
             return CommandResult(1, stderr=["grep: pattern not given"])
         if not len(files):
             files = ["-"]
-        saved_current = ctx.system.fs.current
         if matchwhole:
             match_cond_func = match_whole_word
         elif matchline:
@@ -1196,16 +1248,15 @@ class CommandLine:
                         return
 
         for file in files:
-            saved_current = ctx.system.fs.current
             if file == "-":
                 ty = ctx.stdin.get_type()
-                ctx.system.fs.current = ctx.stdin
+                file_node = ctx.stdin
             else:
-                err = ctx.system.fs.search(file)
-                if err:
+                file_node = ctx.system.fs.resolve(file)
+                if isinstance(file_node, str):
                     stderr.append(f"grep: {file} can not be found")
                     continue
-                ty = ctx.system.fs.current.get_type()
+                ty = file_node.get_type()
             if ty == NodeType.DIRECTORY:
                 if recursive:
 
@@ -1216,19 +1267,19 @@ class CommandLine:
                             else:
                                 search_file(item)
 
-                    pointer = ctx.system.fs.current
-                    recursively_search(pointer)
+                    recursively_search(file_node)
                 else:
                     stderr.append("Can't recursivly search directory without -r option")
             elif ty == NodeType.FILE:
-                search_file(ctx.system.fs.current)
+                search_file(file_node)
             else:
                 stderr.append(f"Can't open file/directory given: {file}")
-            ctx.system.fs.current = saved_current
         if countmatch:
-            return CommandResult(0, stdout=[str(len(stdout))])
+            return CommandResult(
+                1 if stderr else 0, stdout=[str(len(stdout))], stderr=stderr
+            )
         else:
-            return CommandResult(0, stdout, stderr)
+            return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def chmod(self, ctx: CommandContext) -> CommandResult:
         recurse = False
@@ -1389,6 +1440,7 @@ class CommandLine:
     def cat(self, ctx: CommandContext) -> CommandResult:
         stdout = []
         stderr = []
+        status = 0
         numbering = False
         if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("cat"))
@@ -1410,10 +1462,16 @@ class CommandLine:
             if filename == "-":
                 content = ctx.stdin
             else:
-                content = ctx.system.fs.get_file(filename)
+                content = ctx.system.fs.resolve(filename)
 
             if content is None or isinstance(content, str):
                 stderr.append(f"File {filename} does not exist")
+                status = 1
+                continue
+
+            if content.get_type() == NodeType.DIRECTORY:
+                stderr.append(f"cat: Non directory is given")
+                status = 1
                 continue
 
             for line in content.get_data():
@@ -1422,9 +1480,7 @@ class CommandLine:
                     line_number += 1
                 stdout.append(line)
 
-        if stderr:
-            return CommandResult(1, stdout, stderr)
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def head(self, ctx: CommandContext) -> CommandResult:
         lines = 10
@@ -1434,6 +1490,7 @@ class CommandLine:
         files = []
         stdout = []
         stderr = []
+        status = 0
         while ctx.args:
             arg = ctx.args.pop(0)
             if arg == "-":
@@ -1465,19 +1522,21 @@ class CommandLine:
                 files.append(arg)
         if not len(files):
             files = [ctx.stdin]
-        saved_current = ctx.system.fs.current
         for file in files:
             if isinstance(file, FileNode):
                 content = file
                 ty = content.get_type()
             else:
-                ty = ctx.system.fs.search_withaccess(file)
-                content = ctx.system.fs.current
+                content = ctx.system.fs.resolve(file)
+                if isinstance(content, str):
+                    stderr.append(f"head: {file}: {content}")
+                    status = 1
+                    continue
+                ty = content.get_type()
             if ty == NodeType.DIRECTORY:
                 stderr.append(f"head: {file} is a directory")
+                status = 1
                 continue
-            if content is None or isinstance(content, str):
-                return CommandResult(1)
             counter = 0
             data = content.get_data()
             if data == "":
@@ -1507,14 +1566,14 @@ class CommandLine:
                     counter += 1
                     if b == -1 and counter >= lines:
                         break
-            ctx.system.fs.current = saved_current
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def tail(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("tail"))
         stdout = []
         stderr = []
+        status = 0
         lines = -1
         byte = -1
         ahead = False
@@ -1577,6 +1636,7 @@ class CommandLine:
                 lines = int(arg[1:])
             else:
                 return CommandResult(1, stderr=[f"tail: unknown argument given {arg}"])
+
         files = ctx.args
         if len(files) == 0:
             files = ["-"]
@@ -1593,16 +1653,19 @@ class CommandLine:
                 content = ctx.stdin
                 ty = content.get_type()
             else:
-                ty = ctx.system.fs.search_withaccess(file)
-                content = ctx.system.fs.current
-                ctx.system.fs.current = saved_current
+                content = ctx.system.fs.resolve(file)
+                if isinstance(content, str):
+                    return CommandResult(1, stderr=[f"tail: {file} can not be found"])
+                ty = content.get_type()
 
             # Check is file
             if ty == NodeType.DIRECTORY:
+                status = 1 
                 stderr.append(f"tail: {file} is a directory")
                 continue
 
             if ty is None:
+                status = 1
                 stderr.append(f"tail: cannot open '{file}'")
                 continue
 
@@ -1637,7 +1700,7 @@ class CommandLine:
                     decoded = trimmed.decode("utf-8", errors="ignore")
                     for line in decoded.split("\n"):
                         stdout.append(line)
-        return CommandResult(0, stdout, stderr)
+        return CommandResult(status, stdout, stderr)
 
     def rm(self, ctx: CommandContext) -> CommandResult:
         recurse, verbose, interactive = False, False, False
@@ -1781,13 +1844,13 @@ class CommandLine:
         stderr = []
         status = 0
         for name in names:
-            if parent:
-                existing = ctx.system.fs.resolve(name)
-                if (
-                    isinstance(existing, FileNode)
-                    and existing.get_type() == NodeType.DIRECTORY
-                ):
+            existing = ctx.system.fs.resolve(name)
+            if isinstance(existing, FileNode):
+                if parent and existing.get_type() == NodeType.DIRECTORY:
                     continue
+                stderr.append(f"mkdir: Filename '{name}' already exists")
+                status = 1
+                continue
             err = ctx.system.fs.add_directory(name, parent, perms)
             ctx.system.fs.current = saved_current
             if err:
@@ -1849,6 +1912,8 @@ class CommandLine:
         saved_current = ctx.system.fs.current
         lines = ctx.system.fs.list_files(target, -1 if deep else 0, detail, extra)
         ctx.system.fs.current = saved_current
+        if isinstance(lines, str):
+            return CommandResult(1, stderr=[f"ls: {target}: {lines}"])
         for line in lines:
             stdout.append(" ".join(line))
         return CommandResult(0, stdout, stderr)
@@ -1857,10 +1922,22 @@ class CommandLine:
         if not ctx.args:
             return CommandResult(1, stderr=["cd: must give argument"])
         arg = ctx.args[0]
+        sc = ctx.system.fs.current
         if error := ctx.system.fs.search(arg):
+            ctx.system.fs.current = sc
             return CommandResult(1, stderr=["cd:" + error])
-        ctx.system.shell.cwd += "/" + arg
-        ctx.system.fs.cwd += "/" + arg
+        if (ctx.system.fs.current.get_type() != NodeType.DIRECTORY):
+            name = ctx.system.fs.current.name
+            ctx.system.fs.current = sc
+            return CommandResult(1, stderr=[f"cd: {name} is not a directory"])
+        parts = []
+        node = ctx.system.fs.current
+        while node.parent is not None:
+            parts.append(node.name)
+            node = node.parent
+        cwd = "/" + "/".join(reversed(parts))
+        ctx.system.shell.cwd = cwd
+        ctx.system.fs.cwd = cwd
         return CommandResult(0)
 
     def ln(self, ctx: CommandContext) -> CommandResult:
@@ -1881,34 +1958,32 @@ class CommandLine:
                             return CommandResult(2, stderr=["Unknown Argument Given"])
         target = ctx.args[0]
         destination = ctx.args[1]
-        saved_current = ctx.system.fs.current
-        if (err := ctx.system.fs.search(target)) != "" and linkty == "hard":
-            return CommandResult(1, stderr=[err])
-        target_inode = ctx.system.fs.current.inode
-        # Check cause inode of dir is nothing
-        if ctx.system.fs.current.inode.type == NodeType.DIRECTORY and linkty == "hard":
-            ctx.system.fs.current = saved_current
-            return CommandResult(1, stderr=["Cannot hard link directory"])
-        # Reset Pointer
-        ctx.system.fs.current = saved_current
-        # Search for the destination and check it doesn't exist
-        if ctx.system.fs.search(destination) == "":
-            ctx.system.fs.current = saved_current
-            return CommandResult(1, stderr=[f"ln: {destination}: File exists"])
-        # Reset pointer after search
-        ctx.system.fs.current = saved_current
-        ctx.system.fs.add_file(destination)
-        new_file = ctx.system.fs.get_file(destination)
-        if new_file is None or isinstance(new_file, str):
-            return CommandResult(1, stderr=["Could not create link"])
+        target_inode = None
         if linkty == "hard":
-            new_file.inode = target_inode
-            target_inode.link_count += 1
+            source = ctx.system.fs.resolve(target)
+            if isinstance(source, str):
+                return CommandResult(1, stderr=[source])
+            if source.get_type() == NodeType.DIRECTORY:
+                return CommandResult(1, stderr=["Cannot hard link directory"])
+            target_inode = source.inode
+
+        resolved_destination = ctx.system.fs.resolve_parent(destination)
+        if isinstance(resolved_destination, str):
+            return CommandResult(1, stderr=[f"ln: {resolved_destination}"])
+        parent, name = resolved_destination
+        if parent.access(name) is not None:
+            return CommandResult(1, stderr=[f"ln: {destination}: File exists"])
+
+        if linkty == "hard":
+            inode = target_inode
         else:
             inode = Inode(NodeType.SYMLINK)
             inode.set_data([target])
-            new_file.inode = inode
-        ctx.system.fs.current = saved_current
+
+        if error := parent.add_child(name, inode):
+            return CommandResult(1, stderr=[f"ln: {error}"])
+        if linkty == "hard":
+            inode.link_count += 1
         return CommandResult()
 
     def uniq(self, ctx: CommandContext) -> CommandResult:
@@ -1935,8 +2010,14 @@ class CommandLine:
             else:
                 file = arg
         if file != "":
-            ctx.system.fs.search_withaccess(file)
-            ctx.stdin = ctx.system.fs.current
+            tmp = ctx.system.fs.resolve(file)
+            if isinstance(tmp, str):
+                return CommandResult(1, stderr=[f"uniq: {tmp}"])
+            if tmp.get_type() == NodeType.DIRECTORY:
+                return CommandResult(1, stderr=[f"uniq: {file}: Is a directory"])
+            if tmp.get_type() != NodeType.FILE:
+                return CommandResult(1, stderr=[f"uniq: {file}: Not a regular file"])
+            ctx.stdin = tmp
         data = ctx.stdin.get_data()
         processed = []
         for line in data:
@@ -2008,12 +2089,16 @@ class CommandLine:
             else:
                 file = arg
         if file == "" or file == "-":
-            content = ctx.stdin.get_data()
+            content = list(ctx.stdin.get_data())
         else:
-            saved_current = ctx.system.fs.current
-            ctx.system.fs.search(file)
-            content = ctx.system.fs.current.get_data()
-            ctx.system.fs.current = saved_current
+            tmp = ctx.system.fs.resolve(file)
+            if isinstance(tmp, str):
+                return CommandResult(1, stderr=[f"sort: {tmp}"])
+            if tmp.get_type() == NodeType.DIRECTORY:
+                return CommandResult(1, stderr=[f"sort: {file}: Is a directory"])
+            if tmp.get_type() != NodeType.FILE:
+                return CommandResult(1, stderr=[f"sort: {file}: Not a regular file"])
+            content = list(tmp.get_data())
         for idx, line in enumerate(content):
             if igblanks:
                 content[idx] = line.lstrip()
@@ -2052,12 +2137,20 @@ class CommandLine:
                     r.append(modified.pop(vid))
             modified = r
         if output:
-            saved_current = ctx.system.fs.current
-            # If file don't exist already
-            if ctx.system.fs.search(output) != "":
-                ctx.system.fs.add_file(output)
-                ctx.system.fs.search(output)
-            ctx.system.fs.current.set_data(modified)
-            ctx.system.fs.current = saved_current
+            target = ctx.system.fs.resolve(output)
+            if isinstance(target, str):
+                destination = ctx.system.fs.resolve_parent(output)
+                if isinstance(destination, str):
+                    return CommandResult(1, stderr=[f"sort: {output}: {destination}"])
+                parent, name = destination
+                error = parent.add_child(name, Inode(NodeType.FILE))
+                if error:
+                    return CommandResult(1, stderr=[f"sort: {output}: {error}"])
+                target = parent.access(name)
+            elif target.get_type() == NodeType.DIRECTORY:
+                return CommandResult(1, stderr=[f"sort: {output}: Is a directory"])
+            elif target.get_type() != NodeType.FILE:
+                return CommandResult(1, stderr=[f"sort: {output}: Not a regular file"])
+            target.set_data(modified)
             return CommandResult(0)
         return CommandResult(0, stdout=modified)

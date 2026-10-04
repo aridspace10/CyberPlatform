@@ -1,6 +1,9 @@
+import pytest
 from game.filenode import FileNode
 from game.inode import NodeType
 from game.ShellState import ShellState
+from tests.cmd_tests.creation_helpers import assert_failure, assert_success
+from tests.command_helpers import assert_help
 
 
 ######## LN ###################
@@ -296,3 +299,50 @@ def test_ln_symbolic_multiple(cl, shell_basic: ShellState):
     # But same target path
     assert sym1.inode.get_data() == ["f1.txt"]
     assert sym2.inode.get_data() == ["f1.txt"]
+
+
+def test_ln_help(cl, shell_empty):
+    assert_help(cl, shell_empty, "ln")
+
+
+def test_ln_dot_paths_link_source_and_destination(
+    run_dot_command, dot_shell, dot_prefix
+):
+    current = dot_shell.fs.current
+    source = current.access("data.txt")
+    count = source.inode.link_count
+    result = run_dot_command(
+        f"ln {dot_prefix}data.txt {dot_prefix}linked.txt", unchanged=False
+    )
+    linked = current.access("linked.txt")
+    assert linked is not None
+    assert linked is not source
+    assert linked.parent is current
+    assert linked.inode is source.inode
+    assert source.inode.link_count == count + 1
+    assert_success(result)
+
+
+def test_ln_dot_paths_reject_directory_hard_link(run_dot_command, dot_directory):
+    operand, _ = dot_directory
+    assert_failure(run_dot_command(f"ln {operand} ./linked.txt"))
+
+
+def test_ln_dot_paths_reject_invalid_source(run_dot_command, invalid_dot_path):
+    assert_failure(run_dot_command(f"ln {invalid_dot_path} ./linked.txt"))
+
+
+def test_ln_dot_paths_reject_invalid_destination(run_dot_command, invalid_dot_path):
+    assert_failure(run_dot_command(f"ln ./data.txt {invalid_dot_path}"))
+
+
+@pytest.mark.parametrize("target", [".", "..", "../data.txt"])
+def test_ln_dot_paths_symbolic_target_stays_literal(run_dot_command, dot_shell, target):
+    branch = dot_shell.fs.current.access("branch")
+    result = run_dot_command(f"ln -s {target} ./branch/link", unchanged=False)
+    linked = branch.access("link")
+    assert linked is not None
+    assert linked.parent is branch
+    assert linked.inode.type.value == "symlink"
+    assert linked.inode.data == [target]
+    assert_success(result)

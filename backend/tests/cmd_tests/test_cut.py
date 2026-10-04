@@ -12,6 +12,8 @@ import pytest
 from game.Context import CommandContext, SystemContext
 from game.filenode import FileNode
 from game.inode import Inode, NodeType
+from tests.cmd_tests.creation_helpers import assert_failure, assert_success
+from tests.cmd_tests.path_helpers import assert_directory_error
 
 
 @pytest.fixture
@@ -302,3 +304,32 @@ def test_cut_empty_stdin(cl, cut_shell, command):
 def test_cut_end_of_options_allows_dash_prefixed_filename(cl, cut_shell):
     result = cl.enter_command('cut -d ":" -f 1 -- -users.txt', cut_shell)
     assert_output(result, ["frank"])
+
+
+def test_cut_dot_paths_read_file(run_dot_command, dot_prefix):
+    result = run_dot_command(f"cut -d : -f 1 {dot_prefix}data.txt")
+    assert_success(result, ["beta", "alpha", "alpha"])
+
+
+def test_cut_dot_paths_reject_directory(run_dot_command, dot_directory):
+    operand, _ = dot_directory
+    result = run_dot_command(f"cut -d : -f 1 {operand}")
+    assert_directory_error(result)
+
+
+def test_cut_dot_paths_reject_invalid_traversal(run_dot_command, invalid_dot_path):
+    result = run_dot_command(f"cut -d : -f 1 {invalid_dot_path}")
+    assert_failure(result)
+
+
+def test_cut_dot_paths_preserve_literal_dot_names(run_dot_command):
+    result = run_dot_command("cut -d : -f 1 ./..backup")
+    assert_success(result, ["literal"])
+
+
+def test_cut_dot_paths_read_parent_file(run_dot_command, dot_shell):
+    current = dot_shell.fs.current
+    parent = current.parent if current.parent is not None else current
+    lines = list(parent.access("data.txt").inode.data)
+    result = run_dot_command("cut -d : -f 1 ../data.txt")
+    assert_success(result, [line.split(":")[0] for line in lines])

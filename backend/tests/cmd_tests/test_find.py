@@ -1,4 +1,24 @@
 from game.ShellState import ShellState
+from tests.cmd_tests.creation_helpers import assert_failure
+from tests.cmd_tests.path_helpers import descendants
+
+
+def test_find_dot_paths_visit_each_file_once(run_dot_command, dot_directory):
+    operand, target = dot_directory
+    expected = [
+        node.name
+        for node in descendants(target)
+        if not node.items and node.inode.type.value == "file"
+    ]
+    result = run_dot_command(f"find {operand} -type f")
+    assert result.status == 0
+    assert result.stderr == []
+    assert sorted(path.rsplit("/", 1)[-1] for path in result.stdout) == sorted(expected)
+    assert len(result.stdout) == len(set(result.stdout))
+
+
+def test_find_dot_paths_reject_invalid_traversal(run_dot_command, invalid_dot_path):
+    assert_failure(run_dot_command(f"find {invalid_dot_path}"))
 
 
 ################# FIND ##################

@@ -1,74 +1,87 @@
-import math
+import json
 import random
 
+import pytest
 from game.filenode import FileNode
 from game.filesystem import FileSystem
 from game.ShellState import ShellState
-from wonderwords import RandomWord
+from tests.cmd_tests.creation_helpers import assert_failure, assert_success
+from tests.cmd_tests.path_helpers import descendants, tree_state
+from tests.command_helpers import setup_names
 
 
-######## HELPS #################
-def test_cmd_helps(cl, shell_empty):
-    cmds = [
-        "cat",
-        "cp",
-        "tail",
-        "chmod",
-        "grep",
-        "head",
-        "ln",
-        "ls",
-        "mv",
-        "sort",
-        "rm",
-        "sed",
-        "ps",
-        "ping",
-        "sleep",
-        "uniq",
-    ]
-    for cmd in cmds:
-        CmdResult = cl.enter_command(f"{cmd} --help", shell_empty)
-        with open(f"../static/help/{cmd}.txt") as f:
-            assert CmdResult.stderr == []
-            assert CmdResult.stdout == f.readlines()
+@pytest.mark.integration
+@pytest.mark.parametrize("option", ["-a", "-A"])
+def test_shell_dot_paths_listing_then_find_and_save(run_dot_command, dot_shell, option):
+    before = tree_state(dot_shell)
+    run_dot_command(f"ls {option} .")
+    result = run_dot_command("find .")
+    assert result.status == 0
+    assert result.stderr == []
+    expected_count = len(list(descendants(dot_shell.fs.current)))
+    assert len(result.stdout) == expected_count
+    assert len(result.stdout) == len(set(result.stdout))
+    assert tree_state(dot_shell) == before
+    json.loads(json.dumps(dot_shell.fs.to_dict()))
 
 
-####### Unknown #############
+@pytest.mark.integration
+@pytest.mark.parametrize("option", ["-a", "-A"])
+def test_shell_dot_paths_listing_then_recursive_remove(
+    run_dot_command, dot_shell, option
+):
+    current = dot_shell.fs.current
+    data = current.access("data.txt")
+    run_dot_command(f"ls {option} ./branch")
+    assert_success(run_dot_command("rm -r ./branch", unchanged=False))
+    assert current.access("branch") is None
+    assert current.access("data.txt") is data
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("operator", ["<", ">", ">>"])
+def test_shell_dot_paths_redirection_rejects_directory(
+    run_dot_command, dot_directory, operator
+):
+    operand, _ = dot_directory
+    command = "cat" if operator == "<" else "echo changed"
+    assert_failure(run_dot_command(f"{command} {operator} {operand}"))
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("operator", ["<", ">", ">>"])
+def test_shell_dot_paths_redirection_resolves_file(
+    run_dot_command, dot_shell, dot_prefix, operator
+):
+    source = dot_shell.fs.current.access("data.txt")
+    before = list(source.inode.data)
+    if operator == "<":
+        result = run_dot_command(f"cat < {dot_prefix}data.txt")
+        assert_success(result, before)
+    else:
+        result = run_dot_command(
+            f"echo changed {operator} {dot_prefix}data.txt", unchanged=False
+        )
+        assert_success(result)
+        expected = before + ["changed"] if operator == ">>" else ["changed"]
+        assert source.inode.data == expected
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("operator", ["<", ">", ">>"])
+def test_shell_dot_paths_redirection_rejects_invalid_traversal(
+    run_dot_command, invalid_dot_path, operator
+):
+    command = "cat" if operator == "<" else "echo changed"
+    assert_failure(run_dot_command(f"{command} {operator} {invalid_dot_path}"))
+
+
 def test_cmd_unknown(cl, shell_empty):
     CmdResult = cl.enter_command("test abcd", shell_empty)
     assert CmdResult.stderr == ["Unknown command given"]
     assert CmdResult.stdout == []
 
 
-######### ECHO #################
-def test_echo_basic(cl, shell_empty):
-    # echo should return CmdResult.stdout containing the args joined
-    CmdResult = cl.enter_command("echo hello world", shell_empty)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["hello world"]
-
-
-####### CD ####################
-def test_cd_basic(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("cd d1", shell_basic)
-    assert CmdResult.stderr == []
-    assert len(shell_basic.fs.current.items) == 2
-
-
-def test_cd_missing(cl, shell_empty: ShellState):
-    CmdResult = cl.enter_command("cd missing", shell_empty)
-    assert CmdResult.stderr == ["cd:No directory named missing"]
-    assert CmdResult.stdout == []
-
-
-def test_cd_empty(cl, shell_empty: ShellState):
-    CmdResult = cl.enter_command("cd", shell_empty)
-    assert CmdResult.stderr == ["cd: must give argument"]
-    assert CmdResult.stdout == []
-
-
-########### REDIRECTION ##########
 def test_redirection_writes_file(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("echo hi > d1/f3.txt", shell_basic)
     assert CmdResult.stdout == []
@@ -102,194 +115,6 @@ def test_redirection_writes_newfile(cl, shell_basic: ShellState, fs_basic: FileS
     assert fnode.get_data() == ["hi"]
 
 
-######### CAT ##############
-def test_cat_nonexistent_file(cl, shell_empty):
-    # reading missing file returns error
-    CmdResult = cl.enter_command("cat missing.txt", shell_empty)
-    # cat sets CmdResult.stderr in CmdResult.stdout list per your implementation
-    assert len(CmdResult.stderr) == 1
-
-
-def test_cat_error(cl, shell_empty):
-    cmd = cl.enter_command("cat -x missing.txt", shell_empty)
-    assert cmd.stderr == ["cat: Unknown Argument Given (x)"]
-
-
-def test_cat_numbering(cl, shell_basic):
-    CmdResult = cl.enter_command("cat -n f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["1 ERROR no", "2 INFO hey", "3 ERROR no2", "4 error 1"]
-
-
-def test_cat_stdin(cl, shell_basic):
-    CmdResult = cl.enter_command("cat - < f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR no", "INFO hey", "ERROR no2", "error 1"]
-
-
-def test_cat_basic(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("cat f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR no", "INFO hey", "ERROR no2", "error 1"]
-
-
-######## HEAD ##############
-def test_head_basic(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("head f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    for i, line in enumerate(CmdResult.stdout):
-        assert line == str(i)
-
-
-def test_head_count(cl, shell_basic: ShellState):
-    r = random.randint(1, 20)
-    CmdResult = cl.enter_command(f"head -n {r} f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    for i in range(r):
-        assert CmdResult.stdout[i] == str(i)
-    CmdResult = cl.enter_command(f"head --lines={r} f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    for i in range(r):
-        assert CmdResult.stdout[i] == str(i)
-    CmdResult = cl.enter_command(f"head --lines=-{r} f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    for i in range(r, 0):
-        assert CmdResult.stdout[-i] == str(i)
-
-
-def test_head_error(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("head d1", shell_basic)
-    assert CmdResult.stderr == ["head: d1 is a directory"]
-
-
-def test_head_bytes(cl, shell_basic: ShellState):
-    r = random.randint(5, 20)
-    CmdResult = cl.enter_command(f"head -c {r} f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    expected_lines = math.ceil(r / 2)
-    assert len(CmdResult.stdout) == expected_lines
-    for i, line in enumerate(CmdResult.stdout):
-        assert line == str(i)
-
-    CmdResult = cl.enter_command(f"head --bytes={r} f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    expected_lines = math.ceil(r / 2)
-    assert len(CmdResult.stdout) == expected_lines
-    for i, line in enumerate(CmdResult.stdout):
-        assert line == str(i)
-
-
-######## GREP ##############
-def test_grep_basic(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("grep ERROR f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR no", "ERROR no2"]
-
-
-def test_grep_count(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("grep -c ERROR f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["2"]
-
-
-def test_grep_error(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("grep -c", shell_basic)
-    assert CmdResult.stderr == ["grep: pattern not given"]
-    assert CmdResult.stdout == []
-
-    CmdResult = cl.enter_command("grep -a", shell_basic)
-    assert CmdResult.stderr == ["grep: unknown argument given"]
-    assert CmdResult.stdout == []
-
-    CmdResult = cl.enter_command("grep text notexist.txt", shell_basic)
-    assert CmdResult.stderr == ["grep: notexist.txt can not be found"]
-    assert CmdResult.stdout == []
-
-
-def test_grep_matchline(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command('grep -x "ERROR no" f1.txt', shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR no"]
-
-
-def test_grep_matchwhole(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("grep -i ERROR f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR no", "ERROR no2", "error 1"]
-
-
-def test_grep_dir(cl, shell_fouritems: ShellState):
-    CmdResult = cl.enter_command("grep -r ERROR .", shell_fouritems)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR 1", "ERROR 2", "ERROR 3", "ERROR 4"]
-
-
-def test_grep_dir2(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("grep -r ERROR .", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR no", "ERROR no2", "ERROR 1", "ERROR 2"]
-
-
-def test_grep_dir3(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("grep ERROR .", shell_basic)
-    assert CmdResult.stderr == ["Can't recursivly search directory without -r option"]
-    assert CmdResult.stdout == []
-
-
-####### CHMOD #############
-def test_chmod_basic(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("chmod 000 f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    fn = shell_basic.fs.get_file("f1.txt")
-    assert isinstance(fn, FileNode)
-    assert shell_basic.fs.current.get_permission_str(fn) == "----------"
-    CmdResult = cl.enter_command("chmod 777 f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    fn = shell_basic.fs.get_file("f1.txt")
-    assert isinstance(fn, FileNode)
-    assert shell_basic.fs.current.get_permission_str(fn) == "-rwxrwxrwx"
-    CmdResult = cl.enter_command("chmod -Rv 000 d1", shell_basic)
-    assert CmdResult.stdout == [
-        "Updated permissions of d1 with d---------",
-        "Updated permissions of f3.txt with ----------",
-        "Updated permissions of f4.txt with ----------",
-    ]
-    assert CmdResult.stderr == []
-    fn = shell_basic.fs.get_file("d1")
-    assert isinstance(fn, FileNode)
-    assert shell_basic.fs.current.get_permission_str(fn) == "d---------"
-    assert isinstance(fn.items[0], FileNode)
-    assert fn.get_permission_str(fn.items[0]) == "----------"
-
-
-def test_chmod_errors(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("chmod -y 888 not_exist.txt", shell_basic)
-    assert CmdResult.stderr == ["chmod: Unknown output given"]
-    assert CmdResult.stdout == []
-    CmdResult = cl.enter_command("chmod 777 not_exist.txt", shell_basic)
-    assert CmdResult.stderr == ["chmod: No directory named not_exist.txt"]
-    assert CmdResult.stdout == []
-    CmdResult = cl.enter_command("chmod 888 f1.txt", shell_basic)
-    assert CmdResult.stderr == ["chmod: value given which is higher then needed"]
-    assert CmdResult.stdout == []
-    CmdResult = cl.enter_command("chmod f1.txt", shell_basic)
-    assert CmdResult.stderr == ["chmod: expected at least two arguments"]
-    assert CmdResult.stdout == []
-    CmdResult = cl.enter_command("chmod 21 f1.txt", shell_basic)
-    assert CmdResult.stderr == [
-        "chmod: value given for permissions which is not of length of 3"
-    ]
-    assert CmdResult.stdout == []
-    CmdResult = cl.enter_command("chmod 6a5 f1.txt", shell_basic)
-    assert CmdResult.stderr == [
-        "chmod: value other then given integer given for permissions"
-    ]
-    assert CmdResult.stdout == []
-
-
-######## AND OR ################
 def test_andor(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("cd d1 && ls", shell_basic)
     assert CmdResult.stderr == []
@@ -302,81 +127,6 @@ def test_and_failure(cl, shell_basic: ShellState):
     assert CmdResult.stdout == []
 
 
-######### MV ##################
-def test_mv_rename(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("mv f1.txt", shell_basic)
-    assert CmdResult.stderr == ["cp: expected at least two arguments"]
-    assert CmdResult.stdout == []
-    # rename
-    CmdResult = cl.enter_command("mv f1.txt abc.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert isinstance(shell_basic.fs.get_file("abc.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
-
-    CmdResult = cl.enter_command("mv -v abc.txt f1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["Renamed abc.txt -> f1.txt"]
-    assert isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("abc.txt"), FileNode)
-
-    CmdResult = cl.enter_command("mv abc.txt f4.txt", shell_basic)
-    assert CmdResult.stderr == ["mv: could not find file abc.txt"]
-    assert CmdResult.stdout == []
-    assert not isinstance(shell_basic.fs.get_file("f4.txt"), FileNode)
-
-
-def test_vm_move_norename(cl, shell_basic: ShellState):
-    # move to directory
-    CmdResult = cl.enter_command("mv f1.txt d1", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert isinstance(shell_basic.fs.get_file("d1/f1.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
-
-    CmdResult = cl.enter_command("mv -v f2.txt d1", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["Moved f2.txt to d1"]
-    assert isinstance(shell_basic.fs.get_file("d1/f2.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("f2.txt"), FileNode)
-
-    CmdResult = cl.enter_command("mv f3.txt d1", shell_basic)
-    assert CmdResult.stderr == ["mv: could not find file f3.txt"]
-    assert CmdResult.stdout == []
-
-
-def test_vm_move_multiple(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("mv f1.txt f2.txt d1", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert isinstance(shell_basic.fs.get_file("d1/f1.txt"), FileNode)
-    assert isinstance(shell_basic.fs.get_file("d1/f2.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("f2.txt"), FileNode)
-
-    CmdResult = cl.enter_command("mv f5.txt f6.txt d1", shell_basic)
-    assert CmdResult.stderr == [
-        "mv: could not find file f5.txt",
-        "mv: could not find file f6.txt",
-    ]
-    assert CmdResult.stdout == []
-    assert not isinstance(shell_basic.fs.get_file("d1/f5.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("d1/f6.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("f5.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("f6.txt"), FileNode)
-
-
-def test_vm_move_multiple2(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("mv -v f1.txt f2.txt d1", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["Moved f1.txt to d1", "Moved f2.txt to d1"]
-    assert isinstance(shell_basic.fs.get_file("d1/f1.txt"), FileNode)
-    assert isinstance(shell_basic.fs.get_file("d1/f2.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("f1.txt"), FileNode)
-    assert not isinstance(shell_basic.fs.get_file("f2.txt"), FileNode)
-
-
-########## SUBSHELL #################
 def test_subshell_basic(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("(cd d1 && ls)", shell_basic)
     assert CmdResult.stderr == []
@@ -392,7 +142,6 @@ def test_semicolon_basic(cl, shell_basic: ShellState):
     assert CmdResult.stdout == ["f3.txt", "f4.txt"]
 
 
-########## VAR #####################
 def test_var_basic(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("X=5", shell_basic)
     assert CmdResult.stderr == []
@@ -410,105 +159,6 @@ def test_var_error(cl, shell_basic: ShellState):
     assert CmdResult.stdout == []
 
 
-######## SORT ######################
-def setup_names(s: ShellState, name: str) -> list[str]:
-    amount = random.randint(5, 25)
-    names = []
-    r = RandomWord()
-    for _ in range(0, amount):
-        names.append(r.word())
-    s.fs.search(name)
-    s.fs.current.set_data(names)
-    s.fs.current = s.fs.filehead
-    names.sort()
-    return names
-
-
-def test_sort_basic(cl, shell_basic: ShellState):
-    names = setup_names(shell_basic, "f2.txt")
-    CmdResult = cl.enter_command("sort f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    for i in range(0, len(names)):
-        assert CmdResult.stdout[i] == names[i]
-
-
-def test_sort_random(cl, shell_basic: ShellState):
-    names = setup_names(shell_basic, "f2.txt")
-    name = random.choice(names)
-    names.append(name)
-    fn = shell_basic.fs.get_file("f2.txt")
-    assert isinstance(fn, FileNode)
-    fn.append_data([name])
-    CmdResult = cl.enter_command("sort -R f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    for i in range(0, len(names) - 1):
-        if CmdResult.stdout[i] == name:
-            assert CmdResult.stdout[i + 1] == name
-            return
-    raise AssertionError()
-
-
-def test_sort_dups(cl, shell_basic: ShellState):
-    names = setup_names(shell_basic, "f2.txt")
-    name = random.choice(names)
-    names = names.copy()
-    print(f"Extra name is {name}")
-    fn = shell_basic.fs.get_file("f2.txt")
-    assert isinstance(fn, FileNode)
-    fn.append_data([name])
-    print(fn.get_data())
-    CmdResult = cl.enter_command("sort -u f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    # assert len(CmdResult.stdout) == len(names)
-    print(CmdResult.stdout)
-    print(names)
-    for i in range(0, len(names)):
-        assert CmdResult.stdout[i] == names[i]
-
-
-def test_sort_output(cl, shell_basic: ShellState):
-    names = setup_names(shell_basic, "f2.txt")
-    CmdResult = cl.enter_command("sort -o f1.txt f2.txt", shell_basic)
-    shell_basic.fs.search("f1.txt")
-    data = shell_basic.fs.current.get_data()
-    shell_basic.fs.current = shell_basic.fs.filehead
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    for i in range(0, len(names)):
-        assert data[i] == names[i]
-
-
-def test_sort_sorted(cl, shell_basic: ShellState):
-    names = setup_names(shell_basic, "f2.txt")
-    CmdResult = cl.enter_command("sort -o s1.txt f2.txt", shell_basic)
-    shell_basic.fs.search("s1.txt")
-    data = shell_basic.fs.current.get_data()
-    shell_basic.fs.current = shell_basic.fs.filehead
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    for i in range(0, len(names)):
-        assert data[i] == names[i]
-    CmdResult = cl.enter_command("sort -C s1.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert shell_basic.ls == 0
-    fn = shell_basic.fs.get_file("f2.txt")
-    assert isinstance(fn, FileNode)
-    data_copy = fn.get_data().copy()
-    random.shuffle(data_copy)
-    fn.set_data(data_copy)
-    CmdResult = cl.enter_command("sort -C f2.txt", shell_basic)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    assert shell_basic.ls == 0
-    CmdResult = cl.enter_command("sort -c f2.txt", shell_basic)
-    assert len(CmdResult.stderr)
-    assert CmdResult.stderr[0].startswith("sort:")
-    assert CmdResult.stdout == []
-    assert shell_basic.ls == 0
-
-
-######### PIPES #################
 def test_pipes_lsgrep(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("ls | grep f", shell_basic)
     assert CmdResult.stderr == []
@@ -664,76 +314,3 @@ def test_pipes_sort_tail(cl, shell_fouritems: ShellState):
     CmdResult = cl.enter_command("ls | sort | tail --lines=1", shell_fouritems)
     assert CmdResult.stderr == []
     assert CmdResult.stdout == ["f4.txt"]
-
-
-######### CP ###################
-def test_cp_basic(cl, shell_fouritems: ShellState):
-    CmdResult = cl.enter_command("cp f1.txt copied.txt", shell_fouritems)
-    assert CmdResult.stdout == []
-    assert CmdResult.stderr == []
-    fn = shell_fouritems.fs.get_file("copied.txt")
-    assert isinstance(fn, FileNode)
-    assert fn.get_data() == ["ERROR 1", "ERROR 2", "INFO 1"]
-
-    CmdResult = cl.enter_command("cp -v f2.txt f3.txt", shell_fouritems)
-    assert CmdResult.stdout == ["cp: Copied 'f2.txt' to 'f3.txt'"]
-    assert CmdResult.stderr == []
-    fn = shell_fouritems.fs.get_file("f3.txt")
-    assert isinstance(fn, FileNode)
-    assert fn.get_data() == ["ERROR 3", "ERROR 4", "INFO 2"]
-
-
-def test_cp_directory(cl, shell_cp: ShellState):
-    CmdResult = cl.enter_command("cp -vr project project_backup", shell_cp)
-    assert CmdResult.stdout == ["cp: Copied 'project' to 'project_backup'"]
-    assert CmdResult.stderr == []
-    f1 = shell_cp.fs.get_file("project")
-    f2 = shell_cp.fs.get_file("project_backup")
-    assert isinstance(f1, FileNode) and isinstance(f2, FileNode)
-    assert f1.items == f2.items
-
-    CmdResult = cl.enter_command("cp -vr project project2", shell_cp)
-    assert CmdResult.stdout == ["cp: Copied 'project' to 'project2'"]
-    assert CmdResult.stderr == []
-    f1 = shell_cp.fs.get_file("project")
-    f2 = shell_cp.fs.get_file("project2/project")
-    assert isinstance(f1, FileNode) and isinstance(f2, FileNode)
-    assert f1.items == f2.items
-
-
-def test_cp_file_directory(cl, shell_fouritems: ShellState):
-    shell_fouritems.fs.add_directory("d1")
-    CmdResult = cl.enter_command("cp f1.txt f2.txt d1", shell_fouritems)
-    assert CmdResult.stderr == []
-    assert CmdResult.stdout == []
-    f1 = shell_fouritems.fs.get_file("d1")
-    f2 = shell_fouritems.fs.get_file("f1.txt")
-    f3 = shell_fouritems.fs.get_file("f2.txt")
-    f4 = shell_fouritems.fs.get_file("d1/f1.txt")
-    f5 = shell_fouritems.fs.get_file("d1/f2.txt")
-    assert (
-        isinstance(f1, FileNode)
-        and isinstance(f2, FileNode)
-        and isinstance(f3, FileNode)
-    )
-    assert len(f1.items) == 2
-    assert f2 == f4
-    assert f3 == f5
-
-
-def test_cp_errors(cl, shell_cp: ShellState):
-    CmdResult = cl.enter_command("cp project project_backup", shell_cp)
-    assert CmdResult.stdout == []
-    assert CmdResult.stderr == ["cp: -r not specified; omitting directory 'project'"]
-
-    CmdResult = cl.enter_command("cp -r project f1.txt", shell_cp)
-    assert CmdResult.stdout == []
-    assert CmdResult.stderr == [
-        "cp: cannot overwrite non-directory 'f1.txt' with directory 'project'"
-    ]
-
-
-def test_cp_errors2(cl, shell_fouritems: ShellState):
-    CmdResult = cl.enter_command("cp f1.txt f2.txt f12.txt", shell_fouritems)
-    assert CmdResult.stdout == []
-    assert CmdResult.stderr == ["cp: target 'f12.txt' is not a directory"]
