@@ -67,14 +67,15 @@ class FileNode:
         return permission
 
     def update_permissions(self, updated: dict, recurse: bool) -> list[str]:
-        self.ctime = datetime.datetime.now()
-        self.inode.permissions = updated
+        self.inode.ctime = datetime.datetime.now()
+        self.inode.permissions = {owner: bits.copy() for owner, bits in updated.items()}
         result = [
             f"Updated permissions of {self.name} with {self.get_permission_str(self)}"
         ]
         if recurse:
             for item in self.items:
-                result.extend(item.update_permissions(updated, recurse))
+                if item.get_type() != NodeType.SYMLINK:
+                    result.extend(item.update_permissions(updated, recurse))
         return result
 
     def get_data(self) -> list[str]:
