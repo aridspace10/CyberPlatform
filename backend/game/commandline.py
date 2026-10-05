@@ -3,6 +3,7 @@ import datetime
 import random
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal, Tuple
 
 from game.Context import CommandContext, ExecutionContext, SystemContext
@@ -98,7 +99,7 @@ class CommandLine:
             sys.fs.current = saved_current
             return error
         name = lst[-1]
-        if (name == "." or name == ".."):
+        if name == "." or name == "..":
             sys.fs.current = saved_current
             return f"Cannot complete operation for {name}"
         for _idx, item in enumerate(sys.fs.current.items):
@@ -117,14 +118,20 @@ class CommandLine:
         return result
 
     def enter_command(self, raw: str, shell: ShellState) -> CommandResult:
+        if not raw.strip():
+            return CommandResult()
+
         sys = SystemContext(shell.fs, self.process_manager, self.network, shell)
-        tokens = lex(raw)
-        parser = CommandParser(tokens)
-        ast = parser.parse()
+        try:
+            tokens = lex(raw)
+            parser = CommandParser(tokens)
+            ast = parser.parse()
+        except SyntaxError as error:
+            message = str(error) or "invalid command syntax"
+            return CommandResult(2, stderr=[f"syntax error: {message}"])
         if isinstance(ast, Sequence):
             return self.execute_sequence(ast.parts, sys)
-        else:
-            raise Exception("Enter command given no sequence object")
+        return CommandResult(2, stderr=["syntax error: expected a command"])
 
     def execute_pipeline(self, pipe: Pipe, sys: SystemContext) -> CommandResult:
         cmd_result = None
@@ -275,24 +282,20 @@ class CommandLine:
                             )
                         word += sys.shell.vars[part.name]
                 args.append(word)
-            try:
-                return self.execute(args, fdin, sys)
-            except:
-                return CommandResult(1, stderr=["Uncaught Exception"])
+            return self.execute(args, fdin, sys)
         else:
             # save state
             saved_cwd = sys.shell.cwd
             saved_env = sys.shell.vars.copy()
             saved_fs_current = sys.fs.current
-            saved_fs_cwd = sys.shell.cwd
-            # execute
-            cmd_result = self.execute_sequence(atom.sequence.parts, sys)
-            # restore state
-            sys.shell.cwd = saved_cwd
-            sys.shell.vars = saved_env
-            sys.fs.current = saved_fs_current
-            sys.fs.cwd = saved_fs_cwd
-            return cmd_result
+            saved_fs_cwd = sys.fs.cwd
+            try:
+                return self.execute_sequence(atom.sequence.parts, sys)
+            finally:
+                sys.shell.cwd = saved_cwd
+                sys.shell.vars = saved_env
+                sys.fs.current = saved_fs_current
+                sys.fs.cwd = saved_fs_cwd
 
     def execute_sequence(self, parts: list[Job], sys: SystemContext) -> CommandResult:
         cmd_result = None
@@ -328,38 +331,29 @@ class CommandLine:
         return handler(ctx)
 
     def useage(self, type: str) -> list[str]:
-        output = []
-        with open(f"../static/help/{type}.txt") as f:
-            for line in f:
-                output.append(line)
-        return output
+        help_path = (
+            Path(__file__).resolve().parents[2] / "static" / "help" / f"{type}.txt"
+        )
+        try:
+            return help_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        except OSError:
+            return [f"{type}: help is unavailable"]
 
     def sleep(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
-            return CommandResult(1, stdout=self.useage("sleep"))
+            return CommandResult(0, stdout=self.useage("sleep"))
         if not len(ctx.args):
             return CommandResult(1, stderr=["sleep: Missing Argument"])
-        status = 0
-        val = ctx.args[0]
-        last = val[-1]
-        ty = "s"
-        try:
-            int(last)
-        except ValueError:
-            ty = last
-            val = val[:-1]
-        try:
-            val = int(val)
-        except ValueError:
-            return CommandResult(1, stderr=[f"expected int, got {val}"])
-
-        # Modify val for selected type
-        if ty == "m":
-            val *= 60
-        if ty == "h":
-            val *= 60 * 60
-        if ty == "d":
-            val *= 60 * 60 * 24
+        if len(ctx.args) != 1:
+            return CommandResult(1, stderr=["sleep: expected one duration"])
+        match = re.fullmatch(r"(\d+)([smhd]?)", ctx.args[0])
+        if match is None:
+            return CommandResult(
+                1, stderr=[f"sleep: invalid time interval '{ctx.args[0]}'"]
+            )
+        val = int(match.group(1))
+        ty = match.group(2) or "s"
+        val *= {"s": 1, "m": 60, "h": 3600, "d": 86400}[ty]
 
         # Create process
         proc = self.process_manager.create_process(
@@ -370,7 +364,7 @@ class CommandLine:
 
         ctx.system.shell.foreground_pid = proc.pid
 
-        return CommandResult(status, interaction=Interaction(mode="foreground"))
+        return CommandResult(0, interaction=Interaction(mode="foreground"))
 
     def cut(self, ctx: CommandContext) -> CommandResult:
         delimiter = "\t"
@@ -453,22 +447,21 @@ class CommandLine:
                     return CommandResult(stdout=self.useage("ps-all"))
             return CommandResult(stdout=self.useage("ps"))
         parameters: dict[str, Any] = {}
-        while len(ctx.args):
-            arg = ctx.args.pop(0)
-            for option in arg:
-                match (option):
-                    case "-e":
-                        parameters["selectionTy"] = "e"
-                    case "-A":
-                        parameters["selectionTy"] = "e"
-                    case "-C":
-                        parameters["command"] = ctx.args.pop(0)
-                    case "-p":
-                        parameters["pid"] = ctx.args.pop(0)
-                    case "-q":
-                        parameters["qpid"] = ctx.args.pop(0)
-                    case "-l":
-                        parameters["long"] = True
+        args = list(ctx.args)
+        while args:
+            arg = args.pop(0)
+            if arg in ("-e", "-A"):
+                parameters["selectionTy"] = "e"
+            elif arg == "-l":
+                parameters["long"] = True
+            elif arg in ("-C", "-p", "-q"):
+                if not args or not args[0]:
+                    return CommandResult(1, stderr=[f"ps: argument required for {arg}"])
+                value = args.pop(0)
+                key = {"-C": "command", "-p": "pid", "-q": "qpid"}[arg]
+                parameters[key] = value
+            else:
+                return CommandResult(1, stderr=[f"ps: unknown option '{arg}'"])
         self.process_manager.list_processes(parameters)
 
         return CommandResult()
@@ -476,38 +469,33 @@ class CommandLine:
     def ping(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args or "-h" in ctx.args or "-help" in ctx.args:
             return CommandResult(stdout=self.useage("ping"))
-        # between = 0
-        # preload = 3
-        while len(ctx.args) > 1:
-            arg = ctx.args.pop(0)
-            if arg[0] == "-":
-                for option in arg:
-                    match (option):
-                        case "i":
-                            val = None
-                            try:
-                                val = ctx.args.pop(0)
-                                # between = int(val)
-                            except ValueError:
-                                return CommandResult(
-                                    stderr=[
-                                        f"Expected an integer for -i,"
-                                        f" got {val if val else ""}"
-                                    ]
-                                )
-                        case "l":
-                            val = None
-                            try:
-                                val = ctx.args.pop(0)
-                                # preload = int(val)
-                            except ValueError:
-                                return CommandResult(
-                                    stderr=[
-                                        f"Expected an integer for -l, "
-                                        f"got {val if val else ""}"
-                                    ]
-                                )
-        # dnsname = ctx.args.pop(0)
+        args = list(ctx.args)
+        if not args:
+            return CommandResult(1, stderr=["ping: host required"])
+        host = None
+        while args:
+            arg = args.pop(0)
+            if arg in ("-i", "-l"):
+                if not args or not args[0]:
+                    return CommandResult(
+                        1, stderr=[f"ping: argument required for {arg}"]
+                    )
+                value = args.pop(0)
+                try:
+                    if int(value) <= 0:
+                        raise ValueError
+                except ValueError:
+                    return CommandResult(
+                        1, stderr=[f"ping: invalid value for {arg}: '{value}'"]
+                    )
+            elif arg.startswith("-"):
+                return CommandResult(1, stderr=[f"ping: unknown option '{arg}'"])
+            elif host is None:
+                host = arg
+            else:
+                return CommandResult(1, stderr=["ping: expected one host"])
+        if not host:
+            return CommandResult(1, stderr=["ping: host required"])
         return CommandResult()
 
     def find(self, ctx: CommandContext) -> CommandResult:
@@ -515,7 +503,7 @@ class CommandLine:
             return CommandResult(
                 1, stderr=["find: atleast one argument needs to be given"]
             )
-        while len(ctx.args) and ctx.args[0][0] == "-":
+        while len(ctx.args) and ctx.args[0].startswith("-"):
             _ = ctx.args.pop(0)
         if not len(ctx.args):
             return CommandResult(
@@ -536,7 +524,7 @@ class CommandLine:
             fparser = FindParser(ctx.args)
             try:
                 node = fparser.parse()
-            except Exception as e:
+            except (SyntaxError, ValueError) as e:
                 return CommandResult(2, stderr=[f"find: {str(e)}"])
         stdout = []
         stderr = []
@@ -546,7 +534,10 @@ class CommandLine:
                 stderr.append(start_node)
                 continue
 
-            toprints, execs = start_node.find(node, ".")
+            try:
+                toprints, execs = start_node.find(node, ".")
+            except (SyntaxError, ValueError, re.error) as error:
+                return CommandResult(2, stderr=[f"find: {error}"])
             stdout.extend(toprints)
         return CommandResult(1 if stderr else 0, stdout, stderr)
 
@@ -565,7 +556,7 @@ class CommandLine:
         status = 0
         backup = ""
         suppress_print = False
-        while len(ctx.args) and ctx.args[0][0] == "-":
+        while len(ctx.args) and ctx.args[0].startswith("-"):
             arg = ctx.args.pop(0)
             if arg.startswith("--file="):
                 files.append(arg.split("=")[1])
@@ -577,8 +568,16 @@ class CommandLine:
                 for option in arg[1:]:
                     match (option):
                         case "f":
+                            if not ctx.args:
+                                return CommandResult(
+                                    1, stderr=["sed: argument required for -f"]
+                                )
                             files.append(ctx.args.pop(0))
                         case "e":
+                            if not ctx.args:
+                                return CommandResult(
+                                    1, stderr=["sed: argument required for -e"]
+                                )
                             expressions.append(ctx.args.pop(0))
                         case "i":
                             backup = "-i"
@@ -595,6 +594,52 @@ class CommandLine:
                 expressions.append(arg)
             else:
                 files.append(arg)
+
+        if not expressions or any(not expression for expression in expressions):
+            return CommandResult(1, stderr=["sed: empty expression"])
+
+        # Compile address and substitution regexes before touching files. This
+        # keeps malformed scripts from creating backups or partially editing data.
+        try:
+            for expression in expressions:
+                index = 0
+                while index < len(expression) and expression[index] not in "sdp":
+                    index += 1
+                if index == len(expression):
+                    raise ValueError("unknown or incomplete expression")
+                address = expression[:index]
+                if address.startswith("/") and address.endswith("/"):
+                    re.compile(address[1:-1])
+                elif address and not address.startswith("/"):
+                    bounds = address.split(",")
+                    numeric_address = bounds[0].removesuffix("!")
+                    try:
+                        if numeric_address != "$":
+                            int(numeric_address)
+                        if len(bounds) == 2:
+                            int(bounds[1])
+                    except ValueError:
+                        raise ValueError(f"sed: expected int, got {address}") from None
+                if expression[index] == "s":
+                    if index + 1 >= len(expression):
+                        raise ValueError("incomplete substitution")
+                    delimiter = expression[index + 1]
+                    pattern_end = expression.find(delimiter, index + 2)
+                    if pattern_end < 0:
+                        raise ValueError(
+                            "sed: substution expects s/pattern/replacement/"
+                        )
+                    replacement_end = expression.find(delimiter, pattern_end + 1)
+                    if replacement_end < 0:
+                        raise ValueError("sed: expected terminating delim")
+                    re.compile(expression[index + 2 : pattern_end])
+        except re.error as error:
+            return CommandResult(1, stderr=[f"sed: invalid expression: {error}"])
+        except ValueError as error:
+            message = str(error)
+            if message.startswith("sed:"):
+                return CommandResult(1, stderr=[message])
+            return CommandResult(1, stderr=[f"sed: invalid expression: {message}"])
 
         stdout = []
         stderr = []
@@ -614,13 +659,6 @@ class CommandLine:
                 continue
 
             old = list(source.get_data())
-
-            # Save backup if request
-            if backup not in ("", "-i"):
-                inode = Inode(NodeType.FILE)
-                inode.set_data(old)
-                assert source.parent is not None
-                source.parent.add_child(backup.replace("-i", source.name, 1), inode)
 
             # Apply commands to line
             new = old.copy()
@@ -827,6 +865,11 @@ class CommandLine:
                 else:
                     return CommandResult(1, stderr=["sed: unknown expression given"])
             if backup:
+                if backup not in ("", "-i"):
+                    inode = Inode(NodeType.FILE)
+                    inode.set_data(old)
+                    assert source.parent is not None
+                    source.parent.add_child(backup.replace("-i", source.name, 1), inode)
                 source.set_data(new)
             elif suppress_print:
                 stdout.extend(printed)
@@ -850,6 +893,8 @@ class CommandLine:
                 lines = True
             elif arg in ("-w", "--words"):
                 words = True
+            elif arg.startswith("-") and arg != "-":
+                return CommandResult(1, stderr=[f"wc: unknown option '{arg}'"])
             else:
                 files.append(arg)
 
@@ -1186,7 +1231,7 @@ class CommandLine:
                 exclude.append(lst[1])
             elif arg == "--help":
                 return CommandResult(0, stdout=self.useage("grep"))
-            elif arg[0] == "-":
+            elif arg.startswith("-"):
                 for option in arg[1:]:
                     match (option):
                         case "i":
@@ -1364,7 +1409,7 @@ class CommandLine:
             arg = ctx.args.pop(0)
             if arg == "-":
                 pass
-            elif arg[0] == "-":
+            elif arg.startswith("-"):
                 if arg[1] == "-":
                     if arg == "--no-create":
                         create = False
@@ -1482,7 +1527,7 @@ class CommandLine:
                 continue
 
             if content.get_type() == NodeType.DIRECTORY:
-                stderr.append(f"cat: Non directory is given")
+                stderr.append("cat: Non directory is given")
                 status = 1
                 continue
 
@@ -1507,29 +1552,59 @@ class CommandLine:
             arg = ctx.args.pop(0)
             if arg == "-":
                 files.append(ctx.stdin)
-            elif arg[0] == "-":
+            elif arg.startswith("-"):
                 if arg == "--help":
                     return CommandResult(0, stdout=self.useage("head"))
                 elif arg == "-n":
-                    lines = int(ctx.args.pop(0))
+                    if not ctx.args:
+                        return CommandResult(
+                            1, stderr=["head: argument required for -n"]
+                        )
+                    value = ctx.args.pop(0)
+                    try:
+                        lines = int(value)
+                    except ValueError:
+                        return CommandResult(
+                            1, stderr=[f"head: invalid line count '{value}'"]
+                        )
                 elif arg.startswith("--lines="):
-                    val = arg.split("=")[1]
-                    if val[0] == "-":
-                        rev = True
-                        lines = int(val[1:]) * -1
-                    else:
-                        lines = int(val)
+                    val = arg.split("=", 1)[1]
+                    try:
+                        if val.startswith("-"):
+                            rev = True
+                            lines = int(val[1:]) * -1
+                        else:
+                            lines = int(val)
+                    except ValueError:
+                        return CommandResult(
+                            1, stderr=[f"head: invalid line count '{val}'"]
+                        )
                 elif arg == "-c":
-                    b = int(ctx.args.pop(0))
+                    if not ctx.args:
+                        return CommandResult(
+                            1, stderr=["head: argument required for -c"]
+                        )
+                    value = ctx.args.pop(0)
+                    try:
+                        b = int(value)
+                    except ValueError:
+                        return CommandResult(
+                            1, stderr=[f"head: invalid byte count '{value}'"]
+                        )
                 elif arg.startswith("--bytes="):
-                    val = arg.split("=")[1]
-                    if val[0] == "-":
-                        rev = True
-                        b = int(val[1:]) * -1
-                    else:
-                        b = int(val)
+                    val = arg.split("=", 1)[1]
+                    try:
+                        if val.startswith("-"):
+                            rev = True
+                            b = int(val[1:]) * -1
+                        else:
+                            b = int(val)
+                    except ValueError:
+                        return CommandResult(
+                            1, stderr=[f"head: invalid byte count '{val}'"]
+                        )
                 else:
-                    stderr.append(f"head: Unknown argument (${arg}) given")
+                    return CommandResult(1, stderr=[f"head: unknown argument '{arg}'"])
             else:
                 files.append(arg)
         if not len(files):
@@ -1590,7 +1665,7 @@ class CommandLine:
         byte = -1
         ahead = False
         outputType = 0
-        while len(ctx.args) and ctx.args[0][0] == "-":
+        while len(ctx.args) and ctx.args[0].startswith("-"):
             arg = ctx.args.pop(0)
             if arg == "-c" or arg.startswith("--bytes="):
                 if arg == "-c":
@@ -1660,7 +1735,6 @@ class CommandLine:
                 stdout.append(f"==> {file} <==")
 
             # Get filenode
-            saved_current = ctx.system.fs.current
             if file == "-":
                 content = ctx.stdin
                 ty = content.get_type()
@@ -1672,7 +1746,7 @@ class CommandLine:
 
             # Check is file
             if ty == NodeType.DIRECTORY:
-                status = 1 
+                status = 1
                 stderr.append(f"tail: {file} is a directory")
                 continue
 
@@ -1721,7 +1795,7 @@ class CommandLine:
         if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("rm"))
 
-        while len(ctx.args) and ctx.args[0][0] == "-":
+        while len(ctx.args) and ctx.args[0].startswith("-"):
             arg = ctx.args.pop(0)
             if arg in ("--recursive", "--interactive", "--verbose"):
                 recurse = recurse or arg == "--recursive"
@@ -1796,11 +1870,10 @@ class CommandLine:
         return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def pwd(self, ctx: CommandContext) -> CommandResult:
-        while len(ctx.args) > 1:
-            arg = ctx.args[0]
-            if arg == "--help":
-                return CommandResult(0, stdout=self.useage("pwd"))
-            ctx.args = ctx.args[1:]
+        if ctx.args == ["--help"]:
+            return CommandResult(0, stdout=self.useage("pwd"))
+        if ctx.args:
+            return CommandResult(1, stderr=[f"pwd: unexpected operand '{ctx.args[0]}'"])
         pointer = ctx.system.fs.current
         direct = ""
         while pointer is not None:
@@ -1825,7 +1898,7 @@ class CommandLine:
         names: list[str] = []
         while len(ctx.args):
             arg: str = ctx.args.pop(0)
-            if arg[0] == "-":
+            if arg.startswith("-"):
                 if arg == "-m" or arg == "--mode" or arg.startswith("--mode="):
                     if arg in ["-m", "--mode"]:
                         if not len(ctx.args):
@@ -1880,7 +1953,9 @@ class CommandLine:
         stderr = []
         while ctx.args:
             arg = ctx.args[0]
-            if arg[0] == "-":
+            if not arg:
+                return CommandResult(1, stderr=["ls: empty path"])
+            if arg.startswith("-"):
                 if arg == "--help":
                     return CommandResult(0, stdout=self.useage("ls"))
                 options = arg[1:]
@@ -1938,7 +2013,7 @@ class CommandLine:
         if error := ctx.system.fs.search(arg):
             ctx.system.fs.current = sc
             return CommandResult(1, stderr=["cd:" + error])
-        if (ctx.system.fs.current.get_type() != NodeType.DIRECTORY):
+        if ctx.system.fs.current.get_type() != NodeType.DIRECTORY:
             name = ctx.system.fs.current.name
             ctx.system.fs.current = sc
             return CommandResult(1, stderr=[f"cd: {name} is not a directory"])
@@ -1960,7 +2035,7 @@ class CommandLine:
             return CommandResult(2, stderr=["Invalid number of arguments"])
         while len(ctx.args) > 2:
             arg = ctx.args.pop(0)
-            if arg[0] == "-":
+            if arg.startswith("-"):
                 options = arg[1:]
                 for option in options:
                     match option:
@@ -2009,16 +2084,56 @@ class CommandLine:
         file = ""
         while ctx.args:
             arg = ctx.args.pop(0)
+            if not arg:
+                return CommandResult(1, stderr=["uniq: empty path"])
             if arg == "-d" or arg == "repeated":
                 printdup = True
             elif arg.startswith("--skip-fields"):
-                skipfield = int(arg.split("=")[1])
+                if "=" not in arg:
+                    return CommandResult(
+                        1, stderr=["uniq: value required for --skip-fields"]
+                    )
+                value = arg.split("=", 1)[1]
+                try:
+                    skipfield = int(value)
+                except ValueError:
+                    return CommandResult(
+                        1, stderr=[f"uniq: invalid field count '{value}'"]
+                    )
+                if skipfield < 0:
+                    return CommandResult(
+                        1, stderr=["uniq: field count must be non-negative"]
+                    )
             elif arg == "-i":
                 csenstive = False
             elif arg == "-f":
-                skipfield = int(ctx.args.pop(0))
+                if not ctx.args:
+                    return CommandResult(1, stderr=["uniq: argument required for -f"])
+                value = ctx.args.pop(0)
+                try:
+                    skipfield = int(value)
+                except ValueError:
+                    return CommandResult(
+                        1, stderr=[f"uniq: invalid field count '{value}'"]
+                    )
+                if skipfield < 0:
+                    return CommandResult(
+                        1, stderr=["uniq: field count must be non-negative"]
+                    )
             elif arg == "-s":
-                skipchars = int(ctx.args.pop(0))
+                if not ctx.args:
+                    return CommandResult(1, stderr=["uniq: argument required for -s"])
+                value = ctx.args.pop(0)
+                try:
+                    skipchars = int(value)
+                except ValueError:
+                    return CommandResult(
+                        1, stderr=[f"uniq: invalid character count '{value}'"]
+                    )
+                if skipchars < 0:
+                    return CommandResult(
+                        1, stderr=["uniq: character count must be non-negative"]
+                    )
             else:
                 file = arg
         if file != "":
@@ -2070,7 +2185,9 @@ class CommandLine:
         output = ""
         while ctx.args:
             arg = ctx.args.pop(0)
-            if arg[0] == "-":
+            if not arg:
+                return CommandResult(2, stderr=["sort: empty path"])
+            if arg.startswith("-"):
                 if arg == "-":
                     file = "-"
                     continue
@@ -2083,6 +2200,10 @@ class CommandLine:
                         case "R":
                             randomize = True
                         case "o":
+                            if not ctx.args or not ctx.args[0]:
+                                return CommandResult(
+                                    2, stderr=["sort: argument required for -o"]
+                                )
                             output = ctx.args.pop(0)
                         case "c":
                             check = True

@@ -1,5 +1,5 @@
 from tests.cmd_tests.creation_helpers import assert_success
-from tests.cmd_tests.path_helpers import canonical_path
+from tests.cmd_tests.path_helpers import canonical_path, tree_state
 
 
 def test_pwd_dot_paths_report_canonical_directory(run_dot_command, dot_shell):
@@ -17,3 +17,11 @@ def test_pwd_dot_paths_after_navigation(run_dot_command, dot_shell, dot_director
     run_dot_command(f"cd {operand}", navigates_to=target)
     expected = dot_shell.fs.filehead.name + canonical_path(target).rstrip("/")
     assert_success(run_dot_command("pwd"), [expected])
+
+
+def test_pwd_rejects_unexpected_operands_without_mutation(cl, shell_basic):
+    before = tree_state(shell_basic)
+    result = cl.enter_command("pwd --bad", shell_basic)
+    assert result.status != 0
+    assert result.stderr == ["pwd: unexpected operand '--bad'"]
+    assert tree_state(shell_basic) == before

@@ -3,7 +3,7 @@ import random
 from game.filenode import FileNode
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
-from tests.cmd_tests.path_helpers import assert_directory_error
+from tests.cmd_tests.path_helpers import assert_directory_error, tree_state
 from tests.command_helpers import assert_help, setup_names
 
 
@@ -59,6 +59,15 @@ def test_sort_output(cl, shell_basic: ShellState):
     assert CmdResult.stdout == []
     for i in range(0, len(names)):
         assert data[i] == names[i]
+
+
+def test_sort_output_requires_a_path_without_mutation(cl, shell_basic):
+    before = tree_state(shell_basic)
+    for command in ("sort -o", 'sort -o "" f2.txt'):
+        result = cl.enter_command(command, shell_basic)
+        assert_failure(result)
+        assert result.stderr
+        assert tree_state(shell_basic) == before
 
 
 def test_sort_sorted(cl, shell_basic: ShellState):

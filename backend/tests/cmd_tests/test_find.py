@@ -21,6 +21,14 @@ def test_find_dot_paths_reject_invalid_traversal(run_dot_command, invalid_dot_pa
     assert_failure(run_dot_command(f"find {invalid_dot_path}"))
 
 
+def test_find_invalid_type_predicate_returns_command_error_without_mutation(
+    run_dot_command,
+):
+    result = run_dot_command("find . -type invalid")
+    assert_failure(result)
+    assert result.stderr
+
+
 ################# FIND ##################
 def test_find_error(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("find", shell_basic)

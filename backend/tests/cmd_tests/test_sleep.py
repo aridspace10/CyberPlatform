@@ -40,6 +40,17 @@ def test_sleep_error2(cl, shell_empty: ShellState):
     assert cmd.stdout == []
 
 
+def test_sleep_empty_duration_is_a_command_error_without_starting_process(
+    cl, shell_empty
+):
+    processes = dict(cl.process_manager.processes)
+    result = cl.enter_command('sleep ""', shell_empty)
+    assert_failure(result)
+    assert result.stderr
+    assert shell_empty.foreground_pid is None
+    assert cl.process_manager.processes == processes
+
+
 # Async
 
 

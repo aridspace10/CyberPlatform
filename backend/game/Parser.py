@@ -213,8 +213,9 @@ class CommandParser:
 
     def consume(self, expected_type=None):
         tok = self.peek()
-        if expected_type and tok is not None and tok.type != expected_type:
-            raise SyntaxError(f"Expected {expected_type}, got {tok.type}")
+        if expected_type and (tok is None or tok.type != expected_type):
+            actual = "end of input" if tok is None else tok.type
+            raise SyntaxError(f"Expected {expected_type}, got {actual}")
         self.pos += 1
         return tok
 
@@ -257,8 +258,9 @@ class CommandParser:
         ):
             self.consume()
             target = self.consume()
-            if p is not None and target is not None:
-                result.append(Redirection(p.value, target.value))
+            if target is None:
+                raise SyntaxError(f"expected target after {p.value}")
+            result.append(Redirection(p.value, target.value))
         return result
 
     def split_assignment(self, word: str):

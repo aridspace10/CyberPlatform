@@ -97,6 +97,14 @@ def test_ls_error(cl, shell_empty):
     assert CmdResult.stdout == []
 
 
+def test_ls_empty_path_is_a_command_error_without_mutation(cl, shell_basic):
+    before = tree_state(shell_basic)
+    result = cl.enter_command('ls ""', shell_basic)
+    assert result.status != 0
+    assert result.stderr
+    assert tree_state(shell_basic) == before
+
+
 def test_ls_target(cl, shell_basic):
     CmdResult = cl.enter_command("ls d1", shell_basic)
     assert CmdResult.stderr == []
