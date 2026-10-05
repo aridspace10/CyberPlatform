@@ -10,6 +10,7 @@ from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
 from game.Scheduler import Scheduler
 from game.ShellState import ShellState
+from services.session_logging import SessionLogger
 
 Username = str
 
@@ -34,6 +35,7 @@ class GameSession:
     def __init__(self, session_id: str):
         # Basic Info
         self.session_id = session_id
+        self.logger = SessionLogger(session_id)
         self.state = "waiting"
         self.name = "Test"
 

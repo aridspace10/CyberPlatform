@@ -5,3 +5,4 @@ node_modules
 .coveragerc
 app.db
 /docs
+/backend/logs/

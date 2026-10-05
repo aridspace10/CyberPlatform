@@ -1,5 +1,12 @@
 # React + Vite
 
+## Backend URL
+
+The frontend uses `http://localhost:8000` for local development. For a hosted
+build, set `VITE_BACKEND_URL` to the backend's public HTTP(S) origin (for example,
+`https://api.example.com`). Configure the backend's `CYBERPLATFORM_CORS_ORIGINS`
+with the frontend origin so browser downloads and API calls are allowed.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

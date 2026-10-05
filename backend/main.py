@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from api.sessions import router as sessions_router
@@ -31,7 +32,13 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        origin.strip()
+        for origin in os.environ.get(
+            "CYBERPLATFORM_CORS_ORIGINS", "http://localhost:5173"
+        ).split(",")
+        if origin.strip()
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

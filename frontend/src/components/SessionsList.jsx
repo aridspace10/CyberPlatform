@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import "./SessionsList.css"
+import { API_URL } from "../api/config";
 
 export default function SessionList() {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ export default function SessionList() {
   }
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/sessions")
+    fetch(`${API_URL}/sessions`)
       .then(res => res.json())
       .then(data => setSessions(data.sessions));
   }, []);

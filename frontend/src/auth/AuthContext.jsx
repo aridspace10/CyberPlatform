@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createUser, loginUser } from "../api/users";
 import { AuthContext } from "./auth-context";
+import { BACKEND_URL } from "../api/config";
 import validator from 'validator';
 import passwordValidator from 'password-validator';
 
@@ -21,8 +22,6 @@ export function AuthProvider({ children }) {
     () => Boolean(localStorage.getItem("token"))
   );
 
-  const API = "http://localhost:8000";
-
   const logout = () => {
     localStorage.removeItem("token");
     setUser(null);
@@ -35,7 +34,7 @@ export function AuthProvider({ children }) {
 
     if (!token) return;
 
-    fetch(`${API}/users/me`, {
+    fetch(`${BACKEND_URL}/users/me`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -77,7 +76,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem("token", data.access_token);
 
     // fetch user after login
-    const meRes = await fetch(`${API}/users/me`, {
+    const meRes = await fetch(`${BACKEND_URL}/users/me`, {
       headers: {
         Authorization: `Bearer ${data.access_token}`
       }

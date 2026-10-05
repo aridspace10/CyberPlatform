@@ -1,11 +1,13 @@
 from typing import Dict, Literal
 
+from db.authentication import get_current_user
 from db.modals import GameSession as DatabaseGameSession
 from db.modals import Scenario, ScenarioToSession, SessionShell
 from db.session import get_db
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
+from services.session_logging import SessionLogger
 from services.session_service import (
     add_session,
     add_session_scenario,
@@ -79,6 +81,7 @@ def list_sessions():
         ]
     }
 
+
 @router.post("/session_create", status_code=201)
 async def session_create(body: SessionCreate, db: Session = Depends(get_db)):
     """Persist a session and register its complete config with GameManager."""
@@ -141,49 +144,40 @@ async def session_create(body: SessionCreate, db: Session = Depends(get_db)):
 @router.get("/session/{session_id}/join/{user_id}")
 def session_join(session_id: str, user_id: str, db: Session = Depends(get_db)):
     session = session_manager.get_session(session_id)
-    if (session == "404"):
-        return {
-            "details": "Session not found"
-        }
+    if session == "404":
+        return {"details": "Session not found"}
     user = get_user_by_id(db, int(user_id))
-    if (user is None or user.username is None):
-        return {
-            "details": "User not found"
-        }
+    if user is None or user.username is None:
+        return {"details": "User not found"}
     session.requests.add(user.username)
     return None
+
 
 @router.get("/session/{session_id}/accept/{user_id}")
 def session_accept(session_id: str, user_id: str, db: Session = Depends(get_db)):
     # Get Session and User Data
     session = session_manager.get_session(session_id)
-    if (session == "404"):
-        return {
-            "details": "Session not found"
-        }
+    if session == "404":
+        return {"details": "Session not found"}
     user = get_user_by_id(db, int(user_id))
-    if (user is None or user.username is None):
-        return {
-            "details": "User not found"
-        }
+    if user is None or user.username is None:
+        return {"details": "User not found"}
     # Remove Request
     session.requests.remove(user.username)
     return None
 
+
 @router.get("/session/{session_id}/decline/{user_id}")
 def session_decline(session_id: str, user_id: str, db: Session = Depends(get_db)):
     session = session_manager.get_session(session_id)
-    if (session == "404"):
-        return {
-            "details": "Session not found"
-        }
+    if session == "404":
+        return {"details": "Session not found"}
     user = get_user_by_id(db, int(user_id))
-    if (user is None or user.username is None):
-        return {
-            "details": "User not found"
-        }
+    if user is None or user.username is None:
+        return {"details": "User not found"}
     session.requests.remove(user.username)
     return None
+
 
 @router.post("/sandbox/{user_id}")
 async def get_sandbox(user_id: str, db: Session = Depends(get_db)):
@@ -254,6 +248,47 @@ def get_session_data(session_id: int, db: Session = Depends(get_db)):
         "state": session.state,
         "gameData": session.game_manager.get_game_data(session.name),
     }
+
+
+@router.get("/session/{session_id}/diagnostics")
+def download_session_diagnostics(
+    session_id: int,
+    user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    database_session = get_session(db, session_id)
+    if database_session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    membership = (
+        db.query(SessionShell)
+        .filter(
+            SessionShell.SessionID == session_id,
+            SessionShell.UserID == user_id,
+        )
+        .first()
+    )
+    if membership is None:
+        raise HTTPException(
+            status_code=403, detail="You are not a member of this session"
+        )
+
+    runtime_session = session_manager.get_session(str(session_id))
+    logger = (
+        runtime_session.logger
+        if runtime_session != "404"
+        else SessionLogger(str(session_id))
+    )
+    archive = logger.export_user_archive(str(user_id))
+    return Response(
+        content=archive,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="session-{session_id}-diagnostics.zip"'
+            )
+        },
+    )
 
 
 @router.get("/db/session/{session_id}")
