@@ -1,6 +1,7 @@
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
+from tests.command_helpers import assert_command_error_without_mutation
 
 # ---------- BASIC ----------
 
@@ -117,6 +118,11 @@ def test_wc_l_no_arguments(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("wc -l", shell_basic)
     # depends whether your shell reads stdin or errors
     assert CmdResult.stderr == [] or len(CmdResult.stderr) > 0
+
+
+def test_wc_unknown_option_is_a_command_error_without_mutation(cl, shell_basic):
+    result = assert_command_error_without_mutation(cl, shell_basic, "wc --bad")
+    assert result.stderr == ["wc: unknown option '--bad'"]
 
 
 # ---------- STRESS / ODDITIES ----------

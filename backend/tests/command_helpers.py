@@ -2,6 +2,7 @@ import random
 from pathlib import Path
 
 from game.ShellState import ShellState
+from tests.cmd_tests.path_helpers import tree_state
 from wonderwords import RandomWord
 
 
@@ -25,3 +26,20 @@ def assert_help(cl, shell, command):
     )
     assert result.stderr == []
     assert result.stdout == help_path.read_text().splitlines(keepends=True)
+
+
+def assert_command_error_without_mutation(cl, shell, command):
+    before = tree_state(shell)
+    current = shell.fs.current
+    fs_cwd = shell.fs.cwd
+    shell_cwd = shell.cwd
+
+    result = cl.enter_command(command, shell)
+
+    assert result.status != 0, f"{command!r} should fail as invalid input"
+    assert result.stderr, f"{command!r} should explain the input error"
+    assert tree_state(shell) == before, f"{command!r} changed filesystem state"
+    assert shell.fs.current is current
+    assert shell.fs.cwd == fs_cwd
+    assert shell.cwd == shell_cwd
+    return result

@@ -314,3 +314,58 @@ def test_pipes_sort_tail(cl, shell_fouritems: ShellState):
     CmdResult = cl.enter_command("ls | sort | tail --lines=1", shell_fouritems)
     assert CmdResult.stderr == []
     assert CmdResult.stdout == ["f4.txt"]
+
+
+def test_blank_input_is_a_noop(cl, shell_basic):
+    before = tree_state(shell_basic)
+    result = cl.enter_command(" \t ", shell_basic)
+    assert result.status == 0
+    assert result.stdout == []
+    assert result.stderr == []
+    assert tree_state(shell_basic) == before
+
+
+def test_help_loading_does_not_depend_on_process_cwd(
+    cl, shell_empty, monkeypatch, tmp_path
+):
+    from tests.command_helpers import assert_help
+
+    monkeypatch.chdir(tmp_path)
+    assert_help(cl, shell_empty, "head")
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["|", "&&", "||", "echo |", "echo &&", "echo >", "(", ")", ">", "$"],
+)
+def test_malformed_shell_syntax_returns_a_command_error(cl, shell_basic, command):
+    before = tree_state(shell_basic)
+    result = cl.enter_command(command, shell_basic)
+    assert result.status != 0
+    assert result.stderr
+    assert tree_state(shell_basic) == before
+
+
+def test_unexpected_subshell_exception_restores_shell_state(cl, shell_basic):
+    before_tree = tree_state(shell_basic)
+    before_vars = shell_basic.vars.copy()
+    before_current = shell_basic.fs.current
+    before_cwd = shell_basic.cwd
+    before_fs_cwd = shell_basic.fs.cwd
+
+    def explode(ctx):
+        ctx.system.shell.vars["TEMP"] = "changed"
+        ctx.system.shell.cwd = "/changed"
+        ctx.system.fs.cwd = "/changed"
+        ctx.system.fs.current = ctx.system.fs.filehead
+        raise RuntimeError("expected test failure")
+
+    cl.commands["explode"] = explode
+    with pytest.raises(RuntimeError, match="expected test failure"):
+        cl.enter_command("(explode)", shell_basic)
+
+    assert tree_state(shell_basic) == before_tree
+    assert shell_basic.vars == before_vars
+    assert shell_basic.fs.current is before_current
+    assert shell_basic.cwd == before_cwd
+    assert shell_basic.fs.cwd == before_fs_cwd

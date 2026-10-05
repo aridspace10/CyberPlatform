@@ -44,6 +44,22 @@ def test_sed_malformed5(cl, shell_basic: ShellState):
     assert CmdResult.stdout == []
 
 
+def test_sed_invalid_regex_does_not_create_backup_or_mutate_file(cl, shell_basic):
+    source = shell_basic.fs.get_file("f1.txt")
+    before = list(source.get_data())
+    result = cl.enter_command("sed -i.bak 's/[(/x/' f1.txt", shell_basic)
+    assert result.status != 0
+    assert result.stderr
+    assert source.get_data() == before
+    assert shell_basic.fs.get_file("f1.txt.bak") is None
+
+
+def test_sed_empty_expression_is_a_command_error(cl, shell_basic):
+    result = cl.enter_command('sed ""', shell_basic)
+    assert result.status != 0
+    assert result.stderr
+
+
 def test_sed_basic(cl, shell_sed: ShellState):
     CmdResult = cl.enter_command("sed 's/cat/dog/' f1.txt", shell_sed)
     assert CmdResult.stdout == ["dog wolf cat", "hi dog"]

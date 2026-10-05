@@ -1,9 +1,11 @@
 import math
 import random
+from pathlib import Path
 
+import pytest
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
-from tests.cmd_tests.path_helpers import assert_directory_error
+from tests.cmd_tests.path_helpers import assert_directory_error, tree_state
 from tests.command_helpers import assert_help
 
 
@@ -35,6 +37,19 @@ def test_head_error(cl, shell_basic: ShellState):
     assert CmdResult.stderr == ["head: d1 is a directory"]
 
 
+@pytest.mark.parametrize(
+    "command", ["head -n", "head -n nope", "head -c", "head --bytes="]
+)
+def test_head_invalid_count_is_a_command_error_without_mutation(
+    cl, shell_basic, command
+):
+    before = tree_state(shell_basic)
+    result = cl.enter_command(command, shell_basic)
+    assert_failure(result)
+    assert result.stderr
+    assert tree_state(shell_basic) == before
+
+
 def test_head_bytes(cl, shell_basic: ShellState):
     r = random.randint(5, 20)
     CmdResult = cl.enter_command(f"head -c {r} f2.txt", shell_basic)
@@ -54,6 +69,23 @@ def test_head_bytes(cl, shell_basic: ShellState):
 
 def test_head_help(cl, shell_empty):
     assert_help(cl, shell_empty, "head")
+
+
+def test_missing_help_resource_returns_safe_command_output(
+    cl, shell_empty, monkeypatch
+):
+    original_read_text = Path.read_text
+
+    def missing_help(path, *args, **kwargs):
+        if path.name == "head.txt":
+            raise OSError("simulated missing help resource")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", missing_help)
+    result = cl.enter_command("head --help", shell_empty)
+    assert result.status == 0
+    assert result.stdout == ["head: help is unavailable"]
+    assert result.stderr == []
 
 
 def test_head_dot_paths_read_file(run_dot_command, dot_prefix):

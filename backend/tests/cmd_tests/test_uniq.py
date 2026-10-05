@@ -1,10 +1,24 @@
+import pytest
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
-from tests.cmd_tests.path_helpers import assert_directory_error
+from tests.cmd_tests.path_helpers import assert_directory_error, tree_state
 from tests.command_helpers import assert_help
 
 
 def test_uniq_help(cl, shell_empty):
     assert_help(cl, shell_empty, "uniq")
+
+
+@pytest.mark.parametrize(
+    "command", ["uniq -f", "uniq -f nope", "uniq -s", "uniq --skip-fields=x"]
+)
+def test_uniq_invalid_skip_value_is_a_command_error_without_mutation(
+    cl, shell_basic, command
+):
+    before = tree_state(shell_basic)
+    result = cl.enter_command(command, shell_basic)
+    assert_failure(result)
+    assert result.stderr
+    assert tree_state(shell_basic) == before
 
 
 def test_uniq_dot_paths_read_file(run_dot_command, dot_prefix):

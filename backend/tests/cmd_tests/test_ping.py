@@ -1,5 +1,5 @@
 import pytest
-from tests.command_helpers import assert_help
+from tests.command_helpers import assert_command_error_without_mutation, assert_help
 
 
 @pytest.mark.parametrize("destination", [".", "..", "127.0.0.1"])
@@ -11,3 +11,10 @@ def test_ping_dot_paths_do_not_resolve_filesystem(run_dot_command, destination):
 
 def test_ping_help(cl, shell_empty):
     assert_help(cl, shell_empty, "ping")
+
+
+@pytest.mark.parametrize("command", ["ping", "ping -i", "ping -i nope host", 'ping ""'])
+def test_ping_invalid_input_is_a_command_error_without_mutation(
+    cl, shell_empty, command
+):
+    assert_command_error_without_mutation(cl, shell_empty, command)
