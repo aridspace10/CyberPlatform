@@ -1,8 +1,27 @@
+import pytest
 from game.filenode import FileNode
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_help
+
+
+@pytest.mark.parametrize(
+    ("lines", "expected"),
+    [([], []), (["cat cat", "", "wolf"], ["dog dog", "", "wolf"])],
+)
+def test_sed_buffered_input(run_buffered_command, lines, expected):
+    assert_success(run_buffered_command("sed 's/cat/dog/g'", lines), expected)
+
+
+@pytest.mark.parametrize("input_args", ["", "-", "< f1.txt"])
+def test_sed_in_place_rejects_stdin_without_editing_file(cl, shell_sed, input_args):
+    from tests.command_helpers import assert_command_error_without_mutation
+
+    result = assert_command_error_without_mutation(
+        cl, shell_sed, f"sed -i.bak 's/cat/dog/g' {input_args}"
+    )
+    assert result.stderr == ["sed: cannot edit standard input in place"]
 
 
 ###### SED ##############

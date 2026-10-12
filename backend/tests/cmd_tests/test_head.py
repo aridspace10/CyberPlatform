@@ -9,6 +9,18 @@ from tests.cmd_tests.path_helpers import assert_directory_error, tree_state
 from tests.command_helpers import assert_help
 
 
+@pytest.mark.parametrize("lines", [[], ["cat", "", "wolf"]])
+def test_head_buffered_input(run_buffered_command, lines):
+    assert_success(run_buffered_command("head -n 2", lines), lines[:2])
+
+
+def test_head_help_loading_does_not_depend_on_process_cwd(
+    cl, shell_empty, monkeypatch, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+    assert_help(cl, shell_empty, "head")
+
+
 def test_head_basic(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("head f2.txt", shell_basic)
     assert CmdResult.stderr == []

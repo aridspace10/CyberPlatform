@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from game.filenode import FileNode
 from game.filesystem import FileSystem
+from game.InputBuffer import InputBuffer
 from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
 from game.ShellState import ShellState
@@ -17,7 +18,7 @@ class SystemContext:
 
 @dataclass
 class ExecutionContext:
-    stdin: FileNode | str | None = None
+    stdin: InputBuffer | None = None
     stdout: FileNode | str | None = None
 
 
@@ -26,5 +27,5 @@ class CommandContext:
     system: SystemContext
     command: str
     args: list[str]
-    stdin: FileNode
+    stdin: InputBuffer
     stdout: FileNode | None
