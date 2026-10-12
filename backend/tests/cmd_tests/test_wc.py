@@ -1,7 +1,27 @@
+import pytest
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_command_error_without_mutation
+
+
+@pytest.mark.parametrize("lines", [[], ["cat wolf", "", "dog"]])
+def test_wc_buffered_input(run_buffered_command, lines):
+    assert_success(run_buffered_command("wc -l", lines), [str(len(lines))])
+
+
+@pytest.mark.parametrize("has_trailing_newline", [False, True])
+@pytest.mark.parametrize("input_args", ["t.txt", "< t.txt", "- < t.txt"])
+def test_wc_buffered_file_preserves_final_newline(
+    cl, shell_no_final_newline, has_trailing_newline, input_args
+):
+    source = shell_no_final_newline.fs.resolve("t.txt")
+    source.inode.has_trailing_newline = has_trailing_newline
+    assert_success(
+        cl.enter_command(f"wc -l {input_args}", shell_no_final_newline),
+        ["2" if has_trailing_newline else "1"],
+    )
+
 
 # ---------- BASIC ----------
 
@@ -116,8 +136,7 @@ def test_wc_l_directory_error(cl, shell_basic: ShellState):
 
 def test_wc_l_no_arguments(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("wc -l", shell_basic)
-    # depends whether your shell reads stdin or errors
-    assert CmdResult.stderr == [] or len(CmdResult.stderr) > 0
+    assert_success(CmdResult, ["0"])
 
 
 def test_wc_unknown_option_is_a_command_error_without_mutation(cl, shell_basic):

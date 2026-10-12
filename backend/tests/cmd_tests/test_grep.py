@@ -1,7 +1,24 @@
+import pytest
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error, descendants
 from tests.command_helpers import assert_help
+
+
+@pytest.mark.parametrize(
+    ("lines", "expected"),
+    [([], []), (["cat", "", "wolf", "cat dog"], ["cat", "cat dog"])],
+)
+def test_grep_buffered_input(run_buffered_command, lines, expected):
+    assert_success(run_buffered_command("grep cat", lines), expected)
+
+
+@pytest.mark.parametrize("input_prefix", ["", "echo cat | "])
+def test_grep_stdin_filename_uses_a_display_label(cl, shell_basic, input_prefix):
+    suffix = " < f1.txt" if not input_prefix else ""
+    pattern = "ERROR" if not input_prefix else "cat"
+    result = cl.enter_command(f"{input_prefix}grep -l {pattern}{suffix}", shell_basic)
+    assert_success(result, ["(standard input)"])
 
 
 def test_grep_basic(cl, shell_basic: ShellState):

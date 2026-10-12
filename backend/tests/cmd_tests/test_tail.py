@@ -6,6 +6,12 @@ from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_help
 
+
+@pytest.mark.parametrize("lines", [[], ["cat", "", "wolf"]])
+def test_tail_buffered_input(run_buffered_command, lines):
+    assert_success(run_buffered_command("tail -n 2", lines), lines[-2:])
+
+
 # =========================================================
 # Fixtures
 # =========================================================

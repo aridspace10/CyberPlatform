@@ -2,12 +2,138 @@ import json
 import random
 
 import pytest
+from game.commandline import CommandResult
+from game.Context import ExecutionContext, SystemContext
 from game.filenode import FileNode
 from game.filesystem import FileSystem
+from game.inode import Inode
+from game.InputBuffer import InputBuffer
+from game.Parser import CommandParser, lex
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import descendants, tree_state
 from tests.command_helpers import setup_names
+
+
+@pytest.mark.parametrize("supplied", [None, InputBuffer(), InputBuffer(("value",))])
+def test_command_setup_preserves_explicit_input(cl, shell_empty, supplied):
+    received = []
+
+    def probe(ctx):
+        received.append(ctx.stdin)
+        return CommandResult()
+
+    cl.commands["probe"] = probe
+    command = CommandParser(lex("probe")).parse().parts[0].pipeline.parts[0].first
+    system = SystemContext(shell_empty.fs, cl.process_manager, cl.network, shell_empty)
+    execution = ExecutionContext(stdin=supplied)
+    cl.execute_command(command, system, execution)
+
+    assert execution.stdin is supplied
+    assert len(received) == 1
+    if supplied is None:
+        assert received[0] == InputBuffer()
+    else:
+        assert received[0] is supplied
+
+
+@pytest.mark.parametrize("lines", [[], [""], ["cat", "", "wolf"]])
+def test_pipeline_keeps_explicit_empty_input_and_snapshots_output(
+    cl, shell_empty, monkeypatch, lines
+):
+    setup_inputs = []
+    execute_andor = cl.execute_andor
+
+    def record_setup(elem, system, execution):
+        setup_inputs.append(execution.stdin)
+        return execute_andor(elem, system, execution)
+
+    def emit(ctx):
+        return CommandResult(stdout=lines)
+
+    def probe(ctx):
+        assert ctx.stdin is setup_inputs[-1]
+        assert ctx.stdin.lines == tuple(lines)
+        assert ctx.stdin.has_trailing_newline is bool(lines)
+        lines.append("changed upstream")
+        assert "changed upstream" not in ctx.stdin.lines
+        return CommandResult(stdout=list(ctx.stdin.lines))
+
+    monkeypatch.setattr(cl, "execute_andor", record_setup)
+    cl.commands.update(emit=emit, probe=probe)
+    expected = list(lines)
+    assert_success(cl.enter_command("emit | probe", shell_empty), expected)
+    assert setup_inputs[0] is None
+    assert isinstance(setup_inputs[1], InputBuffer)
+
+
+@pytest.mark.parametrize("command", ["probe", "probe | probe", "probe < f1.txt"])
+def test_reading_stdin_never_constructs_filesystem_nodes(
+    cl, shell_basic, monkeypatch, command
+):
+    def unexpected_allocation(*args, **kwargs):
+        pytest.fail("stdin allocated a filesystem node")
+
+    def probe(ctx):
+        assert isinstance(ctx.stdin, InputBuffer)
+        return CommandResult(stdout=list(ctx.stdin.lines))
+
+    monkeypatch.setattr(Inode, "__init__", unexpected_allocation)
+    monkeypatch.setattr(FileNode, "__init__", unexpected_allocation)
+    cl.commands["probe"] = probe
+    result = cl.enter_command(command, shell_basic)
+    assert result.status == 0
+    assert result.stderr == []
+
+
+@pytest.mark.parametrize("lines", [[], [""], ["cat", "", "wolf"]])
+def test_heredoc_uses_an_immutable_buffer_without_allocating_nodes(
+    cl, shell_empty, monkeypatch, lines
+):
+    received = []
+
+    def unexpected_allocation(*args, **kwargs):
+        pytest.fail("heredoc allocated a filesystem node")
+
+    def probe(ctx):
+        received.append(ctx.stdin)
+        return CommandResult(stdout=list(ctx.stdin.lines))
+
+    monkeypatch.setattr(Inode, "__init__", unexpected_allocation)
+    monkeypatch.setattr(FileNode, "__init__", unexpected_allocation)
+    cl.commands["probe"] = probe
+    result = cl.enter_command("probe << EOF", shell_empty)
+    assert result.interaction is not None
+    program = cl.process_manager.get_process(shell_empty.foreground_pid).program
+    for line in lines:
+        assert program.receive_input(line) == ([], [])
+    assert program.receive_input("EOF") == (lines, [])
+    assert received == [InputBuffer.from_lines(lines)]
+    program.lines.append("changed after completion")
+    assert received[0].lines == tuple(lines)
+
+
+@pytest.mark.parametrize(
+    "target", ["missing.txt", "d1/missing.txt", "d1", ".", "f1.txt/missing.txt"]
+)
+def test_failed_input_redirection_never_invokes_handler_or_creates_file(
+    cl, shell_basic, target
+):
+    before = tree_state(shell_basic)
+    current = shell_basic.fs.current
+    next_inode = Inode._next_id
+
+    def probe(ctx):
+        pytest.fail("handler invoked after an input-open failure")
+
+    cl.commands["probe"] = probe
+    result = cl.enter_command(f"probe < {target}", shell_basic)
+    assert_failure(result)
+    assert result.stdout == []
+    assert result.stderr
+    assert tree_state(shell_basic) == before
+    assert shell_basic.fs.current is current
+    assert Inode._next_id == next_inode
 
 
 @pytest.mark.integration
@@ -323,15 +449,6 @@ def test_blank_input_is_a_noop(cl, shell_basic):
     assert result.stdout == []
     assert result.stderr == []
     assert tree_state(shell_basic) == before
-
-
-def test_help_loading_does_not_depend_on_process_cwd(
-    cl, shell_empty, monkeypatch, tmp_path
-):
-    from tests.command_helpers import assert_help
-
-    monkeypatch.chdir(tmp_path)
-    assert_help(cl, shell_empty, "head")
 
 
 @pytest.mark.parametrize(

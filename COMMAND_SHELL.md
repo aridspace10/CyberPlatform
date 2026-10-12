@@ -79,6 +79,23 @@ frontend rendering, login, or multiplayer behavior. Existing parser, command, an
 foreground-composition limitations remain visible. Scheduler waits use one-second
 ticks, and background jobs are not supported by the current engine.
 
+### Command input
+
+Commands receive an immutable `InputBuffer` containing a tuple of lines and a
+final-newline flag. File operands and `<` redirections snapshot the file's data
+and newline metadata; a failed `<` open returns an error before the command runs
+and never creates the missing input file. Pipes snapshot the previous command's
+output, including an explicitly empty result. Heredocs snapshot the entered lines.
+The current line-based output API treats each pipe output entry as a terminated
+line; it does not carry exact byte-stream or final-newline metadata from producers.
+
+During setup, `None` means no input source was supplied. Handlers still receive an
+empty buffer by default, so a command such as `cat` returns immediately. Live
+terminal input, stream cursors, and incremental pipelines remain future work.
+Commands that transform input work on their own copies. Only explicit file-writing
+operations, such as `sed -i file` or `sort -o file`, write through filesystem nodes;
+`sed -i` rejects stdin because a buffer has no file identity.
+
 ### Commands that wait, such as sleep
 
 Enter `sleep 2` at the CyberPlatform prompt. The console runs the real `SleepProgram`

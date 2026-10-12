@@ -9,6 +9,7 @@ from typing import Any, Literal, Tuple
 from game.Context import CommandContext, ExecutionContext, SystemContext
 from game.filenode import FileNode
 from game.inode import Inode, NodeType
+from game.InputBuffer import InputBuffer
 from game.NetworkManager import NetworkManager
 from game.Parser import (
     AndOr,
@@ -145,13 +146,7 @@ class CommandLine:
 
             cmd_result = self.execute_andor(part, sys, exec_ctx)
 
-            if cmd_result.stdout:
-                pipe_inode = Inode(NodeType.FILE)
-                pipe_node = FileNode(None, "pipe", pipe_inode)
-                pipe_node.set_data(cmd_result.stdout)
-                prev_pipe = pipe_node
-            else:
-                prev_pipe = None
+            prev_pipe = InputBuffer.from_lines(cmd_result.stdout)
 
         if cmd_result is None:
             raise Exception("No Cmd Result given")
@@ -190,10 +185,14 @@ class CommandLine:
 
         for redir in redirs:
             if redir.op == "<":
-                exec_ctx.stdin = self.get_fd(redir.target, False, sys)
-                if isinstance(exec_ctx.stdin, str):
-                    cmd_result = CommandResult(1, [], [exec_ctx.stdin], "text", None)
-                    return cmd_result
+                source = sys.fs.resolve(redir.target)
+                if isinstance(source, str):
+                    return CommandResult(1, stderr=[f"{redir.target}: {source}"])
+                if source.get_type() != NodeType.FILE:
+                    return CommandResult(
+                        1, stderr=[f"{redir.target}: Not a regular file"]
+                    )
+                exec_ctx.stdin = InputBuffer.from_file(source)
             elif redir.op == "<<":
                 heredoc_command = copy.deepcopy(command)
                 heredoc_command.pre_redirs = [
@@ -206,13 +205,10 @@ class CommandLine:
                 def complete_heredoc(
                     lines: list[str], pending_command: Command = heredoc_command
                 ):
-                    inode = Inode(NodeType.FILE)
-                    stdin = FileNode(None, "heredoc", inode)
-                    stdin.set_data(lines)
                     result = self.execute_command(
                         pending_command,
                         sys,
-                        ExecutionContext(stdin=stdin),
+                        ExecutionContext(stdin=InputBuffer.from_lines(lines)),
                     )
                     return result.stdout, result.stderr
 
@@ -259,10 +255,7 @@ class CommandLine:
     ) -> CommandResult:
         if isinstance(atom, SimpleCommand):
             if exec_ctx.stdin is None:
-                fdin = FileNode(None, "stdin", Inode(NodeType.FILE))
-                fdin.set_data([])
-            elif isinstance(exec_ctx.stdin, str):
-                raise Exception("Look here")
+                fdin = InputBuffer()
             else:
                 fdin = exec_ctx.stdin
             args = []
@@ -307,7 +300,7 @@ class CommandLine:
         return cmd_result
 
     def execute(
-        self, args: list[str], fdin: FileNode, sys: SystemContext
+        self, args: list[str], fdin: InputBuffer, sys: SystemContext
     ) -> CommandResult:
 
         if not args:
@@ -410,18 +403,22 @@ class CommandLine:
         stdout = []
         stderr = []
         for filename in files or ["-"]:
-            node = ctx.stdin if filename == "-" else ctx.system.fs.resolve(filename)
-            if isinstance(node, str):
-                if "/" not in filename and node.startswith("No directory named "):
-                    stderr.append(f"cut: {filename} does not exist")
+            if filename == "-":
+                content = ctx.stdin
+            else:
+                node = ctx.system.fs.resolve(filename)
+                if isinstance(node, str):
+                    if "/" not in filename and node.startswith("No directory named "):
+                        stderr.append(f"cut: {filename} does not exist")
+                        continue
+                    stderr.append(f"cut: {filename}: {node}")
                     continue
-                stderr.append(f"cut: {filename}: {node}")
-                continue
-            if node.get_type() == NodeType.DIRECTORY:
-                stderr.append(f"cut: {filename}: Is a directory")
-                continue
+                if node.get_type() == NodeType.DIRECTORY:
+                    stderr.append(f"cut: {filename}: Is a directory")
+                    continue
+                content = InputBuffer.from_file(node)
 
-            for line in node.get_data():
+            for line in content.lines:
                 if delimiter not in line:
                     if not only_delim:
                         stdout.append(line)
@@ -643,22 +640,31 @@ class CommandLine:
 
         stdout = []
         stderr = []
-        for file in files:
-            source = ctx.system.fs.resolve(file)
-            if isinstance(source, str):
-                stderr.append(f"sed: {source}")
-                status = 1
-                continue
-            if source.get_type() == NodeType.DIRECTORY:
-                stderr.append(f"sed: {file}: Is a directory")
-                status = 1
-                continue
-            if source.get_type() != NodeType.FILE:
-                stderr.append(f"sed: {file}: Not a regular file")
-                status = 1
-                continue
+        for file in files or ["-"]:
+            source = None
+            if file == "-":
+                if backup:
+                    stderr.append("sed: cannot edit standard input in place")
+                    status = 1
+                    continue
+                content = ctx.stdin
+            else:
+                source = ctx.system.fs.resolve(file)
+                if isinstance(source, str):
+                    stderr.append(f"sed: {source}")
+                    status = 1
+                    continue
+                if source.get_type() == NodeType.DIRECTORY:
+                    stderr.append(f"sed: {file}: Is a directory")
+                    status = 1
+                    continue
+                if source.get_type() != NodeType.FILE:
+                    stderr.append(f"sed: {file}: Not a regular file")
+                    status = 1
+                    continue
+                content = InputBuffer.from_file(source)
 
-            old = list(source.get_data())
+            old = list(content.lines)
 
             # Apply commands to line
             new = old.copy()
@@ -865,6 +871,7 @@ class CommandLine:
                 else:
                     return CommandResult(1, stderr=["sed: unknown expression given"])
             if backup:
+                assert source is not None
                 if backup not in ("", "-i"):
                     inode = Inode(NodeType.FILE)
                     inode.set_data(old)
@@ -911,7 +918,7 @@ class CommandLine:
 
         for file in files:
             if file == "-":
-                node = ctx.stdin
+                content = ctx.stdin
             else:
                 # Get filenode
                 node = ctx.system.fs.resolve(file)
@@ -925,11 +932,12 @@ class CommandLine:
                     stderr.append(f"wc: cannot perform operation on directory ({file})")
                     status = 1
                     continue
+                content = InputBuffer.from_file(node)
 
-            data = node.get_data()
+            data = content.lines
 
             lcount = len(data)
-            if data and not node.inode.has_trailing_newline:
+            if data and not content.has_trailing_newline:
                 lcount -= 1
             wcount = len(" ".join(data).split())
             ccount = len("\n".join(data))
@@ -1272,9 +1280,8 @@ class CommandLine:
         else:
             match_cond_func = match_contains
 
-        def search_file(item: FileNode) -> None:
-            lst = item.get_data()
-            for idx, line in enumerate(lst):
+        def search_input(content: InputBuffer, name: str) -> None:
+            for idx, line in enumerate(content.lines):
                 if case_insentive:
                     line_cmp = line.lower()
                     pattern_cmp = pattern.lower()
@@ -1284,7 +1291,7 @@ class CommandLine:
                 matched = match_cond_func(line_cmp, pattern_cmp)
                 if matched ^ invert:
                     if filename:
-                        tmp = item.name
+                        tmp = name
                     elif showmatched:
                         tmp = [w for w in line.split() if pattern in w][0]
                     else:
@@ -1297,14 +1304,13 @@ class CommandLine:
 
         for file in files:
             if file == "-":
-                ty = ctx.stdin.get_type()
-                file_node = ctx.stdin
-            else:
-                file_node = ctx.system.fs.resolve(file)
-                if isinstance(file_node, str):
-                    stderr.append(f"grep: {file} can not be found")
-                    continue
-                ty = file_node.get_type()
+                search_input(ctx.stdin, "(standard input)")
+                continue
+            file_node = ctx.system.fs.resolve(file)
+            if isinstance(file_node, str):
+                stderr.append(f"grep: {file} can not be found")
+                continue
+            ty = file_node.get_type()
             if ty == NodeType.DIRECTORY:
                 if recursive:
 
@@ -1313,13 +1319,13 @@ class CommandLine:
                             if item.get_type() == NodeType.DIRECTORY:
                                 recursively_search(item)
                             else:
-                                search_file(item)
+                                search_input(InputBuffer.from_file(item), item.name)
 
                     recursively_search(file_node)
                 else:
                     stderr.append("Can't recursivly search directory without -r option")
             elif ty == NodeType.FILE:
-                search_file(file_node)
+                search_input(InputBuffer.from_file(file_node), file_node.name)
             else:
                 stderr.append(f"Can't open file/directory given: {file}")
         if countmatch:
@@ -1519,19 +1525,19 @@ class CommandLine:
             if filename == "-":
                 content = ctx.stdin
             else:
-                content = ctx.system.fs.resolve(filename)
+                node = ctx.system.fs.resolve(filename)
+                if isinstance(node, str):
+                    stderr.append(f"File {filename} does not exist")
+                    status = 1
+                    continue
 
-            if content is None or isinstance(content, str):
-                stderr.append(f"File {filename} does not exist")
-                status = 1
-                continue
+                if node.get_type() == NodeType.DIRECTORY:
+                    stderr.append("cat: Non directory is given")
+                    status = 1
+                    continue
+                content = InputBuffer.from_file(node)
 
-            if content.get_type() == NodeType.DIRECTORY:
-                stderr.append("cat: Non directory is given")
-                status = 1
-                continue
-
-            for line in content.get_data():
+            for line in content.lines:
                 if numbering:
                     line = f"{line_number} {line}"
                     line_number += 1
@@ -1551,7 +1557,7 @@ class CommandLine:
         while ctx.args:
             arg = ctx.args.pop(0)
             if arg == "-":
-                files.append(ctx.stdin)
+                files.append(arg)
             elif arg.startswith("-"):
                 if arg == "--help":
                     return CommandResult(0, stdout=self.useage("head"))
@@ -1608,26 +1614,25 @@ class CommandLine:
             else:
                 files.append(arg)
         if not len(files):
-            files = [ctx.stdin]
+            files = ["-"]
         for file in files:
-            if isinstance(file, FileNode):
-                content = file
-                ty = content.get_type()
+            if file == "-":
+                content = ctx.stdin
             else:
-                content = ctx.system.fs.resolve(file)
-                if isinstance(content, str):
-                    stderr.append(f"head: {file}: {content}")
+                node = ctx.system.fs.resolve(file)
+                if isinstance(node, str):
+                    stderr.append(f"head: {file}: {node}")
                     status = 1
                     continue
-                ty = content.get_type()
-            if ty == NodeType.DIRECTORY:
-                stderr.append(f"head: {file} is a directory")
-                status = 1
-                continue
+                if node.get_type() == NodeType.DIRECTORY:
+                    stderr.append(f"head: {file} is a directory")
+                    status = 1
+                    continue
+                content = InputBuffer.from_file(node)
             counter = 0
-            data = content.get_data()
-            if data == "":
-                return CommandResult(0)
+            data = content.lines
+            if not data:
+                continue
             if rev and b != -1:
                 raw = "\n".join(data)
                 encoded = raw.encode("utf-8")
@@ -1665,7 +1670,7 @@ class CommandLine:
         byte = -1
         ahead = False
         outputType = 0
-        while len(ctx.args) and ctx.args[0].startswith("-"):
+        while ctx.args and ctx.args[0].startswith("-") and ctx.args[0] != "-":
             arg = ctx.args.pop(0)
             if arg == "-c" or arg.startswith("--bytes="):
                 if arg == "-c":
@@ -1734,30 +1739,21 @@ class CommandLine:
             ):
                 stdout.append(f"==> {file} <==")
 
-            # Get filenode
             if file == "-":
                 content = ctx.stdin
-                ty = content.get_type()
             else:
-                content = ctx.system.fs.resolve(file)
-                if isinstance(content, str):
+                node = ctx.system.fs.resolve(file)
+                if isinstance(node, str):
                     return CommandResult(1, stderr=[f"tail: {file} can not be found"])
-                ty = content.get_type()
 
-            # Check is file
-            if ty == NodeType.DIRECTORY:
-                status = 1
-                stderr.append(f"tail: {file} is a directory")
-                continue
+                if node.get_type() == NodeType.DIRECTORY:
+                    status = 1
+                    stderr.append(f"tail: {file} is a directory")
+                    continue
+                content = InputBuffer.from_file(node)
 
-            if ty is None:
-                status = 1
-                stderr.append(f"tail: cannot open '{file}'")
-                continue
-
-            # Get data
-            data = content.get_data()
-            if data == []:
+            data = content.lines
+            if not data:
                 continue
 
             if lines == -1 and byte == -1:
@@ -2136,7 +2132,7 @@ class CommandLine:
                     )
             else:
                 file = arg
-        if file != "":
+        if file not in ("", "-"):
             tmp = ctx.system.fs.resolve(file)
             if isinstance(tmp, str):
                 return CommandResult(1, stderr=[f"uniq: {tmp}"])
@@ -2144,8 +2140,10 @@ class CommandLine:
                 return CommandResult(1, stderr=[f"uniq: {file}: Is a directory"])
             if tmp.get_type() != NodeType.FILE:
                 return CommandResult(1, stderr=[f"uniq: {file}: Not a regular file"])
-            ctx.stdin = tmp
-        data = ctx.stdin.get_data()
+            content = InputBuffer.from_file(tmp)
+        else:
+            content = ctx.stdin
+        data = content.lines
         processed = []
         for line in data:
             if not csenstive:
@@ -2222,7 +2220,7 @@ class CommandLine:
             else:
                 file = arg
         if file == "" or file == "-":
-            content = list(ctx.stdin.get_data())
+            source = ctx.stdin
         else:
             tmp = ctx.system.fs.resolve(file)
             if isinstance(tmp, str):
@@ -2231,7 +2229,8 @@ class CommandLine:
                 return CommandResult(1, stderr=[f"sort: {file}: Is a directory"])
             if tmp.get_type() != NodeType.FILE:
                 return CommandResult(1, stderr=[f"sort: {file}: Not a regular file"])
-            content = list(tmp.get_data())
+            source = InputBuffer.from_file(tmp)
+        content = list(source.lines)
         for idx, line in enumerate(content):
             if igblanks:
                 content[idx] = line.lstrip()

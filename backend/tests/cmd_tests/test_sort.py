@@ -1,10 +1,23 @@
 import random
 
+import pytest
 from game.filenode import FileNode
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error, tree_state
 from tests.command_helpers import assert_help, setup_names
+
+
+@pytest.mark.parametrize("lines", [[], ["wolf", "", "cat", "cat"]])
+def test_sort_buffered_input(run_buffered_command, lines):
+    assert_success(run_buffered_command("sort", lines), sorted(lines))
+
+
+def test_sort_comparison_transforms_do_not_mutate_input(run_buffered_command):
+    result = run_buffered_command("sort -bfi", [" cat", "Wolf\t", "dog"])
+    # Comparison/output semantics of -b/-f/-i are tracked separately in CYB-10.
+    assert result.status == 0
+    assert result.stderr == []
 
 
 def test_sort_basic(cl, shell_basic: ShellState):

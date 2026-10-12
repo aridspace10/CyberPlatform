@@ -4,6 +4,14 @@ from tests.cmd_tests.path_helpers import assert_directory_error, tree_state
 from tests.command_helpers import assert_help
 
 
+@pytest.mark.parametrize(
+    ("lines", "expected"),
+    [([], []), (["Cat", "cat", "", "wolf"], ["Cat", "", "wolf"])],
+)
+def test_uniq_buffered_input(run_buffered_command, lines, expected):
+    assert_success(run_buffered_command("uniq -i", lines), expected)
+
+
 def test_uniq_help(cl, shell_empty):
     assert_help(cl, shell_empty, "uniq")
 

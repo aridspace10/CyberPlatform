@@ -11,7 +11,7 @@ field numbering and stdout items without appended newlines.
 import pytest
 from game.Context import CommandContext, SystemContext
 from game.filenode import FileNode
-from game.inode import Inode, NodeType
+from game.InputBuffer import InputBuffer
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 
@@ -55,7 +55,7 @@ def cut_context(cut_shell, process_manager, network_manager):
             ),
             command="cut",
             args=list(args),
-            stdin=FileNode(None, "stdin", Inode(NodeType.FILE)),
+            stdin=InputBuffer(),
             stdout=None,
         )
 
@@ -66,6 +66,14 @@ def assert_output(result, expected):
     assert result.stderr == []
     assert result.status == 0
     assert result.stdout == expected
+
+
+@pytest.mark.parametrize(
+    ("lines", "expected"),
+    [([], []), (["cat:wolf", "", "dog:fox"], ["wolf", "", "fox"])],
+)
+def test_cut_buffered_input(run_buffered_command, lines, expected):
+    assert_success(run_buffered_command("cut -d : -f 2", lines), expected)
 
 
 @pytest.mark.parametrize(
