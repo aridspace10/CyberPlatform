@@ -597,9 +597,7 @@ def test_pipes_sortuniq(cl, shell_basic: ShellState):
     fn.append_data([name])
     CmdResult = cl.enter_command("sort f2.txt | uniq", shell_basic)
     assert CmdResult.stderr == []
-    assert len(CmdResult.stdout) == len(names)
-    for i in range(0, len(names)):
-        assert CmdResult.stdout[i] == names[i]
+    assert CmdResult.stdout == sorted(set(names))
 
 
 def test_pipes_lsgrep_inverse(cl, shell_basic: ShellState):
