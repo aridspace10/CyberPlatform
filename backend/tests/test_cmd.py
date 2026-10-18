@@ -241,6 +241,126 @@ def test_redirection_writes_newfile(cl, shell_basic: ShellState, fs_basic: FileS
     assert fnode.get_data() == ["hi"]
 
 
+def test_input_redirection_after_output_redirect_is_isolated(cl, shell_basic):
+    source = shell_basic.fs.resolve("f1.txt")
+
+    result = cl.enter_command("echo first > out.txt && cat < f1.txt", shell_basic)
+
+    assert_success(result, list(source.inode.data))
+    output = shell_basic.fs.resolve("out.txt")
+    assert output.inode.data == ["first"]
+    assert output.inode.has_trailing_newline
+
+
+def test_input_redirection_does_not_leak_to_next_command(cl, shell_basic):
+    source = shell_basic.fs.resolve("f1.txt")
+
+    result = cl.enter_command("cat < f1.txt && cat -", shell_basic)
+
+    assert_success(result, list(source.inode.data))
+
+
+@pytest.mark.parametrize("target", ["d1", ".", "d1/", "missing/file", "f1.txt/file"])
+@pytest.mark.parametrize("operator", [">", ">>"])
+def test_output_redirection_rejects_invalid_targets_without_mutation(
+    cl, shell_basic, target, operator
+):
+    before = tree_state(shell_basic)
+    current = shell_basic.fs.current
+
+    result = cl.enter_command(f"echo changed {operator} {target}", shell_basic)
+
+    assert_failure(result)
+    assert result.stderr
+    assert tree_state(shell_basic) == before
+    assert shell_basic.fs.current is current
+
+
+@pytest.mark.parametrize("operator", [">", ">>"])
+def test_output_redirection_rejects_directory_symlink_without_mutation(
+    cl, shell_basic, operator
+):
+    assert_success(cl.enter_command("ln -s d1 dirlink", shell_basic))
+    before = tree_state(shell_basic)
+
+    result = cl.enter_command(f"echo changed {operator} dirlink", shell_basic)
+
+    assert_failure(result)
+    assert tree_state(shell_basic) == before
+
+
+def test_output_redirection_follows_regular_file_symlink(cl, shell_basic):
+    assert_success(cl.enter_command("ln -s f1.txt filelink", shell_basic))
+    target = shell_basic.fs.resolve("f1.txt")
+
+    assert_success(cl.enter_command("echo replacement > filelink", shell_basic))
+
+    assert target.inode.data == ["replacement"]
+    assert target.inode.has_trailing_newline is True
+    link = shell_basic.fs.get_file("filelink")
+    assert link.inode.data == ["f1.txt"]
+
+
+def test_multiple_output_redirects_apply_in_order(cl, shell_basic):
+    first = shell_basic.fs.resolve("f1.txt")
+
+    result = cl.enter_command("echo final > f1.txt > second.txt", shell_basic)
+
+    assert_success(result)
+    assert first.inode.data == []
+    assert first.inode.has_trailing_newline is False
+    second = shell_basic.fs.resolve("second.txt")
+    assert second.inode.data == ["final"]
+    assert second.inode.has_trailing_newline is True
+
+
+def test_mixed_redirections_use_final_input_and_output(cl, shell_basic):
+    source = shell_basic.fs.resolve("f1.txt")
+    expected = list(source.inode.data)
+
+    result = cl.enter_command("cat < f2.txt < f1.txt > out.txt", shell_basic)
+
+    assert_success(result)
+    output = shell_basic.fs.resolve("out.txt")
+    assert output.inode.data == expected
+    assert output.inode.has_trailing_newline is True
+
+
+def test_truncate_and_append_empty_output_preserve_correct_newline_state(cl, shell_basic):
+    target = shell_basic.fs.resolve("f1.txt")
+
+    assert_success(cl.enter_command("cat - > f1.txt", shell_basic))
+    assert target.inode.data == []
+    assert target.inode.has_trailing_newline is False
+
+    target.set_data(["unfinished"])
+    target.inode.has_trailing_newline = False
+    assert_success(cl.enter_command("cat - >> f1.txt", shell_basic))
+    assert target.inode.data == ["unfinished"]
+    assert target.inode.has_trailing_newline is False
+
+
+def test_append_updates_newline_state_and_joins_unterminated_line(cl, shell_basic):
+    target = shell_basic.fs.resolve("f1.txt")
+    target.set_data(["unfinished"])
+    target.inode.has_trailing_newline = False
+
+    assert_success(cl.enter_command("echo tail >> f1.txt", shell_basic))
+    assert target.inode.data == ["unfinishedtail"]
+    assert target.inode.has_trailing_newline is True
+
+    assert_success(cl.enter_command("echo abc >> new.txt", shell_basic))
+    assert_success(cl.enter_command("wc -l new.txt", shell_basic), ["1"])
+
+
+def test_subshell_inherits_redirected_and_pipeline_input(cl, shell_basic):
+    source = shell_basic.fs.resolve("f1.txt")
+    expected = list(source.inode.data)
+
+    assert_success(cl.enter_command("(cat -) < f1.txt", shell_basic), expected)
+    assert_success(cl.enter_command("cat f1.txt | (cat -)", shell_basic), expected)
+
+
 def test_andor(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("cd d1 && ls", shell_basic)
     assert CmdResult.stderr == []

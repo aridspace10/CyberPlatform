@@ -74,8 +74,15 @@ class Inode:
     def set_data(self, data: list[str]) -> None:
         self.mtime = datetime.now()
         self.data = data
-        self.has_trailing_newline = True
+        self.has_trailing_newline = bool(data)
 
     def append_data(self, data: list[str]) -> None:
+        if not data:
+            return
         self.mtime = datetime.now()
-        self.data.extend(data)
+        if self.data and not self.has_trailing_newline:
+            self.data[-1] += data[0]
+            self.data.extend(data[1:])
+        else:
+            self.data.extend(data)
+        self.has_trailing_newline = True
