@@ -389,6 +389,22 @@ def test_symbolic_links_resolve_absolute_targets_and_intermediate_directories(
     assert shell_basic.fs.resolve("absolute").name == "f1.txt"
 
 
+def test_search_through_successful_symlink_preserves_current_directory(cl, shell_basic):
+    assert_success(cl.enter_command("ln -s /d1 jump", shell_basic))
+    shell_basic.fs.current = shell_basic.fs.filehead
+    shell_basic.fs.cwd = "/"
+    shell_basic.cwd = "/"
+    previous_current = shell_basic.fs.current
+    previous_fs_cwd = shell_basic.fs.cwd
+    previous_shell_cwd = shell_basic.cwd
+
+    assert shell_basic.fs.search("jump") == ""
+
+    assert shell_basic.fs.current is previous_current
+    assert shell_basic.fs.cwd == previous_fs_cwd
+    assert shell_basic.cwd == previous_shell_cwd
+
+
 def test_grep_reads_through_symbolic_link(cl, shell_basic):
     assert_success(cl.enter_command("ln -s f1.txt readable", shell_basic))
     expected = cl.enter_command("grep ERROR f1.txt", shell_basic)
