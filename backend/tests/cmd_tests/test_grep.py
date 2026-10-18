@@ -65,13 +65,23 @@ def test_grep_matchwhole(cl, shell_basic: ShellState):
 def test_grep_dir(cl, shell_fouritems: ShellState):
     CmdResult = cl.enter_command("grep -r ERROR .", shell_fouritems)
     assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR 1", "ERROR 2", "ERROR 3", "ERROR 4"]
+    assert CmdResult.stdout == [
+        "./f1.txt:ERROR 1",
+        "./f1.txt:ERROR 2",
+        "./f2.txt:ERROR 3",
+        "./f2.txt:ERROR 4",
+    ]
 
 
 def test_grep_dir2(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("grep -r ERROR .", shell_basic)
     assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR no", "ERROR no2", "ERROR 1", "ERROR 2"]
+    assert CmdResult.stdout == [
+        "./f1.txt:ERROR no",
+        "./f1.txt:ERROR no2",
+        "./d1/f4.txt:ERROR 1",
+        "./d1/f4.txt:ERROR 2",
+    ]
 
 
 def test_grep_dir3(cl, shell_basic: ShellState):
@@ -175,6 +185,31 @@ def test_grep_count_is_per_file_and_retains_missing_file_error(cl, shell_empty):
     assert no_matches.stderr == []
 
 
+def test_grep_matching_multiple_files_prefixes_each_filename(cl, shell_empty):
+    shell_empty.fs.add_file("first.txt")
+    shell_empty.fs.current.access("first.txt").set_data(["alpha"])
+    shell_empty.fs.add_file("second.txt")
+    shell_empty.fs.current.access("second.txt").set_data(["alpha"])
+
+    result = cl.enter_command("grep alpha first.txt second.txt", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["first.txt:alpha", "second.txt:alpha"]
+
+
+def test_grep_recursive_matching_prefixes_each_filename(cl, shell_empty):
+    shell_empty.fs.add_directory("search")
+    shell_empty.fs.add_file("search/first.txt")
+    shell_empty.fs.current.access("search").access("first.txt").set_data(["alpha"])
+    shell_empty.fs.add_file("search/second.txt")
+    shell_empty.fs.current.access("search").access("second.txt").set_data(["alpha"])
+
+    result = cl.enter_command("grep -r alpha search", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["search/first.txt:alpha", "search/second.txt:alpha"]
+
+
 def test_grep_recursion_applies_include_exclude_and_directory_filters(
     cl, shell_empty
 ):
@@ -200,7 +235,7 @@ def test_grep_recursion_applies_include_exclude_and_directory_filters(
 
     excluded = cl.enter_command("grep -r --exclude=keep.zzz alpha search", shell_empty)
     assert excluded.status == 0
-    assert excluded.stdout == ["alpha", "alpha"]
+    assert excluded.stdout == ["search/skip.txt:alpha", "search/ignored/inside.zzz:alpha"]
     assert excluded.stderr == []
 
 
@@ -247,7 +282,8 @@ def test_grep_dot_paths_recursive_search(run_dot_command, dot_directory):
     result = run_dot_command(f"grep -r : {operand}")
     assert result.status == 0
     assert result.stderr == []
-    assert sorted(result.stdout) == sorted(expected)
+    actual = [next(item for item in expected if output.endswith(item)) for output in result.stdout]
+    assert sorted(actual) == sorted(expected)
 
 
 def test_grep_dot_paths_read_parent_file(run_dot_command, dot_shell):
