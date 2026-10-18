@@ -7,6 +7,7 @@ class ProcessManager:
         self.events = []
         self._next_pid = 1
         self._booted = False
+        self._init_pid: int | None = None
 
     def create_process(
         self, command: str, parent: int, status: ProcessState = ProcessState.RUNNING
@@ -25,7 +26,7 @@ class ProcessManager:
     @property
     def default_parent_pid(self) -> int:
         """Return init's PID when booted, or the system-root sentinel."""
-        return 1 if 1 in self.processes else 0
+        return self._init_pid if self._booted else 0
 
     def remove_process(self, pid: int) -> Process | None:
         proc = self.processes[pid]
@@ -42,6 +43,7 @@ class ProcessManager:
         if self._booted:
             return
         init = self.create_process("init", 0, status=ProcessState.SLEEPING)
+        self._init_pid = init.pid
         for command in ("networkd", "sshd", "journald", "cron", "bash"):
             self.create_process(command, init.pid, status=ProcessState.SLEEPING)
         self._next_pid = max(self._next_pid, 100)

@@ -39,6 +39,25 @@ def test_unbooted_manager_uses_system_root_as_parent(cl, shell_empty):
     assert process.ppid == 0
 
 
+def test_create_before_boot_keeps_command_children_attached_to_init(cl, shell_empty):
+    early = cl.process_manager.create_process("early-job", parent=0)
+
+    cl.process_manager.boot()
+    init = next(
+        process
+        for process in cl.process_manager.processes.values()
+        if process.command == "init"
+    )
+    result = cl.enter_command("sleep 1", shell_empty)
+
+    assert result.interaction is not None
+    process = cl.process_manager.get_process(shell_empty.foreground_pid)
+    assert process is not None
+    assert process.pid != early.pid
+    assert init.pid == cl.process_manager.default_parent_pid
+    assert process.ppid == init.pid
+
+
 def test_interleaved_sessions_keep_sleep_rm_and_heredoc_processes_isolated():
     session_a = GameSession("process-ids-a")
     shell_a = _session_shell()
