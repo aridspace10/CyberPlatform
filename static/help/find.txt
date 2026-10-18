@@ -1,0 +1,17 @@
+find [STARTING-POINT ...] [EXPRESSION]
+
+Walk each starting point and print matching paths. Starting points are resolved
+independently; traversal does not change the shell's current directory.
+Symbolic links are matched as links and are not followed.
+
+Supported predicates:
+  -name PATTERN   Match the node name using shell wildcards.
+  -type f|d|l     Match regular files, directories, or symbolic links.
+  -empty          Match zero-length files and empty directories.
+  -true           Always match.
+  -false          Never match.
+
+Expressions support ! (or \!), parentheses (escape as \( and \)), implicit
+AND between adjacent predicates, and -o for OR. AND binds more tightly than OR.
+
+Actions are not supported. -exec and -delete are rejected before traversal.
