@@ -190,6 +190,35 @@ def test_tail_n_zero(cl, shell_tail):
     assert CmdResult.stdout == []
 
 
+def test_tail_byte_count_slices_bytes_including_final_newline(cl, shell_tail):
+    node = shell_tail.fs.get_file("single.txt")
+    node.set_data(["abc"])
+    node.inode.has_trailing_newline = True
+
+    result = cl.enter_command("tail -c 2 single.txt", shell_tail)
+
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["c"]
+
+    node.set_data(["é"])
+    node.inode.has_trailing_newline = False
+    result = cl.enter_command("tail -c 1 single.txt", shell_tail)
+    assert result.stdout == ["�"]
+
+
+def test_tail_explicit_stdin_and_plus_byte_count(cl, shell_tail):
+    result = cl.enter_command("cat single.txt | tail -n 1 -", shell_tail)
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["hello"]
+
+    result = cl.enter_command("tail -c +2 single.txt", shell_tail)
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["ello"]
+
+
 # =========================================================
 # Short Numeric Form
 # =========================================================
@@ -284,6 +313,7 @@ def test_tail_missing_file(cl, shell_tail):
 
     assert CmdResult.stdout == []
     assert len(CmdResult.stderr) == 1
+    assert CmdResult.status != 0
 
 
 def test_tail_invalid_n_alpha(cl, shell_tail):
@@ -305,6 +335,16 @@ def test_tail_missing_n_value(cl, shell_tail):
 
     assert CmdResult.stdout == []
     assert len(CmdResult.stderr) == 1
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["tail -n -1 f1.txt", "tail -c -1 f1.txt", "tail -n +0 f1.txt", "tail -n ++2 f1.txt"],
+)
+def test_tail_rejects_unsupported_negative_and_zero_start_counts(cl, shell_tail, command):
+    result = cl.enter_command(command, shell_tail)
+    assert result.status != 0
+    assert result.stderr
 
 
 # =========================================================
