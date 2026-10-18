@@ -654,7 +654,7 @@ class CommandLine:
         stderr = []
         status = 0
         words = bytes_flag = chars = lines = False
-        files = []
+        files: list[str] = []
 
         for arg in ctx.args:
             if arg in ("-c", "--bytes"):
