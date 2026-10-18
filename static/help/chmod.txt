@@ -1,5 +1,8 @@
 Usage: chmod [OPTION]... OCTAL-MODE FILE...
 Change the mode of each FILE using a three-digit octal mode (000 through 777).
+Permission bits are educational metadata only; commands do not enforce them.
+The simulator has no effective user/group or ownership policy, so chmod does
+not grant or deny access. `ls -l` displays these mode bits for inspection.
 
   -v, --verbose    output a diagnostic for each file changed
   -R, --recursive  change directories and their contents recursively

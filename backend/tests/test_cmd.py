@@ -136,6 +136,33 @@ def test_failed_input_redirection_never_invokes_handler_or_creates_file(
     assert Inode._next_id == next_inode
 
 
+def test_permission_bits_are_metadata_for_reads_writes_and_directory_operations(
+    cl, shell_basic
+):
+    shell_basic.fs.get_file("d1/f3.txt").set_data(["nested content"])
+    assert_success(cl.enter_command("chmod 000 f1.txt", shell_basic))
+    assert_success(
+        cl.enter_command("cat f1.txt", shell_basic),
+        ["ERROR no", "INFO hey", "ERROR no2", "error 1"],
+    )
+    assert_success(cl.enter_command("ln -s f1.txt f1-link.txt", shell_basic))
+    assert_success(
+        cl.enter_command("cat f1-link.txt", shell_basic),
+        ["ERROR no", "INFO hey", "ERROR no2", "error 1"],
+    )
+    assert_success(cl.enter_command("echo changed > f1.txt", shell_basic))
+    assert shell_basic.fs.get_file("f1.txt").get_data() == ["changed"]
+
+    assert_success(cl.enter_command("chmod -R 000 d1", shell_basic))
+    assert_success(
+        cl.enter_command("cat d1/f3.txt", shell_basic), ["nested content"]
+    )
+    assert_success(cl.enter_command("touch d1/new.txt", shell_basic))
+    assert shell_basic.fs.get_file("d1/new.txt") is not None
+    assert_success(cl.enter_command("rm d1/f3.txt", shell_basic))
+    assert shell_basic.fs.get_file("d1/f3.txt") is None
+
+
 @pytest.mark.integration
 @pytest.mark.parametrize("option", ["-a", "-A"])
 def test_shell_dot_paths_listing_then_find_and_save(run_dot_command, dot_shell, option):
