@@ -182,3 +182,24 @@ def test_cp_does_not_copy_the_current_directory(cl, shell_empty):
 
     assert_failure(result)
     assert isinstance(shell_empty.fs.resolve("copied"), str)
+
+
+def test_cp_recursive_clone_depth_uses_destination_parent(cl, shell_cp):
+    shell_cp.fs.add_directory("destination")
+    shell_cp.fs.add_directory("destination/nested")
+    destination = shell_cp.fs.get_file("destination/nested")
+    source = shell_cp.fs.get_file("project")
+    assert isinstance(destination, FileNode) and isinstance(source, FileNode)
+
+    result = cl.enter_command("cp -R project destination/nested", shell_cp)
+
+    copied = shell_cp.fs.get_file("destination/nested/project")
+    copied_files = shell_cp.fs.get_file("destination/nested/project/files")
+    copied_file = shell_cp.fs.get_file("destination/nested/project/files/f1.txt")
+    assert result.status == 0
+    assert isinstance(copied, FileNode)
+    assert isinstance(copied_files, FileNode)
+    assert isinstance(copied_file, FileNode)
+    assert copied.depth == destination.depth + 1
+    assert copied_files.depth == copied.depth + 1
+    assert copied_file.depth == copied_files.depth + 1

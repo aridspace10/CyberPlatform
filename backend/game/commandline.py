@@ -1098,7 +1098,7 @@ class CommandLine:
 
         def clone_with_name(node: FileNode, name: str, parent: FileNode) -> FileNode:
             clone = FileNode(parent, name, clone_inode(node.inode))
-            clone.depth = node.depth
+            clone.depth = parent.depth + 1
             clone.items = [
                 clone_with_name(child, child.name, clone) for child in node.items
             ]
