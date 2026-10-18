@@ -1,4 +1,5 @@
 import pytest
+from game.identity import EffectiveIdentity
 from game.filenode import FileNode
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
@@ -21,6 +22,57 @@ def test_cp_dot_paths_copy_source_and_destination(
     assert copied.inode.data == source.inode.data
     assert copied.inode.data is not source.inode.data
     assert_success(result)
+
+
+def test_cp_requires_source_read_and_destination_parent_write(cl, shell_basic):
+    source = shell_basic.fs.filehead.access("f1.txt")
+    source.inode.permissions["user"]["r"] = False
+
+    result = cl.enter_command("cp f1.txt copied.txt", shell_basic)
+
+    assert_failure(result)
+    assert shell_basic.fs.filehead.access("copied.txt") is None
+    source.inode.permissions["user"]["r"] = True
+    shell_basic.fs.filehead.inode.permissions["user"]["w"] = False
+    result = cl.enter_command("cp f1.txt copied.txt", shell_basic)
+    assert_failure(result)
+    assert shell_basic.fs.filehead.access("copied.txt") is None
+
+
+def test_cp_overwrite_preserves_target_inode_metadata_and_hard_links(cl, shell_basic):
+    assert_success(cl.enter_command("touch alias.txt", shell_basic))
+    assert_success(cl.enter_command("ln alias.txt target.txt", shell_basic))
+    source = shell_basic.fs.filehead.access("f1.txt")
+    target = shell_basic.fs.filehead.access("target.txt")
+    alias = shell_basic.fs.filehead.access("alias.txt")
+    target.inode.owner = "alice"
+    target.inode.group = "writers"
+    target.inode.permissions["group"]["w"] = True
+    shell_basic.identity = EffectiveIdentity("bob", "writers", frozenset({"writers"}))
+    original_inode = target.inode
+
+    result = cl.enter_command("cp f1.txt target.txt", shell_basic)
+
+    assert_success(result)
+    assert target.inode is original_inode
+    assert alias.inode is original_inode
+    assert target.inode.owner == "alice"
+    assert target.inode.group == "writers"
+    assert alias.inode.data == source.inode.data
+
+
+def test_recursive_cp_preserves_links_without_following_targets(cl, shell_basic):
+    assert_success(cl.enter_command("ln -s f1.txt d1/link", shell_basic))
+    source = shell_basic.fs.filehead.access("f1.txt")
+    source.inode.permissions["user"]["r"] = False
+
+    result = cl.enter_command("cp -R d1 copy", shell_basic)
+
+    assert_success(result)
+    copied = shell_basic.fs.filehead.access("copy")
+    link = copied.access("link")
+    assert link.get_type().value == "symlink"
+    assert link.inode.symlink_target == "f1.txt"
 
 
 def test_cp_dot_paths_destination_directory(run_dot_command, dot_shell, dot_directory):

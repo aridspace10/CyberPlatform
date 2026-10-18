@@ -1,5 +1,8 @@
 Usage: rm [OPTION]... [FILE]...
  Remove (unlink) the FILE(s).
+Removing an entry requires write and search access to its parent directory.
+Recursive removal traverses real directories and treats symbolic links as
+entries; it does not follow links to directories.
    -f, --force           ignore nonexistent files and arguments, never prompt
    -i                    prompt before every removal
    -I                    prompt once before removing more than three files, or
@@ -32,4 +35,3 @@ Usage: rm [OPTION]... [FILE]...
  Report any translation bugs to <https://translationproject.org/team/>
  Full documentation <https://www.gnu.org/software/coreutils/rm>
  or available locally via: info '(coreutils) rm invocation'
- 

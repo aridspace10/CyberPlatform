@@ -22,6 +22,8 @@ class Inode:
         self.data: list[str] = []
         self.symlink_target: str | None = None
         self.has_trailing_newline: bool = False
+        self.owner = "user"
+        self.group = "user"
 
         self.permissions = {
             "user": {"r": True, "w": True, "x": True},
@@ -44,6 +46,8 @@ class Inode:
             "has_trailing_newline": self.has_trailing_newline,
             "link_count": self.link_count,
             "permissions": self.permissions,
+            "owner": self.owner,
+            "group": self.group,
             "btimes": self.btime.isoformat(),
             "ctimes": self.ctime.isoformat(),
             "atimes": self.atime.isoformat(),
@@ -63,6 +67,8 @@ class Inode:
         # false; keep that behavior because the original value is unknowable.
         self.has_trailing_newline = i.get("has_trailing_newline", False)
         self.link_count = i.get("link_count", 1)
+        self.owner = i.get("owner", "user")
+        self.group = i.get("group", "user")
         self.permissions = i["permissions"]
         self.btime = datetime.fromisoformat(i["btimes"])
         self.ctime = datetime.fromisoformat(i["ctimes"])

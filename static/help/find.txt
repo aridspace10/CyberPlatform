@@ -3,6 +3,7 @@ find [STARTING-POINT ...] [EXPRESSION]
 Walk each starting point and print matching paths. Starting points are resolved
 independently; traversal does not change the shell's current directory.
 Symbolic links are matched as links and are not followed.
+Traversal requires read and search access to each directory visited.
 
 Supported predicates:
   -name PATTERN   Match the node name using shell wildcards.

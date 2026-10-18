@@ -1,4 +1,5 @@
 from game.filesystem import FileSystem
+from game.identity import EffectiveIdentity
 
 
 class ShellState:
@@ -10,3 +11,4 @@ class ShellState:
         self.ls: int = 0
         self.last_status: int = 0
         self.foreground_pid: int | None = None
+        self.identity = EffectiveIdentity()

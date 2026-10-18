@@ -15,6 +15,9 @@ class SystemContext:
     nm: NetworkManager
     shell: ShellState
 
+    def __post_init__(self) -> None:
+        self.fs.identity = self.shell.identity
+
 
 @dataclass
 class ExecutionContext:
