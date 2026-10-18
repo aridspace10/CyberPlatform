@@ -104,3 +104,8 @@ def test_symlink_target_round_trips_and_migrates_from_legacy_data():
     inode_data["data"] = ["legacy-target"]
     restored.from_dict(legacy)
     assert restored.filehead.access("link").inode.symlink_target == "legacy-target"
+
+
+def test_get_file_returns_error_for_missing_parent_path():
+    fs = FileSystem()
+    assert fs.get_file("missing/child") == "No directory named missing"

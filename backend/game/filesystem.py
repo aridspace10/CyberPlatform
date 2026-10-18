@@ -52,12 +52,10 @@ class FileSystem:
             raise Exception("Syncronization failure") from err
 
     def get_file(self, path: str) -> FileNode | str | None:
-        parent_path, name = posixpath.split(path)
-        if name in ("", ".", ".."):
-            return PathResolutionError(path, f"Invalid filename: {path}", "invalid")
-        parent = self.resolve(parent_path or ".")
-        if isinstance(parent, str):
-            return parent
+        resolved_parent = self.resolve_parent(path)
+        if isinstance(resolved_parent, str):
+            return resolved_parent
+        parent, name = resolved_parent
         return parent.access(name)
 
     def list_files(
