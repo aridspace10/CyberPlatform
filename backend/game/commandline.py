@@ -1989,10 +1989,15 @@ class CommandLine:
             content = ctx.stdin
 
         def comparison_key(line: str) -> str:
-            key = line
-            if skip_fields:
-                fields = key.split()
-                key = " ".join(fields[skip_fields:])
+            offset = 0
+            for _ in range(skip_fields):
+                while offset < len(line) and line[offset].isspace():
+                    offset += 1
+                while offset < len(line) and not line[offset].isspace():
+                    offset += 1
+            while offset < len(line) and line[offset].isspace():
+                offset += 1
+            key = line[offset:]
             if skip_chars:
                 key = key[skip_chars:]
             return key.casefold() if ignore_case else key

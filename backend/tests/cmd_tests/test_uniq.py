@@ -92,6 +92,16 @@ def test_uniq_fields_treat_tabs_and_repeated_blanks_as_separators(cl, shell_empt
     assert result.stdout == ["id1\talpha\tS"]
 
 
+def test_uniq_preserves_whitespace_in_unskipped_text(cl, shell_empty):
+    shell_empty.fs.add_file("input.txt")
+    shell_empty.fs.current.access("input.txt").set_data(["a x  y", "a x y"])
+
+    result = cl.enter_command("uniq -f 1 input.txt", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["a x  y", "a x y"]
+
+
 def test_uniq_accepts_stdin_marker(cl, shell_basic):
     result = cl.enter_command("uniq - < f1.txt", shell_basic)
 
