@@ -116,6 +116,12 @@ class FileSystem:
                     target_path, node, seen_links | {child.inode.id}, creating
                 )
                 if isinstance(target, PathResolutionError):
+                    if target.code == "missing":
+                        return PathResolutionError(
+                            path,
+                            f"Dangling symbolic link: {child.name}",
+                            "dangling_symlink",
+                        )
                     return PathResolutionError(path, str(target), target.code)
                 node = target
             else:

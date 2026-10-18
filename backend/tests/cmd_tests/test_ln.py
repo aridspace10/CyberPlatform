@@ -371,6 +371,14 @@ def test_symbolic_links_resolve_relative_nested_and_chained_targets(cl, shell_ba
     assert result.stdout == shell_basic.fs.get_file("f1.txt").get_data()
     assert shell_basic.fs.resolve("d1/relative").name == "f1.txt"
 
+    current = shell_basic.fs.resolve("d1")
+    shell_basic.fs.current = current
+    shell_basic.fs.cwd = "/d1"
+    shell_basic.cwd = "/d1"
+    assert shell_basic.fs.resolve("relative").name == "f1.txt"
+    assert shell_basic.fs.current is current
+    assert shell_basic.fs.cwd == shell_basic.cwd == "/d1"
+
 
 def test_symbolic_links_resolve_absolute_targets_and_intermediate_directories(
     cl, shell_basic

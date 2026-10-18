@@ -324,7 +324,8 @@ def test_output_redirection_follows_regular_file_symlink(cl, shell_basic):
     assert target.inode.data == ["replacement"]
     assert target.inode.has_trailing_newline is True
     link = shell_basic.fs.get_file("filelink")
-    assert link.inode.data == ["f1.txt"]
+    assert link.inode.symlink_target == "f1.txt"
+    assert link.inode.data == []
 
 
 def test_multiple_output_redirects_apply_in_order(cl, shell_basic):
