@@ -388,6 +388,8 @@ class CommandLine:
         total_seconds = 0
         multipliers = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
         for duration in ctx.args:
+            # Match a complete signed decimal magnitude and an optional unit;
+            # fullmatch rejects unsupported suffixes and trailing text.
             match = re.fullmatch(
                 r"([+-]?(?:\d+(?:\.\d*)?|\.\d+))([smhd]?)", duration
             )
@@ -395,6 +397,8 @@ class CommandLine:
                 return CommandResult(
                     1, stderr=[f"sleep: invalid time interval '{duration}'"]
                 )
+            # Keep decimal durations exact so converting them to scheduler ticks
+            # never depends on binary floating point rounding.
             value = Fraction(match.group(1))
             if value < 0:
                 return CommandResult(
