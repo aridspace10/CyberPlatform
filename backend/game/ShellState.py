@@ -8,4 +8,5 @@ class ShellState:
         self.commands: list[str] = []
         self.vars: dict = {}
         self.ls: int = 0
+        self.last_status: int = 0
         self.foreground_pid: int | None = None

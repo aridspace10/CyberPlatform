@@ -26,7 +26,7 @@ class DevShell:
         self.process_manager.boot()
         self.scheduler = Scheduler(self.process_manager)
         self.commandline = CommandLine(self.process_manager, NetworkManager())
-        self.last_status = 0
+        self.shell.last_status = 0
         if not self.empty:
             self.shell.fs.add_directory("logs")
             for path, lines in {
@@ -42,6 +42,14 @@ class DevShell:
     def foreground(self) -> Process | None:
         pid = self.shell.foreground_pid
         return self.process_manager.get_process(pid) if pid is not None else None
+
+    @property
+    def last_status(self) -> int:
+        return self.shell.last_status
+
+    @last_status.setter
+    def last_status(self, status: int) -> None:
+        self.shell.last_status = status
 
     @property
     def prompt(self) -> str:

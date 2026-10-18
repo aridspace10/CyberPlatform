@@ -388,6 +388,57 @@ def test_semicolon_basic(cl, shell_basic: ShellState):
     assert CmdResult.stdout == ["f3.txt", "f4.txt"]
 
 
+def test_sequence_accumulates_output_and_diagnostics(cl, shell_basic):
+    result = cl.enter_command("echo first; echo second", shell_basic)
+    assert result.status == 0
+    assert result.stdout == ["first", "second"]
+    assert result.stderr == []
+
+    result = cl.enter_command("cat missing; echo okay", shell_basic)
+    assert result.status == 0
+    assert result.stdout == ["okay"]
+    assert result.stderr == ["File missing does not exist"]
+
+
+def test_andor_skips_only_ineligible_branch(cl, shell_basic):
+    result = cl.enter_command(
+        "cat missing && echo skip || echo recovered", shell_basic
+    )
+
+    assert result.status == 0
+    assert result.stdout == ["recovered"]
+    assert result.stderr == ["File missing does not exist"]
+
+
+def test_pipeline_preserves_upstream_diagnostics_and_final_status(cl, shell_basic):
+    result = cl.enter_command("cat missing | cat", shell_basic)
+
+    assert result.status == 0
+    assert result.stdout == []
+    assert result.stderr == ["File missing does not exist"]
+
+
+def test_subshell_inherits_pipeline_stdin_and_restores_nested_cwd(cl, shell_basic):
+    result = cl.enter_command("cat f1.txt | (cat)", shell_basic)
+    assert result.stdout == ["ERROR no", "INFO hey", "ERROR no2", "error 1"]
+    assert result.stderr == []
+
+    result = cl.enter_command("cd d1; ((cd ..; pwd)); pwd", shell_basic)
+    assert result.status == 0
+    assert result.stdout == ["root", "root/d1"]
+    assert shell_basic.fs.current is shell_basic.fs.filehead.access("d1")
+
+
+def test_last_status_expansion_tracks_previous_command(cl, shell_basic):
+    failed = cl.enter_command("cat missing", shell_basic)
+    assert failed.status == 1
+
+    status = cl.enter_command("echo $?", shell_basic)
+    assert status.status == 0
+    assert status.stdout == ["1"]
+    assert status.stderr == []
+
+
 def test_var_basic(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("X=5", shell_basic)
     assert CmdResult.stderr == []
