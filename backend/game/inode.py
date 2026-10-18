@@ -39,6 +39,8 @@ class Inode:
             "id": self.id,
             "type": self.type.value,
             "data": self.data,
+            "has_trailing_newline": self.has_trailing_newline,
+            "link_count": self.link_count,
             "permissions": self.permissions,
             "btimes": self.btime.isoformat(),
             "ctimes": self.ctime.isoformat(),
@@ -48,8 +50,13 @@ class Inode:
 
     def from_dict(self, i: dict) -> None:
         self.id = i["id"]
+        Inode._next_id = max(Inode._next_id, self.id + 1)
         self.type = NodeType(i["type"])
         self.data = i["data"]
+        # Older saves have neither field. Their restored newline state was
+        # false; keep that behavior because the original value is unknowable.
+        self.has_trailing_newline = i.get("has_trailing_newline", False)
+        self.link_count = i.get("link_count", 1)
         self.permissions = i["permissions"]
         self.btime = datetime.fromisoformat(i["btimes"])
         self.ctime = datetime.fromisoformat(i["ctimes"])

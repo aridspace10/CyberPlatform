@@ -4,6 +4,7 @@ from game.inode import NodeType
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.command_helpers import assert_help
+from tests.filesystem_helpers import restored_filesystem
 
 
 ######## LN ###################
@@ -48,6 +49,20 @@ def test_ln_basic(cl, shell_basic: ShellState):
     assert isinstance(s1, FileNode)
 
     assert f1.get_data() == s1.get_data()
+
+
+def test_ln_hard_link_survives_filesystem_restore(cl, shell_basic: ShellState):
+    assert_success(cl.enter_command("ln f1.txt h.txt", shell_basic))
+    shell_basic.fs = restored_filesystem(shell_basic.fs)
+
+    source = shell_basic.fs.get_file("f1.txt")
+    link = shell_basic.fs.get_file("h.txt")
+    assert source.inode is link.inode
+    assert source.inode.link_count == 2
+
+    assert_success(cl.enter_command('echo "after restore" >> h.txt', shell_basic))
+    assert source.get_data() == link.get_data()
+    assert "after restore" in source.get_data()
 
 
 def test_ln_nested_directory(cl, shell_basic: ShellState):

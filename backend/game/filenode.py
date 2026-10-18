@@ -34,15 +34,37 @@ class FileNode:
             and self.get_size() == other.get_size()
         )
 
-    def from_dict(self, fn: dict, depth: int, parent: FileNode | None) -> None:
+    def from_dict(
+        self,
+        fn: dict,
+        depth: int,
+        parent: FileNode | None,
+        inodes: dict[int, Inode] | None = None,
+    ) -> None:
         try:
+            if inodes is None:
+                inodes = {}
             self.name = fn["name"]
+            self.parent = parent
             self.depth = depth
-            self.inode.from_dict(fn["inode"])
+            inode_data = fn["inode"]
+            inode_id = inode_data["id"]
+            if inode_id in inodes:
+                self.inode = inodes[inode_id]
+            else:
+                self.inode.from_dict(inode_data)
+                inodes[inode_id] = self.inode
+            self.items = []
+            names = set()
             for item in fn["items"]:
-                inode = Inode(item["inode"]["type"])
-                f = FileNode(parent, item["name"], inode)
-                f.from_dict(item, depth + 1, self)
+                if item["name"] in names:
+                    raise ValueError(f"Duplicate sibling: {item['name']}")
+                names.add(item["name"])
+                child_inode = inodes.get(item["inode"]["id"])
+                if child_inode is None:
+                    child_inode = Inode(NodeType(item["inode"]["type"]))
+                f = FileNode(self, item["name"], child_inode)
+                f.from_dict(item, depth + 1, self, inodes)
                 self.items.append(f)
         except Exception as err:
             raise Exception("Syncronization Error") from err

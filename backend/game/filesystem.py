@@ -16,12 +16,28 @@ class FileSystem:
         return {"lcs": self.lcs, "nodes": self.filehead.to_dict()}
 
     def from_dict(self, fs: dict) -> None:
-        # Clear fs
-        self.__init__()
-        # restore fs
         try:
+            root = FileNode(None, "root", Inode(NodeType.DIRECTORY))
+            inodes: dict[int, Inode] = {}
+            root.from_dict(fs["nodes"], 0, None, inodes)
+
+            # Count directory entries rather than trusting saved counts, which
+            # are absent in old saves and can be stale after link deletion.
+            counts = {inode_id: 0 for inode_id in inodes}
+
+            def count_links(node: FileNode) -> None:
+                counts[node.inode.id] += 1
+                for child in node.items:
+                    count_links(child)
+
+            count_links(root)
+            for inode_id, inode in inodes.items():
+                inode.link_count = counts[inode_id]
+
             self.lcs = fs["lcs"]
-            self.filehead.from_dict(fs["nodes"], 0, None)
+            self.filehead = root
+            self.current = root
+            self.cwd = ""
         except Exception as err:
             raise Exception("Syncronization failure") from err
 
