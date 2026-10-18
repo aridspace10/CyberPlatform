@@ -203,6 +203,17 @@ def test_sleep_continuation_runs_after_scheduler_tick(monkeypatch, capsys):
     assert capsys.readouterr().out == "completed\n"
 
 
+def test_sleep_sequence_retains_output_before_and_after_foreground_job(monkeypatch, capsys):
+    console = DevShell(empty=True)
+    monkeypatch.setattr("game.dev_shell.time.sleep", lambda _seconds: None)
+
+    run_line(console, "echo before; sleep 1; echo after", False)
+
+    assert console.foreground is None
+    assert console.last_status == 0
+    assert capsys.readouterr().out == "before\nafter\n"
+
+
 def test_sleep_continuation_propagates_following_command_status(monkeypatch, capsys):
     console = DevShell(empty=True)
     monkeypatch.setattr("game.dev_shell.time.sleep", lambda _seconds: None)
