@@ -12,14 +12,18 @@ from game.inode import Inode, NodeType
 from game.InputBuffer import InputBuffer
 from game.NetworkManager import NetworkManager
 from game.Parser import (
+    AndNode,
     AndOr,
     Atom,
     Command,
     CommandParser,
+    ExecNode,
     FilterNode,
     FindParser,
     Job,
     Pipe,
+    NotNode,
+    OrNode,
     Sequence,
     SimpleCommand,
     lex,
@@ -507,8 +511,10 @@ class CommandLine:
             return CommandResult(
                 1, stderr=["find: atleast one argument needs to be given"]
             )
-        while len(ctx.args) and ctx.args[0].startswith("-"):
-            _ = ctx.args.pop(0)
+        if ctx.args[0] in ("-h", "--help"):
+            return CommandResult(0, stdout=self.useage("find"))
+        if ctx.args[0].startswith("-"):
+            return CommandResult(2, stderr=[f"find: unsupported option '{ctx.args[0]}'"])
         if not len(ctx.args):
             return CommandResult(
                 1, stderr=["find: starting locaiton needs to be given"]
@@ -528,19 +534,70 @@ class CommandLine:
             fparser = FindParser(ctx.args)
             try:
                 node = fparser.parse()
-            except (SyntaxError, ValueError) as e:
+            except (SyntaxError, ValueError, RecursionError) as e:
                 return CommandResult(2, stderr=[f"find: {str(e)}"])
+
+        # Supported predicates are deliberately small and side-effect free.
+        # Actions are rejected until find has a safe command-action contract.
+        pending = [node]
+        expression_nodes = 0
+        while pending:
+            expression = pending.pop()
+            expression_nodes += 1
+            if expression_nodes > 256:
+                return CommandResult(2, stderr=["find: expression is too complex"])
+            if isinstance(expression, FilterNode):
+                if expression.type in ("", "-true", "-false", "-empty"):
+                    continue
+                if expression.type == "-type":
+                    if expression.value not in ("f", "d", "l"):
+                        return CommandResult(
+                            2,
+                            stderr=[
+                                f"find: Value for -type not allowed: {expression.value}"
+                            ],
+                        )
+                    continue
+                if expression.type == "-name":
+                    continue
+                if expression.type == "-delete":
+                    return CommandResult(
+                        2, stderr=["find: -delete actions are not supported"]
+                    )
+                return CommandResult(
+                    2, stderr=[f"find: unsupported predicate: {expression.type}"]
+                )
+            if isinstance(expression, ExecNode):
+                return CommandResult(
+                    2, stderr=["find: -exec actions are not supported"]
+                )
+            if isinstance(expression, NotNode):
+                pending.append(expression.node)
+            elif isinstance(expression, (AndNode, OrNode)):
+                pending.extend((expression.left, expression.right))
+            else:
+                return CommandResult(2, stderr=["find: unsupported expression"])
         stdout = []
         stderr = []
         for start in starting:
-            start_node = ctx.system.fs.resolve(start)
+            # Do not follow a final symlink: find reports links as leaves by
+            # default, while path components before the final one still resolve.
+            parent_info = ctx.system.fs.resolve_parent(start.rstrip("/"))
+            start_node = None
+            if not isinstance(parent_info, str):
+                parent, leaf = parent_info
+                candidate = parent.access(leaf)
+                if candidate is not None and candidate.get_type() == NodeType.SYMLINK:
+                    start_node = candidate
+            if start_node is None:
+                start_node = ctx.system.fs.resolve(start)
             if isinstance(start_node, str):
                 stderr.append(start_node)
                 continue
 
             try:
                 toprints, execs = start_node.find(node, ".")
-            except (SyntaxError, ValueError, re.error) as error:
+            except (SyntaxError, ValueError, re.error, RecursionError) as error:
                 return CommandResult(2, stderr=[f"find: {error}"])
             stdout.extend(toprints)
         return CommandResult(1 if stderr else 0, stdout, stderr)

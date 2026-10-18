@@ -172,13 +172,7 @@ class FileNode:
         elif isinstance(node, FilterNode):
             return (self._evalFilterNode(node), actions)
         elif isinstance(node, ExecNode):
-            if node.mode == "+":
-                pass
-            else:  # mode == ;
-                for i, part in enumerate(node.command):
-                    if "{}" in part:
-                        node.command[i] = part.replace("{}", self.current_path)
-                actions.append(" ".join(node.command))
+            raise ValueError("-exec actions are not supported")
         return (False, actions)
 
     def _evalOrFindNode(
@@ -201,7 +195,7 @@ class FileNode:
                 return self.get_type() == NodeType.FILE
             case "d":
                 return self.get_type() == NodeType.DIRECTORY
-            case "s":
+            case "l":
                 return self.get_type() == NodeType.SYMLINK
             case _:
                 raise SyntaxError(f"Value for -type not allowed: ${val}")
@@ -214,6 +208,16 @@ class FileNode:
                 return fnmatch.fnmatch(self.name, node.value)
             case "-true":
                 return True
+            case "-false":
+                return False
+            case "-empty":
+                if self.get_type() == NodeType.DIRECTORY:
+                    return not self.items
+                if self.get_type() == NodeType.FILE:
+                    return not self.inode.data
+                return False
+            case "-delete":
+                raise ValueError("-delete actions are not supported")
             case "":  # the empty find
                 return True
             case _:
@@ -228,16 +232,31 @@ class FileNode:
 
     def find(self, filter: Node, past: str) -> Tuple[List[str], List[str]]:
         output = []
-        self.current_path = "." if past == "." and self.name == "" else self._join(past)
-        passed, actions = self._evalNode(filter, [])
-        if passed:
-            output.append(self.current_path)
-
-        for item in self.items:
-            toprint, execs = item.find(filter, self.current_path)
-            output.extend(toprint)
-            actions.extend(execs)
-        return (output, actions)
+        actions: list[str] = []
+        start_path = "." if self.parent is None else self._join(past)
+        pending: list[tuple[FileNode, str, int]] = [(self, start_path, 0)]
+        visited: set[int] = set()
+        max_depth = 512
+        while pending:
+            current, current_path, depth = pending.pop()
+            if depth > max_depth:
+                raise ValueError(
+                    f"find: maximum traversal depth ({max_depth}) exceeded"
+                )
+            identity = id(current)
+            if identity in visited:
+                raise ValueError("find: filesystem cycle detected")
+            visited.add(identity)
+            passed, current_actions = current._evalNode(filter, [])
+            actions.extend(current_actions)
+            if passed:
+                output.append(current_path)
+            # find treats symbolic links as leaves and never follows them.
+            if current.get_type() == NodeType.SYMLINK:
+                continue
+            for item in reversed(current.items):
+                pending.append((item, f"{current_path}/{item.name}", depth + 1))
+        return output, actions
 
     def len(self) -> int:
         return len(self.items)

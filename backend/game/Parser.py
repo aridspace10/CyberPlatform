@@ -371,7 +371,10 @@ class FindParser:
 
     # entry point
     def parse(self):
-        return self.parse_or()
+        node = self.parse_or()
+        if self.peek() is not None:
+            raise SyntaxError(f"Unexpected token: {self.peek()}")
+        return node
 
     def parse_or(self):
         node = self.parse_and()
@@ -398,8 +401,8 @@ class FindParser:
 
     def parse_factor(self) -> Node:
         tok = self.peek()
-        if tok is None:
-            raise SyntaxError()
+        if tok is None or tok == ")":
+            raise SyntaxError("Expected find expression")
 
         if tok == "!":
             self.consume()
@@ -415,16 +418,20 @@ class FindParser:
         filt = self.consume()
         if filt is None:
             return FilterNode("", "")
-        if filt in ["-true", "-false", "-empty", "-delete"]:  # Singular
+        if filt in ["-true", "-false", "-empty", "-delete"]:
             return FilterNode(filt, "")
         if filt == "-exec":
             cmd = []
             while (tok := self.peek()) is not None and tok not in (";", "+"):
                 cmd.append(self.consume())
             mode = self.consume()
-            if mode is None or mode != ";" or mode != "+":
+            if mode not in (";", "+"):
                 raise SyntaxError("Expected ; or +")
+            if not cmd:
+                raise SyntaxError("Expected command after -exec")
             return ExecNode(cmd, mode)
+        if filt not in ("-type", "-name"):
+            raise SyntaxError(f"Unsupported predicate: {filt}")
         val = self.consume()
         if val is None:
             raise SyntaxError(f"No value for given for: {filt}")
