@@ -6,6 +6,8 @@ from game.inode import Inode, NodeType
 from tests.cmd_tests.creation_helpers import assert_failure
 from tests.cmd_tests.path_helpers import descendants
 from tests.command_helpers import assert_help
+def test_find_help(cl, shell_empty):
+    assert_help(cl, shell_empty, "find")
 
 
 def test_find_dot_paths_visit_each_file_once(run_dot_command, dot_directory):

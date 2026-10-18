@@ -1,6 +1,11 @@
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
+from tests.command_helpers import assert_help
 from tests.filesystem_helpers import restored_filesystem
+
+
+def test_cd_help(cl, shell_empty):
+    assert_help(cl, shell_empty, "cd")
 
 
 def test_cd_basic(cl, shell_basic: ShellState):

@@ -3,6 +3,7 @@ import random
 from pathlib import Path
 
 import pytest
+from game.command_contract import format_command_help
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error, tree_state
@@ -83,20 +84,16 @@ def test_head_help(cl, shell_empty):
     assert_help(cl, shell_empty, "head")
 
 
-def test_missing_help_resource_returns_safe_command_output(
+def test_help_does_not_depend_on_working_directory_resources(
     cl, shell_empty, monkeypatch
 ):
-    original_read_text = Path.read_text
+    def unavailable_help_resources(_path, *args, **kwargs):
+        raise OSError("simulated missing help resource")
 
-    def missing_help(path, *args, **kwargs):
-        if path.name == "head.txt":
-            raise OSError("simulated missing help resource")
-        return original_read_text(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "read_text", missing_help)
+    monkeypatch.setattr(Path, "read_text", unavailable_help_resources)
     result = cl.enter_command("head --help", shell_empty)
     assert result.status == 0
-    assert result.stdout == ["head: help is unavailable"]
+    assert result.stdout == format_command_help("head")
     assert result.stderr == []
 
 

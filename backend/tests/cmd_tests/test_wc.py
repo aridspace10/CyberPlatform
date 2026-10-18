@@ -2,8 +2,12 @@ import pytest
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
-from tests.command_helpers import assert_command_error_without_mutation
+from tests.command_helpers import assert_command_error_without_mutation, assert_help
 from tests.filesystem_helpers import restored_filesystem
+
+
+def test_wc_help(cl, shell_empty):
+    assert_help(cl, shell_empty, "wc")
 
 
 @pytest.mark.parametrize("lines", [[], ["cat wolf", "", "dog"]])

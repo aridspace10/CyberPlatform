@@ -1,5 +1,12 @@
 from tests.cmd_tests.creation_helpers import assert_success
 from tests.cmd_tests.path_helpers import canonical_path, tree_state
+from tests.command_helpers import assert_help
+
+
+def test_pwd_help_documents_no_logical_or_physical_flags(cl, shell_empty):
+    assert_help(cl, shell_empty, "pwd")
+    help_text = "".join(cl.enter_command("pwd --help", shell_empty).stdout)
+    assert "No -L/-P flags" in help_text
 
 
 def test_pwd_dot_paths_report_canonical_directory(run_dot_command, dot_shell):

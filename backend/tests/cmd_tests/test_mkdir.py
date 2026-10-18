@@ -20,6 +20,7 @@ from tests.cmd_tests.creation_helpers import (
     node_at,
 )
 from tests.cmd_tests.path_helpers import tree_state
+from tests.command_helpers import assert_help
 
 
 @pytest.mark.parametrize("command,node_type", [("mkdir", NodeType.DIRECTORY)])
@@ -357,10 +358,7 @@ def test_mkdir_parents(cl, shell_empty: ShellState):
 
 
 def test_mkdir_help(cl, shell_empty):
-    result = cl.enter_command("mkdir --help", shell_empty)
-    with open("../static/help/mkdir.txt") as help_file:
-        assert result.stderr == []
-        assert result.stdout == help_file.readlines()
+    assert_help(cl, shell_empty, "mkdir")
 
 
 def test_mkdir_dot_paths_create_in_resolved_parent(

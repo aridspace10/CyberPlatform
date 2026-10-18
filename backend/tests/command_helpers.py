@@ -1,6 +1,6 @@
 import random
-from pathlib import Path
 
+from game.command_contract import COMMAND_CONTRACTS, format_command_help
 from game.ShellState import ShellState
 from tests.cmd_tests.path_helpers import tree_state
 from wonderwords import RandomWord
@@ -21,11 +21,9 @@ def setup_names(s: ShellState, name: str) -> list[str]:
 
 def assert_help(cl, shell, command):
     result = cl.enter_command(f"{command} --help", shell)
-    help_path = (
-        Path(__file__).resolve().parents[2] / "static" / "help" / f"{command}.txt"
-    )
     assert result.stderr == []
-    assert result.stdout == help_path.read_text().splitlines(keepends=True)
+    assert result.stdout == format_command_help(command)
+    assert set(cl.commands) == set(COMMAND_CONTRACTS)
 
 
 def assert_command_error_without_mutation(cl, shell, command):
