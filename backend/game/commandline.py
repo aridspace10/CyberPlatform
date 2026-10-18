@@ -543,6 +543,8 @@ class CommandLine:
                             1, stderr=["ping: count must be between 1 and 10"]
                         )
                 else:
+                    # Accept unsigned decimal seconds (including .5 or 1.) but
+                    # reject signs, exponent notation, whitespace, and suffixes.
                     if len(value) > 20 or not re.fullmatch(
                         r"(?:\d+(?:\.\d*)?|\.\d+)", value
                     ):
