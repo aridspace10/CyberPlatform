@@ -238,6 +238,27 @@ async def websocket_endpoint(
 
                 raw = data.get("input", "")
                 input_text = raw if isinstance(raw, str) else repr(raw)
+                if session.closed:
+                    response = {
+                        "type": "command_output",
+                        "stdout": [],
+                        "stderr": ["Session is closed"],
+                        "cwd": player.shell.cwd or "/",
+                        "interaction": None,
+                    }
+                    session.logger.record_activity(
+                        request_id=request_id,
+                        user_id=user_id,
+                        username=username,
+                        input_kind="command",
+                        input_text=input_text,
+                        cwd=player.shell.cwd or "/",
+                        status=1,
+                        interaction=None,
+                        outcome="session_closed",
+                    )
+                    await session.send_to(websocket, response)
+                    continue
                 input_kind = (
                     "foreground_input" if player.shell.foreground_pid else "command"
                 )

@@ -1,6 +1,7 @@
 import json
 import time
 
+from network.SessionManger import session_manager
 from services.session_logging import SessionLogger
 
 
@@ -28,6 +29,25 @@ def test_background_job_keeps_prompt_available_and_streams_completion(session):
     assert completion["stdout"] == ["background"]
     assert completion["stderr"] == []
     assert completion["status"] == 0
+
+
+def test_removed_session_rejects_commands_on_existing_websocket(session, client):
+    game_session = session.game_session
+    client.portal.call(
+        session_manager.remove_session, game_session.session_id
+    )
+
+    session.send_command("sleep 5 &")
+    response = session.receive_until(
+        lambda message: message.get("type") == "command_output"
+    )
+
+    assert response["stderr"] == ["Session is closed"]
+    assert game_session.players["jackson"].shell.background_jobs == {}
+    assert not any(
+        process.command.startswith("sleep ")
+        for process in game_session.process_manager.processes.values()
+    )
 
 
 def test_background_job_cancellation_stops_its_child(session):
