@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 from game.ProcessManager import ProcessState
+from game.Scheduler import Scheduler
 from game.ShellState import ShellState
 from network.SessionManger import GameSession
 from tests.cmd_tests.creation_helpers import assert_failure
@@ -274,3 +275,90 @@ async def test_multiple_sleep_processes():
 
 def test_sleep_help(cl, shell_empty):
     assert_help(cl, shell_empty, "sleep")
+
+
+@pytest.mark.parametrize(
+    ("command", "ticks"),
+    [
+        ("sleep 1", 1),
+        ("sleep 1.5", 2),
+        ("sleep .1 .2", 1),
+        ("sleep 0.5s 0.5s", 1),
+        ("sleep 0.01m", 1),
+        ("sleep 1m", 60),
+    ],
+)
+def test_sleep_maps_summed_decimal_durations_to_scheduler_ticks(
+    cl, shell_empty, command, ticks
+):
+    result = cl.enter_command(command, shell_empty)
+
+    assert result.status == 0
+    assert result.interaction is not None
+    process = cl.process_manager.get_process(shell_empty.foreground_pid)
+    assert process is not None
+    assert process.program.remaining == ticks
+
+
+@pytest.mark.parametrize(
+    "duration", ["2x", "-1", "NaN", "Infinity", "1sbad", ".", "1e3"]
+)
+def test_sleep_rejects_invalid_duration_without_creating_process(
+    cl, shell_empty, duration
+):
+    processes = dict(cl.process_manager.processes)
+
+    result = cl.enter_command(f"sleep {duration}", shell_empty)
+
+    assert result.status == 1
+    assert result.stderr == [f"sleep: invalid time interval '{duration}'"]
+    assert shell_empty.foreground_pid is None
+    assert cl.process_manager.processes == processes
+
+
+def test_sleep_zero_completes_without_foreground_process(cl, shell_empty):
+    result = cl.enter_command("sleep 0 0.0s", shell_empty)
+
+    assert result.status == 0
+    assert result.interaction is None
+    assert shell_empty.foreground_pid is None
+    assert cl.process_manager.processes == {}
+
+
+def test_sleep_completes_and_is_cleaned_up_by_scheduler_tick(cl, shell_empty):
+    result = cl.enter_command("sleep 0.1", shell_empty)
+    assert result.interaction is not None
+    process = cl.process_manager.get_process(shell_empty.foreground_pid)
+    assert process is not None
+
+    scheduler = Scheduler(cl.process_manager)
+    scheduler.tick()
+
+    assert process.status == ProcessState.TERMINATED
+    assert cl.process_manager.get_process(process.pid) is None
+    assert shell_empty.foreground_pid == process.pid
+
+
+def test_sleep_duration_elapses_over_the_expected_number_of_ticks(cl, shell_empty):
+    result = cl.enter_command("sleep 1.5", shell_empty)
+    assert result.interaction is not None
+    process = cl.process_manager.get_process(shell_empty.foreground_pid)
+    assert process is not None
+    scheduler = Scheduler(cl.process_manager)
+
+    scheduler.tick()
+    assert process.status == ProcessState.RUNNING
+    assert cl.process_manager.get_process(process.pid) is process
+
+    scheduler.tick()
+    assert process.status == ProcessState.TERMINATED
+    assert cl.process_manager.get_process(process.pid) is None
+
+
+def test_sleep_validates_every_argument_before_creating_process(cl, shell_empty):
+    result = cl.enter_command("sleep 1 2x", shell_empty)
+
+    assert result.status == 1
+    assert result.stderr == ["sleep: invalid time interval '2x'"]
+    assert cl.process_manager.processes == {}
+    assert shell_empty.foreground_pid is None
