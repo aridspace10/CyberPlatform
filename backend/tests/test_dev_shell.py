@@ -6,6 +6,11 @@ import time
 from pathlib import Path
 
 import pytest
+from game.command_contract import (
+    COMMAND_CONTRACTS,
+    COMMAND_EXAMPLES,
+    format_command_help,
+)
 from game.dev_shell import DevShell, repl, run_line
 
 LAUNCHER = Path(__file__).resolve().parents[2] / "run_shell.py"
@@ -115,10 +120,29 @@ def test_command_mode_accepts_responses_as_later_inputs(console_workdir):
 
 def test_help_uses_correct_working_directory_and_preserves_newlines(console_workdir):
     result = run_console(console_workdir, "-c", "mkdir --help")
-    expected = (LAUNCHER.parent / "static/help/mkdir.txt").read_text()
+    expected = "".join(format_command_help("mkdir"))
     assert result.returncode == 0
     assert result.stderr == ""
-    assert result.stdout == expected.rstrip("\n") + "\n"
+    assert result.stdout == expected
+
+
+def test_documented_command_examples_execute(monkeypatch, capsys):
+    console = DevShell(empty=True)
+    monkeypatch.setattr("game.dev_shell.time.sleep", lambda _seconds: None)
+    assert set(COMMAND_EXAMPLES) == set(console.commandline.commands) == set(
+        COMMAND_CONTRACTS
+    )
+    assert console.shell.fs.add_file("note.txt") == ""
+    note = console.shell.fs.get_file("note.txt")
+    assert not isinstance(note, str)
+    note.set_data(["hello world"])
+
+    for command in console.commandline.commands:
+        run_line(console, COMMAND_EXAMPLES[command], False)
+        assert console.foreground is None, command
+        assert console.last_status == 0, command
+
+    capsys.readouterr()
 
 
 def test_blank_input_and_error_do_not_end_the_console(console_workdir):

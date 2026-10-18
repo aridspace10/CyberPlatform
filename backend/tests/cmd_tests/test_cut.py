@@ -14,6 +14,14 @@ from game.filenode import FileNode
 from game.InputBuffer import InputBuffer
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
+from tests.command_helpers import assert_help
+
+
+def test_cut_help_documents_the_field_subset(cl, shell_empty):
+    assert_help(cl, shell_empty, "cut")
+    help_text = "".join(cl.enter_command("cut --help", shell_empty).stdout)
+    assert "comma-separated" in help_text
+    assert "ranges" in help_text
 
 
 @pytest.fixture

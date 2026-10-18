@@ -1,5 +1,0 @@
-Usage:
- ps [-e|-A] [-l]
-
-List every process in the simulated process table. The default output contains
-PID, state, parent PID, and command columns. Completed processes are omitted.

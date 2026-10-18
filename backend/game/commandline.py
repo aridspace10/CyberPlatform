@@ -3,7 +3,6 @@ import datetime
 import random
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Literal, Tuple
 
 from game.Context import CommandContext, ExecutionContext, SystemContext
@@ -21,9 +20,9 @@ from game.Parser import (
     FilterNode,
     FindParser,
     Job,
-    Pipe,
     NotNode,
     OrNode,
+    Pipe,
     Sequence,
     SimpleCommand,
     lex,
@@ -33,6 +32,7 @@ from game.ProcessManager import ProcessManager
 from game.Program import HeredocProgram, RmProgram, SleepProgram
 from game.ShellState import ShellState
 
+from .command_contract import COMMAND_CONTRACTS, format_command_help
 from .helpers import (
     determine_perms_fromstr,
     match_contains,
@@ -367,16 +367,17 @@ class CommandLine:
         if handler is None:
             return CommandResult(1, stderr=["Unknown command given"])
 
+        # Help is shared by all registered commands. echo explicitly treats
+        # --help as ordinary text, as documented by its contract.
+        if command != "echo" and "--help" in ctx.args:
+            return CommandResult(0, stdout=self.useage(command))
+
         return handler(ctx)
 
     def useage(self, type: str) -> list[str]:
-        help_path = (
-            Path(__file__).resolve().parents[2] / "static" / "help" / f"{type}.txt"
-        )
-        try:
-            return help_path.read_text(encoding="utf-8").splitlines(keepends=True)
-        except OSError:
-            return [f"{type}: help is unavailable"]
+        if type not in COMMAND_CONTRACTS:
+            return [f"{type}: help is unavailable\n"]
+        return format_command_help(type)
 
     def sleep(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
@@ -1573,7 +1574,7 @@ class CommandLine:
         return CommandResult(status, stdout, stderr)
 
     def rm(self, ctx: CommandContext) -> CommandResult:
-        recurse, verbose, interactive = False, False, False
+        recurse, verbose, interactive, force = False, False, False, False
         stdout = []
         stderr = []
         if "--help" in ctx.args:
@@ -1581,10 +1582,11 @@ class CommandLine:
 
         while len(ctx.args) and ctx.args[0].startswith("-"):
             arg = ctx.args.pop(0)
-            if arg in ("--recursive", "--interactive", "--verbose"):
+            if arg in ("--recursive", "--interactive", "--verbose", "--force"):
                 recurse = recurse or arg == "--recursive"
                 interactive = interactive or arg == "--interactive"
                 verbose = verbose or arg == "--verbose"
+                force = force or arg == "--force"
             else:
                 for option in arg[1:]:
                     if option in ("r", "R"):
@@ -1593,6 +1595,8 @@ class CommandLine:
                         verbose = True
                     elif option == "i":
                         interactive = True
+                    elif option == "f":
+                        force = True
                     else:
                         return CommandResult(
                             1,
@@ -1649,6 +1653,8 @@ class CommandLine:
         for filename in targets:
             result = ctx.system.fs.delete(filename, recursive=recurse)
             if isinstance(result, str):
+                if force and isinstance(ctx.system.fs.resolve(filename), str):
+                    continue
                 stderr.append(f"rm: {result}")
             elif verbose:
                 stdout.append(f"removed '{filename}'")

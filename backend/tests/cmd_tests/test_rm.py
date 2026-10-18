@@ -52,6 +52,23 @@ def test_rm_basic(cl, shell_fouritems: ShellState):
     assert len(shell_fouritems.fs.current.items) == 3
 
 
+def test_rm_force_ignores_missing_files_and_removes_existing_files(cl, shell_fouritems):
+    result = cl.enter_command("rm -f missing.txt f2.txt", shell_fouritems)
+
+    assert result.status == 0
+    assert result.stdout == []
+    assert result.stderr == []
+    assert shell_fouritems.fs.get_file("f2.txt") is None
+
+
+def test_rm_long_force_ignores_missing_files(cl, shell_empty):
+    result = cl.enter_command("rm --force missing.txt", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == []
+    assert result.stderr == []
+
+
 def test_rm_dir(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("rm d1", shell_basic)
     assert len(shell_basic.fs.current.items) == 3
