@@ -449,20 +449,26 @@ class CommandLine:
         while args:
             arg = args.pop(0)
             if arg in ("-e", "-A"):
-                parameters["selectionTy"] = "e"
+                parameters["all"] = True
             elif arg == "-l":
                 parameters["long"] = True
             elif arg in ("-C", "-p", "-q"):
                 if not args or not args[0]:
                     return CommandResult(1, stderr=[f"ps: argument required for {arg}"])
                 value = args.pop(0)
-                key = {"-C": "command", "-p": "pid", "-q": "qpid"}[arg]
-                parameters[key] = value
+                if arg == "-C":
+                    parameters["command"] = value
+                    continue
+                try:
+                    pids = [int(pid) for pid in value.split(",")]
+                    if any(pid <= 0 for pid in pids):
+                        raise ValueError
+                except ValueError:
+                    return CommandResult(1, stderr=[f"ps: invalid process ID list '{value}'"])
+                parameters["pid"] = set(pids)
             else:
                 return CommandResult(1, stderr=[f"ps: unknown option '{arg}'"])
-        self.process_manager.list_processes(parameters)
-
-        return CommandResult()
+        return CommandResult(stdout=self.process_manager.list_processes(parameters))
 
     def ping(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args or "-h" in ctx.args or "-help" in ctx.args:

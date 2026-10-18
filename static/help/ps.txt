@@ -1,8 +1,17 @@
 Usage:
- ps [options]
+ ps [-e|-A] [-l] [-p PID[,PID...]] [-q PID[,PID...]] [-C COMMAND]
 
- Try 'ps --help <simple|list|output|threads|misc|all>'
-  or 'ps --help <s|l|o|t|m|a>'
- for additional help text.
+List processes managed by this game session. Output columns are PID, STATE,
+PPID, and COMMAND. States include running, waiting_input, sleeping, and stopped.
+Completed processes are removed by the scheduler and are not listed.
 
-For more details see ps(1).
+Supported options:
+ -e, -A               list all simulated processes (the default)
+ -l                   include the simulated program type column
+ -p PID[,PID...]      select one or more process IDs
+ -q PID[,PID...]      select one or more process IDs
+ -C COMMAND           select an exact command string
+ --help               show this help
+
+PID and command selections can be combined to narrow the results.
+Use 'ps --help simple', 'ps --help list', or 'ps --help all' for details.

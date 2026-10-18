@@ -21,8 +21,42 @@ class ProcessManager:
         del self.processes[pid]
         return proc
 
-    def list_processes(self, paramaters: dict) -> list[str]:
-        return []
+    def list_processes(self, parameters: dict) -> list[str]:
+        """Return the simulated process table, excluding already terminated jobs.
+
+        The scheduler removes completed processes. Filtering terminated entries
+        here also keeps the output correct between termination and the next tick.
+        """
+        processes = [
+            process
+            for process in self.processes.values()
+            if process.status != ProcessState.TERMINATED
+        ]
+
+        pids = parameters.get("pid")
+        if pids is not None:
+            processes = [process for process in processes if process.pid in pids]
+        command = parameters.get("command")
+        if command is not None:
+            processes = [process for process in processes if process.command == command]
+
+        header = "PID  STATE          PPID  COMMAND"
+        if parameters.get("long"):
+            header = "PID  STATE          PPID  PROGRAM         COMMAND"
+        rows = [header]
+        for process in processes:
+            state = process.status.value.lower()
+            if parameters.get("long"):
+                program = type(process.program).__name__ if process.program else "-"
+                rows.append(
+                    f"{process.pid:<4} {state:<14} {process.ppid:<5} "
+                    f"{program:<15} {process.command}"
+                )
+            else:
+                rows.append(
+                    f"{process.pid:<4} {state:<14} {process.ppid:<5} {process.command}"
+                )
+        return rows
 
     def modify_process(self, pid: int, status: ProcessState) -> None:
         self.processes[pid].status = status

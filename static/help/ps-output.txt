@@ -1,0 +1,5 @@
+Usage:
+ ps [-l]
+
+The default output columns are PID, STATE, PPID, and COMMAND. State values are
+shown in lowercase. The -l option adds the simulated program type as PROGRAM.
