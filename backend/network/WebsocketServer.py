@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from db.session import get_db
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from game.commandline import CommandResult, Interaction
 from game.ProcessManager import ProcessState
 from network.SessionManger import Player, session_manager
 from services.session_service import get_session, get_session_shell
@@ -26,16 +27,48 @@ def execute_terminal_input(session, player: Player, raw: str):
     if player.shell.foreground_pid:
         proc = session.process_manager.get_process(player.shell.foreground_pid)
         if proc and proc.program:
-            stdout, stderr = proc.program.receive_input(raw)
-            if proc.status == ProcessState.TERMINATED:
-                player.shell.foreground_pid = None
-                interaction = None
+            if raw in ("\x03", "^C"):
+                proc.status = ProcessState.TERMINATED
+                proc.exit_status = 130
+                result = CommandResult(status=130)
+            elif proc.status != ProcessState.WAITING_INPUT:
+                result = CommandResult(
+                    status=1,
+                    stderr=["Foreground process is not accepting input"],
+                    interaction=Interaction(
+                        mode="foreground", prompt=proc.program.prompt
+                    ),
+                )
             else:
-                interaction = {
-                    "mode": "foreground",
-                    "prompt": proc.program.prompt,
+                stdout, stderr = proc.program.receive_input(raw)
+                if proc.status == ProcessState.TERMINATED:
+                    result = CommandResult(
+                        status=proc.exit_status,
+                        stdout=stdout,
+                        stderr=stderr,
+                    )
+                else:
+                    result = CommandResult(
+                        status=1 if stderr else 0,
+                        stdout=stdout,
+                        stderr=stderr,
+                        interaction=Interaction(
+                            mode="foreground", prompt=proc.program.prompt
+                        ),
+                    )
+            if proc.status == ProcessState.TERMINATED:
+                result = session.commandline.resume_foreground(
+                    player.shell, proc, result
+                )
+            stdout, stderr, status = result.stdout, result.stderr, result.status
+            interaction = (
+                None
+                if result.interaction is None
+                else {
+                    "mode": result.interaction.mode,
+                    "prompt": result.interaction.prompt,
                 }
-            status = 1 if stderr else 0
+            )
         else:
             player.shell.foreground_pid = None
             stdout = []
@@ -229,6 +262,7 @@ async def websocket_endpoint(
                         if proc:
                             proc.status = ProcessState.TERMINATED
                         player.shell.foreground_pid = None
+                    player.shell.continuation = None
                     response = {
                         "type": "command_output",
                         "stdout": [],

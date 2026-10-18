@@ -2,7 +2,7 @@ import asyncio
 from typing import Dict, Literal, Set
 
 from fastapi import WebSocket
-from game.commandline import CommandLine
+from game.commandline import CommandLine, CommandResult
 from game.Events import ProcessTerminatedEvent
 from game.filesystem import FileSystem
 from game.GameManager import GameManager
@@ -87,9 +87,48 @@ class GameSession:
                 if isinstance(event, ProcessTerminatedEvent):
                     for player in self.players.values():
                         if player.shell.foreground_pid == event.process.pid:
-                            player.shell.foreground_pid = None
-
-                            if player.websocket:
+                            had_continuation = player.shell.continuation is not None
+                            try:
+                                result = self.commandline.resume_foreground(
+                                    player.shell,
+                                    event.process,
+                                    CommandResult(
+                                        status=event.process.exit_status,
+                                        stdout=event.process.stdout.copy(),
+                                        stderr=event.process.stderr.copy(),
+                                    ),
+                                )
+                            except Exception:
+                                result = CommandResult(
+                                    status=1,
+                                    stderr=["Foreground continuation failed"],
+                                )
+                            if had_continuation and player.websocket:
+                                path_parts = []
+                                node = player.shell.fs.current
+                                while node is not None:
+                                    if node.name:
+                                        path_parts.append(node.name)
+                                    node = node.parent
+                                interaction = (
+                                    None
+                                    if result.interaction is None
+                                    else {
+                                        "mode": result.interaction.mode,
+                                        "prompt": result.interaction.prompt,
+                                    }
+                                )
+                                await self.send_to(
+                                    player.websocket,
+                                    {
+                                        "type": "command_output",
+                                        "stdout": result.stdout,
+                                        "stderr": result.stderr,
+                                        "cwd": "/" + "/".join(reversed(path_parts)),
+                                        "interaction": interaction,
+                                    },
+                                )
+                            if player.websocket and player.shell.foreground_pid is None:
                                 await self.send_to(
                                     player.websocket,
                                     {

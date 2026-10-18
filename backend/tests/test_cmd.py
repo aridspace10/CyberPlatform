@@ -68,6 +68,12 @@ def test_pipeline_keeps_explicit_empty_input_and_snapshots_output(
     assert isinstance(setup_inputs[1], InputBuffer)
 
 
+def test_background_job_is_explicitly_rejected(cl, shell_empty):
+    result = cl.enter_command("echo unsupported &", shell_empty)
+    assert result.status == 2
+    assert result.stderr == ["background execution is not supported"]
+
+
 @pytest.mark.parametrize("command", ["probe", "probe | probe", "probe < f1.txt"])
 def test_reading_stdin_never_constructs_filesystem_nodes(
     cl, shell_basic, monkeypatch, command
