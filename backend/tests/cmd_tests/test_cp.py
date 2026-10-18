@@ -72,7 +72,7 @@ def test_recursive_cp_preserves_links_without_following_targets(cl, shell_basic)
     copied = shell_basic.fs.filehead.access("copy")
     link = copied.access("link")
     assert link.get_type().value == "symlink"
-    assert link.inode.data == ["f1.txt"]
+    assert link.inode.symlink_target == "f1.txt"
 
 
 def test_cp_dot_paths_destination_directory(run_dot_command, dot_shell, dot_directory):

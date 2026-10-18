@@ -938,6 +938,7 @@ class CommandLine:
         def clone_inode(source_inode: Inode) -> Inode:
             inode = Inode(source_inode.type)
             inode.data = copy.deepcopy(source_inode.data)
+            inode.symlink_target = source_inode.symlink_target
             inode.has_trailing_newline = source_inode.has_trailing_newline
             inode.permissions = copy.deepcopy(source_inode.permissions)
             return inode
