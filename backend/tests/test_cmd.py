@@ -536,6 +536,16 @@ def test_last_status_expansion_tracks_previous_command(cl, shell_basic):
     assert status.stderr == []
 
 
+def test_last_status_expansion_tracks_completed_conditional_list(cl, shell_basic):
+    result = cl.enter_command(
+        "cat missing || echo recovered; echo $?", shell_basic
+    )
+
+    assert result.status == 0
+    assert result.stdout == ["recovered", "0"]
+    assert result.stderr == ["File missing does not exist"]
+
+
 def test_var_basic(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("X=5", shell_basic)
     assert CmdResult.stderr == []

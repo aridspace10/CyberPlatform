@@ -325,7 +325,9 @@ class CommandLine:
         cmd_result: CommandResult | None = None
         for job in parts:
             # background jobs not yet supported, just execute inline
-            cmd_result = self.execute_pipeline(job.pipeline, sys, inherited_stdin)
+            cmd_result = self.execute_andor(
+                job.pipeline, sys, ExecutionContext(stdin=inherited_stdin)
+            )
             stdout.extend(cmd_result.stdout)
             stderr.extend(cmd_result.stderr)
             if cmd_result.interaction is not None:
