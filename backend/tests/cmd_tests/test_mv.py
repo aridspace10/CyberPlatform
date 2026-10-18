@@ -86,6 +86,58 @@ def test_mv_replaces_existing_file(run_dot_command, dot_shell):
     assert source.parent is current
 
 
+def test_mv_extensionless_rename_and_nested_destination_preserve_tree(
+    cl, shell_empty
+):
+    fs = shell_empty.fs
+    fs.add_file("source")
+    source = fs.current.access("source")
+    source.set_data(["payload"])
+    fs.add_directory("nested")
+
+    result = cl.enter_command("mv source nested/renamed", shell_empty)
+
+    moved = fs.current.access("nested").access("renamed")
+    assert result.status == 0
+    assert fs.current.access("source") is None
+    assert moved is source
+    assert moved.inode.data == ["payload"]
+    assert moved.parent is fs.current.access("nested")
+    assert len([item for item in moved.parent.items if item.name == "renamed"]) == 1
+
+
+def test_mv_invalid_later_source_does_not_partially_move(cl, shell_empty):
+    fs = shell_empty.fs
+    fs.add_file("first")
+    first = fs.current.access("first")
+    first.set_data(["keep"])
+    fs.add_directory("target")
+
+    result = cl.enter_command("mv first missing target", shell_empty)
+
+    assert result.status != 0
+    assert result.stderr == ["mv: could not find file missing"]
+    assert fs.current.access("first") is first
+    assert first.parent is fs.current
+    assert fs.current.access("target").items == []
+
+
+def test_mv_moves_directory_into_existing_directory(cl, shell_empty):
+    fs = shell_empty.fs
+    fs.add_directory("source-dir")
+    fs.add_directory("target-dir")
+    source = fs.current.access("source-dir")
+    target = fs.current.access("target-dir")
+
+    result = cl.enter_command("mv source-dir target-dir", shell_empty)
+
+    assert result.status == 0
+    assert fs.current.access("source-dir") is None
+    assert target.access("source-dir") is source
+    assert source.parent is target
+    assert len([item for item in target.items if item.name == "source-dir"]) == 1
+
+
 @pytest.mark.parametrize(
     "command",
     [
