@@ -1859,101 +1859,159 @@ class CommandLine:
         return CommandResult()
 
     def uniq(self, ctx: CommandContext) -> CommandResult:
-        if "--help" in ctx.args:
-            return CommandResult(0, stdout=self.useage("uniq"))
+        count = False
+        duplicates_only = False
+        unique_only = False
+        ignore_case = False
+        skip_fields = 0
+        skip_chars = 0
+        input_file: str | None = None
+        args = list(ctx.args)
+        index = 0
 
-        printdup = False
-        skipfield = 0
-        skipchars = 0
-        csenstive = True
-        file = ""
-        while ctx.args:
-            arg = ctx.args.pop(0)
-            if not arg:
-                return CommandResult(1, stderr=["uniq: empty path"])
-            if arg == "-d" or arg == "repeated":
-                printdup = True
-            elif arg.startswith("--skip-fields"):
-                if "=" not in arg:
+        def parse_count(value: str, label: str) -> int | CommandResult:
+            try:
+                parsed = int(value)
+            except ValueError:
+                return CommandResult(1, stderr=[f"uniq: invalid {label} '{value}'"])
+            if parsed < 0:
+                return CommandResult(
+                    1, stderr=[f"uniq: {label} must be non-negative"]
+                )
+            return parsed
+
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if arg == "--":
+                if index < len(args):
+                    if input_file is not None or len(args) - index > 1:
+                        return CommandResult(
+                            1, stderr=["uniq: expected at most one input file"]
+                        )
+                    input_file = args[index]
+                break
+            if arg == "--help":
+                return CommandResult(0, stdout=self.useage("uniq"))
+
+            long_name, separator, long_value = arg.partition("=")
+            if arg == "-":
+                if input_file is not None:
                     return CommandResult(
-                        1, stderr=["uniq: value required for --skip-fields"]
+                        1, stderr=["uniq: expected at most one input file"]
                     )
-                value = arg.split("=", 1)[1]
-                try:
-                    skipfield = int(value)
-                except ValueError:
-                    return CommandResult(
-                        1, stderr=[f"uniq: invalid field count '{value}'"]
-                    )
-                if skipfield < 0:
-                    return CommandResult(
-                        1, stderr=["uniq: field count must be non-negative"]
-                    )
-            elif arg == "-i":
-                csenstive = False
-            elif arg == "-f":
-                if not ctx.args:
-                    return CommandResult(1, stderr=["uniq: argument required for -f"])
-                value = ctx.args.pop(0)
-                try:
-                    skipfield = int(value)
-                except ValueError:
-                    return CommandResult(
-                        1, stderr=[f"uniq: invalid field count '{value}'"]
-                    )
-                if skipfield < 0:
-                    return CommandResult(
-                        1, stderr=["uniq: field count must be non-negative"]
-                    )
-            elif arg == "-s":
-                if not ctx.args:
-                    return CommandResult(1, stderr=["uniq: argument required for -s"])
-                value = ctx.args.pop(0)
-                try:
-                    skipchars = int(value)
-                except ValueError:
-                    return CommandResult(
-                        1, stderr=[f"uniq: invalid character count '{value}'"]
-                    )
-                if skipchars < 0:
-                    return CommandResult(
-                        1, stderr=["uniq: character count must be non-negative"]
-                    )
-            else:
-                file = arg
-        if file not in ("", "-"):
-            tmp = ctx.system.fs.resolve(file)
-            if isinstance(tmp, str):
-                return CommandResult(1, stderr=[f"uniq: {tmp}"])
-            if tmp.get_type() == NodeType.DIRECTORY:
-                return CommandResult(1, stderr=[f"uniq: {file}: Is a directory"])
-            if tmp.get_type() != NodeType.FILE:
-                return CommandResult(1, stderr=[f"uniq: {file}: Not a regular file"])
-            content = InputBuffer.from_file(tmp)
+                input_file = arg
+                continue
+            if arg.startswith("--"):
+                if long_name in ("--count", "--repeated", "--unique", "--ignore-case"):
+                    if separator:
+                        return CommandResult(1, stderr=[f"uniq: unexpected value for {long_name}"])
+                    if long_name == "--count":
+                        count = True
+                    elif long_name == "--repeated":
+                        duplicates_only = True
+                    elif long_name == "--unique":
+                        unique_only = True
+                    else:
+                        ignore_case = True
+                    continue
+                if long_name in ("--skip-fields", "--skip-chars"):
+                    if separator:
+                        value = long_value
+                    elif index < len(args):
+                        value = args[index]
+                        index += 1
+                    else:
+                        return CommandResult(1, stderr=[f"uniq: value required for {long_name}"])
+                    label = "field count" if long_name == "--skip-fields" else "character count"
+                    parsed = parse_count(value, label)
+                    if isinstance(parsed, CommandResult):
+                        return parsed
+                    if long_name == "--skip-fields":
+                        skip_fields = parsed
+                    else:
+                        skip_chars = parsed
+                    continue
+                return CommandResult(1, stderr=[f"uniq: unsupported option '{arg}'"])
+
+            if arg.startswith("-"):
+                options = arg[1:]
+                option_index = 0
+                while option_index < len(options):
+                    option = options[option_index]
+                    option_index += 1
+                    if option == "i":
+                        ignore_case = True
+                    elif option == "c":
+                        count = True
+                    elif option == "d":
+                        duplicates_only = True
+                    elif option == "u":
+                        unique_only = True
+                    elif option in ("f", "s"):
+                        if option_index < len(options):
+                            value = options[option_index:]
+                            option_index = len(options)
+                        elif index < len(args):
+                            value = args[index]
+                            index += 1
+                        else:
+                            return CommandResult(1, stderr=[f"uniq: argument required for -{option}"])
+                        label = "field count" if option == "f" else "character count"
+                        parsed = parse_count(value, label)
+                        if isinstance(parsed, CommandResult):
+                            return parsed
+                        if option == "f":
+                            skip_fields = parsed
+                        else:
+                            skip_chars = parsed
+                    else:
+                        return CommandResult(1, stderr=[f"uniq: unsupported option '-{option}'"])
+                continue
+
+            if input_file is not None:
+                return CommandResult(1, stderr=["uniq: expected at most one input file"])
+            input_file = arg
+
+        if duplicates_only and unique_only:
+            return CommandResult(1, stderr=["uniq: -d and -u cannot be used together"])
+
+        if input_file not in (None, "-"):
+            node = ctx.system.fs.resolve(input_file)
+            if isinstance(node, str):
+                return CommandResult(1, stderr=[f"uniq: {input_file}: {node}"])
+            if node.get_type() == NodeType.DIRECTORY:
+                return CommandResult(1, stderr=[f"uniq: {input_file}: Is a directory"])
+            if node.get_type() != NodeType.FILE:
+                return CommandResult(1, stderr=[f"uniq: {input_file}: Not a regular file"])
+            content = InputBuffer.from_file(node)
         else:
             content = ctx.stdin
-        data = content.lines
-        processed = []
-        for line in data:
-            if not csenstive:
-                line = line.lower()
-            if skipchars:
-                line = line[skipchars:]
-            if skipfield:
-                fields = [f for f in line.split(" ") if f != ""]
-                line = " ".join(fields[skipfield:])
-            processed.append(line)
 
-        output = []
-        for i, line in enumerate(data):
-            same_as_prev = i > 0 and processed[i] == processed[i - 1]
+        def comparison_key(line: str) -> str:
+            key = line
+            if skip_fields:
+                fields = key.split()
+                key = " ".join(fields[skip_fields:])
+            if skip_chars:
+                key = key[skip_chars:]
+            return key.casefold() if ignore_case else key
 
-            if printdup:
-                if same_as_prev:
-                    output.append(line)
-            else:
-                if not same_as_prev:
-                    output.append(line)
+        lines = content.lines
+        keys = [comparison_key(line) for line in lines]
+        output: list[str] = []
+        start = 0
+        while start < len(lines):
+            end = start + 1
+            while end < len(lines) and keys[end] == keys[start]:
+                end += 1
+            group_size = end - start
+            if (not duplicates_only or group_size > 1) and (
+                not unique_only or group_size == 1
+            ):
+                line = lines[start]
+                output.append(f"{group_size} {line}" if count else line)
+            start = end
 
         return CommandResult(0, stdout=output)
 
