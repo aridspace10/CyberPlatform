@@ -92,31 +92,38 @@ class CommandLine:
             return ctx.args.pop(0)
         raise ValueError(f"{ctx.command}: parameter expected for {param}")
 
-    def get_fd(self, path: str, removing: bool, sys: SystemContext) -> FileNode | str:
-        lst = path.split("/")
-        saved_current = sys.fs.current
-        # only go to path if a path is given
-        if len(lst) > 1 and (error := sys.fs.search("/".join(lst[0:-1]))) != "":
-            sys.fs.current = saved_current
-            return error
-        name = lst[-1]
-        if name == "." or name == "..":
-            sys.fs.current = saved_current
-            return f"Cannot complete operation for {name}"
-        for _idx, item in enumerate(sys.fs.current.items):
-            if item.name == name:
-                if removing:
-                    item.set_data([])
-                sys.fs.current = saved_current
-                return item
-        inode = Inode(NodeType.FILE)
-        sys.fs.current.add_child(name, inode)
-        sys.fs.search_withaccess(
-            name
-        )  # search with access will set new filenode as ctx.system.fs.current
-        result = sys.fs.current
-        sys.fs.current = saved_current
-        return result
+    def open_redirection(
+        self, path: str, mode: Literal["read", "truncate", "append"], sys: SystemContext
+    ) -> InputBuffer | FileNode | str:
+        if mode == "read":
+            node = sys.fs.resolve(path)
+            if isinstance(node, str):
+                return node
+            if node.get_type() != NodeType.FILE:
+                return "Not a regular file"
+            return InputBuffer.from_file(node)
+
+        parent_result = sys.fs.resolve_parent(path)
+        if isinstance(parent_result, str):
+            return parent_result
+        parent, name = parent_result
+        node = parent.access(name)
+        if node is None:
+            inode = Inode(NodeType.FILE)
+            error = parent.add_child(name, inode)
+            if error:
+                return error
+            node = parent.access(name)
+        elif node.get_type() == NodeType.SYMLINK:
+            node = sys.fs.resolve(path)
+            if isinstance(node, str):
+                return node
+
+        if node.get_type() != NodeType.FILE:
+            return "Not a regular file"
+        if mode == "truncate":
+            node.set_data([])
+        return node
 
     def enter_command(self, raw: str, shell: ShellState) -> CommandResult:
         if not raw.strip():
@@ -134,17 +141,14 @@ class CommandLine:
             return self.execute_sequence(ast.parts, sys)
         return CommandResult(2, stderr=["syntax error: expected a command"])
 
-    def execute_pipeline(self, pipe: Pipe, sys: SystemContext) -> CommandResult:
+    def execute_pipeline(
+        self, pipe: Pipe, sys: SystemContext, inherited_stdin: InputBuffer | None = None
+    ) -> CommandResult:
         cmd_result = None
-        prev_pipe = None
-
-        exec_ctx = ExecutionContext()
+        prev_pipe = inherited_stdin
 
         for part in pipe.parts:
-            exec_ctx.stdin = prev_pipe
-            exec_ctx.stdout = None
-
-            cmd_result = self.execute_andor(part, sys, exec_ctx)
+            cmd_result = self.execute_andor(part, sys, ExecutionContext(stdin=prev_pipe))
 
             prev_pipe = InputBuffer.from_lines(cmd_result.stdout)
 
@@ -172,6 +176,8 @@ class CommandLine:
     def execute_command(
         self, command: Command, sys: SystemContext, exec_ctx: ExecutionContext
     ) -> CommandResult:
+        # A branch inherits stdin but owns its redirection descriptors.
+        local_ctx = ExecutionContext(stdin=exec_ctx.stdin)
         redirs = command.pre_redirs + command.post_redirs
         for assign in command.assignments:
             sys.shell.vars[assign.name] = assign.value.parts[0]
@@ -185,14 +191,10 @@ class CommandLine:
 
         for redir in redirs:
             if redir.op == "<":
-                source = sys.fs.resolve(redir.target)
+                source = self.open_redirection(redir.target, "read", sys)
                 if isinstance(source, str):
                     return CommandResult(1, stderr=[f"{redir.target}: {source}"])
-                if source.get_type() != NodeType.FILE:
-                    return CommandResult(
-                        1, stderr=[f"{redir.target}: Not a regular file"]
-                    )
-                exec_ctx.stdin = InputBuffer.from_file(source)
+                local_ctx.stdin = source
             elif redir.op == "<<":
                 heredoc_command = copy.deepcopy(command)
                 heredoc_command.pre_redirs = [
@@ -231,23 +233,17 @@ class CommandLine:
                     ),
                 )
             elif redir.op == ">":
-                exec_ctx.stdout = self.get_fd(redir.target, True, sys)
-                if isinstance(exec_ctx.stdout, str):
-                    cmd_result = CommandResult(1, [], [exec_ctx.stdout], "text", None)
-                    return cmd_result
+                local_ctx.stdout = self.open_redirection(redir.target, "truncate", sys)
+                if isinstance(local_ctx.stdout, str):
+                    return CommandResult(1, stderr=[local_ctx.stdout])
             elif redir.op == ">>":
-                exec_ctx.stdout = self.get_fd(redir.target, False, sys)
-                if isinstance(exec_ctx.stdout, str):
-                    cmd_result = CommandResult(1, [], [exec_ctx.stdout], "text", None)
-                    return cmd_result
-        cmd_result = self.execute_atom(command.atom, sys, exec_ctx)
-        if command.pre_redirs or command.post_redirs:
-            if isinstance(exec_ctx.stdout, FileNode):
-                exec_ctx.stdout.append_data(cmd_result.stdout)
-                cmd_result.stdout = []
-        else:
-            # No redirection → leave stdout alone
-            exec_ctx.stdout = None
+                local_ctx.stdout = self.open_redirection(redir.target, "append", sys)
+                if isinstance(local_ctx.stdout, str):
+                    return CommandResult(1, stderr=[local_ctx.stdout])
+        cmd_result = self.execute_atom(command.atom, sys, local_ctx)
+        if isinstance(local_ctx.stdout, FileNode):
+            local_ctx.stdout.append_data(cmd_result.stdout)
+            cmd_result.stdout = []
         return cmd_result
 
     def execute_atom(
@@ -283,18 +279,23 @@ class CommandLine:
             saved_fs_current = sys.fs.current
             saved_fs_cwd = sys.fs.cwd
             try:
-                return self.execute_sequence(atom.sequence.parts, sys)
+                return self.execute_sequence(atom.sequence.parts, sys, exec_ctx.stdin)
             finally:
                 sys.shell.cwd = saved_cwd
                 sys.shell.vars = saved_env
                 sys.fs.current = saved_fs_current
                 sys.fs.cwd = saved_fs_cwd
 
-    def execute_sequence(self, parts: list[Job], sys: SystemContext) -> CommandResult:
+    def execute_sequence(
+        self,
+        parts: list[Job],
+        sys: SystemContext,
+        inherited_stdin: InputBuffer | None = None,
+    ) -> CommandResult:
         cmd_result = None
         for job in parts:
             # background jobs not yet supported, just execute inline
-            cmd_result = self.execute_pipeline(job.pipeline, sys)
+            cmd_result = self.execute_pipeline(job.pipeline, sys, inherited_stdin)
         if cmd_result is None:
             raise Exception("cmd being empty")
         return cmd_result

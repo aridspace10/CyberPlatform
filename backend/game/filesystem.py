@@ -98,7 +98,7 @@ class FileSystem:
                 self.current = saved
                 return f"No directory named {cur}"
             if node.inode.type == NodeType.SYMLINK:
-                target = node.inode.data
+                target = node.inode.data[0]
                 # Resolve target relative to symlink's parent
                 saved = self.current
                 err = self.search(target)
