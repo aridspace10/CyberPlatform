@@ -39,6 +39,7 @@ class GameSession:
         self.logger = SessionLogger(session_id)
         self.state = "waiting"
         self.name = "Test"
+        self.closed = False
 
         # Player and Connecitons
         self.players: Dict[Username, Player] = {}
@@ -170,6 +171,7 @@ class GameSession:
         return self.scheduler_task
 
     async def stop_scheduler(self) -> None:
+        self.closed = True
         for player in self.players.values():
             for pid in list(player.shell.background_jobs):
                 self.commandline.cancel_background_job(pid, player.shell)
