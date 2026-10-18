@@ -1,5 +1,7 @@
 import pytest
 from game.ShellState import ShellState
+from game.filenode import FileNode
+from game.inode import Inode, NodeType
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error, descendants
 from tests.command_helpers import assert_help
@@ -237,6 +239,63 @@ def test_grep_recursion_applies_include_exclude_and_directory_filters(
     assert excluded.status == 0
     assert excluded.stdout == ["search/skip.txt:alpha", "search/ignored/inside.zzz:alpha"]
     assert excluded.stderr == []
+
+
+def test_grep_recursive_filters_keep_equals_and_match_basenames(cl, shell_empty):
+    fs = shell_empty.fs
+    fs.add_directory("search")
+    for name in ("match=one.txt", "match=two.log", "skip=three.txt"):
+        fs.add_file(f"search/{name}")
+        fs.current.access("search").access(name).set_data(["alpha"])
+
+    result = cl.enter_command(
+        "grep -r --include=match=*.txt --include=match=*.log "
+        "--exclude=skip=*.txt alpha search",
+        shell_empty,
+    )
+
+    assert result.status == 0
+    assert result.stdout == [
+        "search/match=one.txt:alpha",
+        "search/match=two.log:alpha",
+    ]
+    assert result.stderr == []
+
+
+def test_grep_recursive_search_does_not_follow_directory_symlinks(cl, shell_empty):
+    fs = shell_empty.fs
+    fs.add_directory("search")
+    fs.add_file("search/inside.txt")
+    fs.current.access("search").access("inside.txt").set_data(["alpha"])
+    fs.add_file("search/other.txt")
+    fs.current.access("search").access("other.txt").set_data(["beta"])
+    assert_success(cl.enter_command("ln -s . search/loop", shell_empty))
+
+    result = cl.enter_command("grep -r alpha search", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["search/inside.txt:alpha"]
+    assert result.stderr == []
+
+
+def test_grep_recursive_search_handles_deep_directory_trees(cl, shell_empty):
+    shell_empty.fs.add_directory("search")
+    directory = shell_empty.fs.resolve("search")
+    assert not isinstance(directory, str)
+    parent = directory
+    for index in range(1100):
+        child = FileNode(parent, f"nested-{index}", Inode(NodeType.DIRECTORY))
+        parent.items.append(child)
+        parent = child
+    file_node = FileNode(parent, "match.txt", Inode(NodeType.FILE))
+    file_node.set_data(["alpha"])
+    parent.items.append(file_node)
+
+    result = cl.enter_command("grep -r alpha search", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["alpha"]
+    assert result.stderr == []
 
 
 @pytest.mark.parametrize(
