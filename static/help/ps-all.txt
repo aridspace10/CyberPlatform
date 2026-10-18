@@ -6,7 +6,7 @@ Supported selection and output options:
  -p PID[,PID...]      select one or more positive process IDs
  -q PID[,PID...]      alias for -p
  -C COMMAND           select an exact command string
- -l                   use the long output header
+ -l                   include the simulated program type column
 
 Output columns are PID, STATE, PPID, and COMMAND. Process states include
 running, waiting_input, sleeping, and stopped. The scheduler removes completed

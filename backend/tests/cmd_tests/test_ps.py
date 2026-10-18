@@ -73,6 +73,15 @@ def test_ps_no_matches_prints_header_only(cl, shell_empty):
     assert result.stdout == ["PID  STATE          PPID  COMMAND"]
 
 
+def test_ps_long_output_shows_simulated_program_type(cl, shell_empty):
+    cl.enter_command("sleep 10", shell_empty)
+
+    result = cl.enter_command("ps -l", shell_empty)
+
+    assert result.stdout[0] == "PID  STATE          PPID  PROGRAM         COMMAND"
+    assert any("SleepProgram" in line and "sleep 10" in line for line in result.stdout)
+
+
 @pytest.mark.parametrize("pid_list", ["abc", "0", "1,,2", "-1"])
 def test_ps_rejects_invalid_pid_lists(cl, shell_empty, pid_list):
     result = cl.enter_command(f"ps -p {pid_list}", shell_empty)

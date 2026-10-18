@@ -7,7 +7,7 @@ Completed processes are removed by the scheduler and are not listed.
 
 Supported options:
  -e, -A               list all simulated processes (the default)
- -l                   use the long output header
+ -l                   include the simulated program type column
  -p PID[,PID...]      select one or more process IDs
  -q PID[,PID...]      select one or more process IDs
  -C COMMAND           select an exact command string

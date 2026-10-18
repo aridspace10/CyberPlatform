@@ -42,13 +42,20 @@ class ProcessManager:
 
         header = "PID  STATE          PPID  COMMAND"
         if parameters.get("long"):
-            header = "PID  STATE          PPID  COMMAND (LONG)"
+            header = "PID  STATE          PPID  PROGRAM         COMMAND"
         rows = [header]
-        rows.extend(
-            f"{process.pid:<4} {process.status.value.lower():<14} "
-            f"{process.ppid:<5} {process.command}"
-            for process in processes
-        )
+        for process in processes:
+            state = process.status.value.lower()
+            if parameters.get("long"):
+                program = type(process.program).__name__ if process.program else "-"
+                rows.append(
+                    f"{process.pid:<4} {state:<14} {process.ppid:<5} "
+                    f"{program:<15} {process.command}"
+                )
+            else:
+                rows.append(
+                    f"{process.pid:<4} {state:<14} {process.ppid:<5} {process.command}"
+                )
         return rows
 
     def modify_process(self, pid: int, status: ProcessState) -> None:
