@@ -263,3 +263,17 @@ def test_chmod_recursive_skips_symbolic_links(cl, shell_basic):
     assert link.inode.ctime == old_ctime
     assert link.inode.permissions == link_permissions
     assert external_file.inode.permissions == external_permissions
+
+
+def test_client_supplied_root_username_cannot_chmod_root_owned_file(cl, shell_basic):
+    shell_basic.identity = EffectiveIdentity.for_session("root", "0")
+    node = shell_basic.fs.filehead.access("f1.txt")
+    node.inode.owner = "root"
+    node.inode.permissions["user"] = {"r": True, "w": True, "x": True}
+
+    result = cl.enter_command("chmod 600 f1.txt", shell_basic)
+
+    assert result.status != 0
+    assert result.stderr == [
+        "chmod: changing permissions of 'f1.txt': Operation not permitted"
+    ]

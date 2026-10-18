@@ -429,3 +429,14 @@ def test_recursive_directory_removal_releases_descendant_inode_links(cl, shell_b
     assert source.inode.link_count == 2
     assert_success(cl.enter_command("rm -r d1", shell_basic))
     assert source.inode.link_count == 1
+@pytest.mark.parametrize("links", [[("loop", "loop")], [("a", "b"), ("b", "a")]])
+def test_symlink_cycles_return_an_error_instead_of_recursing(cl, shell_empty, links):
+    for link_name, target in links:
+        assert_success(
+            cl.enter_command(f"ln -s {target} {link_name}", shell_empty)
+        )
+
+    resolved = shell_empty.fs.resolve(links[0][0])
+
+    assert isinstance(resolved, str)
+    assert resolved == "Too many levels of symbolic links"
