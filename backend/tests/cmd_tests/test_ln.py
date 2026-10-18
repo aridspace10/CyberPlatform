@@ -203,7 +203,7 @@ def test_ln_symbolic_basic(cl, shell_basic: ShellState):
     assert sym.inode.type == NodeType.SYMLINK
 
     # Symlink stores target path
-    assert sym.inode.get_data() == ["f1.txt"]
+    assert sym.inode.symlink_target == "f1.txt"
 
 
 def test_ln_symbolic_nested(cl, shell_basic: ShellState):
@@ -217,7 +217,7 @@ def test_ln_symbolic_nested(cl, shell_basic: ShellState):
     assert isinstance(sym, FileNode)
 
     assert sym.inode.type == NodeType.SYMLINK
-    assert sym.inode.get_data() == ["d1/f3.txt"]
+    assert sym.inode.symlink_target == "d1/f3.txt"
 
 
 def test_ln_symbolic_directory_allowed(cl, shell_basic: ShellState):
@@ -232,7 +232,7 @@ def test_ln_symbolic_directory_allowed(cl, shell_basic: ShellState):
 
     # Symlinks to directories should be allowed
     assert link.inode.type == NodeType.SYMLINK
-    assert link.inode.get_data() == ["d1"]
+    assert link.inode.symlink_target == "d1"
 
 
 def test_ln_symbolic_does_not_share_inode(cl, shell_basic: ShellState):
@@ -273,7 +273,7 @@ def test_ln_symbolic_missing_target_allowed(cl, shell_basic: ShellState):
     assert isinstance(sym, FileNode)
 
     assert sym.inode.type == NodeType.SYMLINK
-    assert sym.inode.get_data() == ["missing.txt"]
+    assert sym.inode.symlink_target == "missing.txt"
 
 
 def test_ln_invalid_option(cl, shell_basic: ShellState):
@@ -312,8 +312,8 @@ def test_ln_symbolic_multiple(cl, shell_basic: ShellState):
     assert sym1.inode is not sym2.inode
 
     # But same target path
-    assert sym1.inode.get_data() == ["f1.txt"]
-    assert sym2.inode.get_data() == ["f1.txt"]
+    assert sym1.inode.symlink_target == "f1.txt"
+    assert sym2.inode.symlink_target == "f1.txt"
 
 
 def test_ln_help(cl, shell_empty):
@@ -359,5 +359,65 @@ def test_ln_dot_paths_symbolic_target_stays_literal(run_dot_command, dot_shell, 
     assert linked is not None
     assert linked.parent is branch
     assert linked.inode.type.value == "symlink"
-    assert linked.inode.data == [target]
+    assert linked.inode.symlink_target == target
     assert_success(result)
+
+
+def test_symbolic_links_resolve_relative_nested_and_chained_targets(cl, shell_basic):
+    assert_success(cl.enter_command("ln -s ../f1.txt d1/relative", shell_basic))
+    assert_success(cl.enter_command("ln -s d1/relative chained", shell_basic))
+    result = cl.enter_command("cat chained", shell_basic)
+    assert result.stderr == []
+    assert result.stdout == shell_basic.fs.get_file("f1.txt").get_data()
+    assert shell_basic.fs.resolve("d1/relative").name == "f1.txt"
+
+
+def test_symbolic_links_resolve_absolute_targets_and_intermediate_directories(
+    cl, shell_basic
+):
+    assert_success(cl.enter_command("ln -s /d1 dirlink", shell_basic))
+    assert_success(cl.enter_command("ln -s /f1.txt absolute", shell_basic))
+    assert shell_basic.fs.resolve("dirlink/f3.txt").name == "f3.txt"
+    assert shell_basic.fs.resolve("absolute").name == "f1.txt"
+
+
+def test_grep_reads_through_symbolic_link(cl, shell_basic):
+    assert_success(cl.enter_command("ln -s f1.txt readable", shell_basic))
+    expected = cl.enter_command("grep ERROR f1.txt", shell_basic)
+    actual = cl.enter_command("grep ERROR readable", shell_basic)
+    assert actual.stdout == expected.stdout
+    assert actual.stderr == expected.stderr == []
+
+
+def test_symbolic_link_cycle_and_dangling_errors_are_deterministic(cl, shell_basic):
+    assert_success(cl.enter_command("ln -s loop-b loop-a", shell_basic))
+    assert_success(cl.enter_command("ln -s loop-a loop-b", shell_basic))
+    assert shell_basic.fs.resolve("loop-a") == "Too many levels of symbolic links"
+
+    assert_success(cl.enter_command("ln -s absent dangling", shell_basic))
+    assert shell_basic.fs.resolve("dangling").startswith("Dangling symbolic link:")
+
+
+def test_unlink_symlink_removes_link_not_target(cl, shell_basic):
+    assert_success(cl.enter_command("ln -s f1.txt sym", shell_basic))
+    target = shell_basic.fs.get_file("f1.txt")
+    assert_success(cl.enter_command("rm sym", shell_basic))
+    assert shell_basic.fs.get_file("sym") is None
+    assert shell_basic.fs.get_file("f1.txt") is target
+
+
+def test_unlink_hard_link_decrements_shared_inode_count(cl, shell_basic):
+    assert_success(cl.enter_command("ln f1.txt hard", shell_basic))
+    source = shell_basic.fs.get_file("f1.txt")
+    assert source.inode.link_count == 2
+    assert_success(cl.enter_command("rm hard", shell_basic))
+    assert source.inode.link_count == 1
+    assert shell_basic.fs.get_file("f1.txt") is source
+
+
+def test_recursive_directory_removal_releases_descendant_inode_links(cl, shell_basic):
+    assert_success(cl.enter_command("ln f1.txt d1/hard", shell_basic))
+    source = shell_basic.fs.get_file("f1.txt")
+    assert source.inode.link_count == 2
+    assert_success(cl.enter_command("rm -r d1", shell_basic))
+    assert source.inode.link_count == 1

@@ -158,7 +158,13 @@ class FileNode:
             if item.name == name:
                 if item.get_type() == NodeType.DIRECTORY and not recurse:
                     return "dir"
-                return self.items.pop(idx)
+                removed = self.items.pop(idx)
+                def release(node: FileNode) -> None:
+                    node.inode.link_count = max(0, node.inode.link_count - 1)
+                    for child in node.items:
+                        release(child)
+                release(removed)
+                return removed
         return ""
 
     def _evalNode(self, node: Node, actions: list[str]) -> Tuple[bool, list[str]]:

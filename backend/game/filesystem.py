@@ -106,12 +106,16 @@ class FileSystem:
                     return PathResolutionError(
                         path, "Too many levels of symbolic links", "symlink_loop"
                     )
-                if not child.inode.data:
+                target_path = child.inode.symlink_target
+                if target_path is None and child.inode.data:
+                    # Older callers and save files stored the target in data.
+                    target_path = child.inode.data[0]
+                if target_path is None:
                     return PathResolutionError(
                         path, f"Invalid symbolic link: {child.name}", "invalid_symlink"
                     )
                 target = self._resolve(
-                    child.inode.data[0], node, seen_links | {child.inode.id}, creating
+                    target_path, node, seen_links | {child.inode.id}, creating
                 )
                 if isinstance(target, PathResolutionError):
                     return PathResolutionError(path, str(target), target.code)
