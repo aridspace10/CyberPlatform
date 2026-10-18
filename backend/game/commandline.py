@@ -367,7 +367,7 @@ class CommandLine:
 
         # Help is shared by all registered commands. echo explicitly treats
         # --help as ordinary text, as documented by its contract.
-        if command != "echo" and "--help" in ctx.args:
+        if command not in {"echo", "cat"} and "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage(command))
 
         return handler(ctx)

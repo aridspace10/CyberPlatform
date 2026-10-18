@@ -444,7 +444,7 @@ def test_shell_failed_lookup_does_not_suppress_following_command(cl, shell_basic
 
     assert result.status == 0
     assert result.stdout == ["recovered"]
-    assert result.stderr == ["File missing.txt does not exist"]
+    assert result.stderr == ["cat: missing.txt: No directory named missing.txt"]
     assert shell_basic.fs.current is original_cwd
 
 
@@ -493,7 +493,7 @@ def test_sequence_accumulates_output_and_diagnostics(cl, shell_basic):
     result = cl.enter_command("cat missing; echo okay", shell_basic)
     assert result.status == 0
     assert result.stdout == ["okay"]
-    assert result.stderr == ["File missing does not exist"]
+    assert result.stderr == ["cat: missing: No directory named missing"]
 
 
 def test_andor_skips_only_ineligible_branch(cl, shell_basic):
@@ -503,7 +503,7 @@ def test_andor_skips_only_ineligible_branch(cl, shell_basic):
 
     assert result.status == 0
     assert result.stdout == ["recovered"]
-    assert result.stderr == ["File missing does not exist"]
+    assert result.stderr == ["cat: missing: No directory named missing"]
 
 
 def test_pipeline_preserves_upstream_diagnostics_and_final_status(cl, shell_basic):
@@ -511,7 +511,7 @@ def test_pipeline_preserves_upstream_diagnostics_and_final_status(cl, shell_basi
 
     assert result.status == 0
     assert result.stdout == []
-    assert result.stderr == ["File missing does not exist"]
+    assert result.stderr == ["cat: missing: No directory named missing"]
 
 
 def test_subshell_inherits_pipeline_stdin_and_restores_nested_cwd(cl, shell_basic):
@@ -542,7 +542,7 @@ def test_last_status_expansion_tracks_completed_conditional_list(cl, shell_basic
 
     assert result.status == 0
     assert result.stdout == ["recovered", "0"]
-    assert result.stderr == ["File missing does not exist"]
+    assert result.stderr == ["cat: missing: No directory named missing"]
 
 
 def test_var_basic(cl, shell_basic: ShellState):
