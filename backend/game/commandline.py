@@ -1019,10 +1019,14 @@ class CommandLine:
         files: list[str] = []
         index = 0
 
+        # Consume options before the positional pattern, then treat remaining words
+        # as file operands. Copying args keeps command execution from mutating parser state.
         while index < len(args):
             arg = args[index]
             index += 1
             if arg == "--":
+                # After --, option-looking text is data: the first word is the pattern
+                # if one has not been supplied, and every later word names an input.
                 if pattern is None:
                     if index >= len(args):
                         return CommandResult(2, stderr=["grep: pattern not given"])
@@ -1033,6 +1037,7 @@ class CommandLine:
             if arg == "--help":
                 return CommandResult(0, stdout=self.useage("grep"))
             if arg.startswith("--include="):
+                # Split only once so a glob may itself contain '=' characters.
                 includes.append(arg.split("=", 1)[1])
             elif arg.startswith("--exclude="):
                 excludes.append(arg.split("=", 1)[1])
@@ -1083,6 +1088,8 @@ class CommandLine:
                 else:
                     suppress_filename = True
             elif arg.startswith("-") and arg != "-":
+                # Short flags may be grouped (for example, -in); reject unsupported
+                # letters before opening inputs so a typo cannot look like no matches.
                 for option in arg[1:]:
                     if option == "i":
                         ignore_case = True
@@ -1121,6 +1128,8 @@ class CommandLine:
             return CommandResult(2, stderr=["grep: pattern not given"])
         if not files:
             files = ["-"]
+        # Listing matching files and printing per-file counts have distinct output
+        # formats, so reject their ambiguous combination before scanning any input.
         if list_files and count_lines:
             return CommandResult(2, stderr=["grep: -l and -c cannot be combined"])
 
@@ -1137,8 +1146,11 @@ class CommandLine:
         had_error = False
 
         def file_is_selected(name: str) -> bool:
-            return (not includes or any(fnmatch.fnmatch(name, item) for item in includes)) and not any(
-                fnmatch.fnmatch(name, item) for item in excludes
+            # File filters match basenames; multiple include patterns are alternatives,
+            # while any matching exclude pattern takes precedence.
+            return (
+                (not includes or any(fnmatch.fnmatchcase(name, item) for item in includes))
+                and not any(fnmatch.fnmatchcase(name, item) for item in excludes)
             )
 
         def collect_file(node: FileNode, name: str) -> None:
@@ -1146,14 +1158,36 @@ class CommandLine:
                 candidates.append((name, InputBuffer.from_file(node)))
 
         def collect_directory(node: FileNode, display_path: str) -> None:
-            for child in node.items:
-                child_path = f"{display_path.rstrip('/')}/{child.name}" if display_path else child.name
-                if child.get_type() == NodeType.DIRECTORY:
-                    if any(fnmatch.fnmatch(child.name, item) for item in excluded_dirs):
+            # Walk iteratively so deeply nested trees cannot exhaust Python's call
+            # stack. Track node identities defensively in case a malformed tree cycles.
+            pending = [(node, display_path)]
+            visited: set[int] = set()
+            while pending:
+                current, current_path = pending.pop()
+                if current.get_type() == NodeType.DIRECTORY:
+                    if id(current) in visited:
                         continue
-                    collect_directory(child, child_path)
-                else:
-                    collect_file(child, child_path)
+                    visited.add(id(current))
+
+                    # Reverse the push order so popping keeps filesystem order.
+                    # Directory symlinks are not pushed, which prevents link loops.
+                    for child in reversed(current.items):
+                        child_path = (
+                            f"{current_path.rstrip('/')}/{child.name}"
+                            if current_path
+                            else child.name
+                        )
+                        if child.get_type() == NodeType.DIRECTORY:
+                            if any(
+                                fnmatch.fnmatchcase(child.name, item)
+                                for item in excluded_dirs
+                            ):
+                                continue
+                            pending.append((child, child_path))
+                        elif child.get_type() == NodeType.FILE:
+                            pending.append((child, child_path))
+                elif current.get_type() == NodeType.FILE:
+                    collect_file(current, current_path)
 
         for file in files:
             if file == "-":
@@ -1175,6 +1209,8 @@ class CommandLine:
                 stderr.append(f"grep: {file}: Not a regular file")
                 had_error = True
 
+        # Prefix output when the search can produce results from multiple inputs.
+        # Explicit -H/-h options override this default in either direction.
         show_filenames = force_filename or (
             not suppress_filename
             and (len(files) > 1 or len(candidates) > 1)
@@ -1228,6 +1264,8 @@ class CommandLine:
             else:
                 stdout.extend(file_output)
 
+        # Errors take precedence over matches; otherwise the shell status reports
+        # whether at least one line was selected across all readable inputs.
         status = 2 if had_error else (0 if any_selected else 1)
         return CommandResult(status, stdout, stderr)
 
