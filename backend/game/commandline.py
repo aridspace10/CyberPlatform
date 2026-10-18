@@ -978,9 +978,8 @@ class CommandLine:
             elif target_exists and target_type == NodeType.FILE:
                 if source_type != NodeType.FILE:
                     continue
-                target.inode = clone_inode(source.inode)
-                if target.parent is not None:
-                    fs._stamp_owner(target.inode, target.parent)
+                target.inode.set_data(copy.deepcopy(source.inode.data))
+                target.inode.has_trailing_newline = source.inode.has_trailing_newline
             else:
                 if target_parent is None or target_name is None:
                     return CommandResult(

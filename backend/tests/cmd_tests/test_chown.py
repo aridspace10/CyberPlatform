@@ -15,6 +15,24 @@ def test_chown_requires_privileged_identity(cl, shell_basic):
     assert (node.inode.owner, node.inode.group) == ("user", "user")
 
 
+def test_client_supplied_root_username_does_not_grant_privilege(cl, shell_basic):
+    shell_basic.identity = EffectiveIdentity.for_session("root", "0")
+    node = shell_basic.fs.filehead.access("f1.txt")
+    node.inode.owner = "root"
+    node.inode.group = "root"
+    node.inode.permissions = {
+        "user": {"r": True, "w": True, "x": True},
+        "group": {"r": False, "w": False, "x": False},
+        "public": {"r": False, "w": False, "x": False},
+    }
+
+    result = cl.enter_command("cat f1.txt", shell_basic)
+
+    assert shell_basic.identity.username == "untrusted-root"
+    assert not shell_basic.identity.privileged
+    assert_failure(result)
+
+
 def test_root_chown_updates_owner_group_and_long_listing(cl, shell_basic):
     shell_basic.identity = EffectiveIdentity("root", "root", frozenset({"root"}), True)
 

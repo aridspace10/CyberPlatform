@@ -14,8 +14,13 @@ class EffectiveIdentity:
 
     @classmethod
     def for_session(cls, username: str, user_id: str = "") -> EffectiveIdentity:
-        """Build a session identity; only the explicit root identity is privileged."""
+        """Build an unprivileged identity from the client supplied session name.
+
+        The current join flow has no trusted authentication context, so a client
+        chosen username must never grant simulated administrative privileges.
+        """
         name = username or "anonymous"
-        is_root = name == "root"
-        group = "root" if is_root else "users"
-        return cls(name, group, frozenset({group}), is_root)
+        if name == "root":
+            name = "untrusted-root"
+        group = "users"
+        return cls(name, group, frozenset({group}), False)
