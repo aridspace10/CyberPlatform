@@ -300,7 +300,10 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
             return CommandResult(1, stderr=[f"sed: {source}"])
         if source.get_type() != NodeType.FILE:
             return CommandResult(1, stderr=[f"sed: {filename}: Not a regular file"])
-        scripts.extend(source.inode.data)
+        content = ctx.system.fs.read_node(source)
+        if isinstance(content, str):
+            return CommandResult(1, stderr=[f"sed: {filename}: {content}"])
+        scripts.extend(content.lines)
     try:
         commands = [command for script in scripts for command in _parse_script(script)]
     except ValueError as error:
@@ -333,11 +336,19 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
                 stderr.append(f"sed: {filename}: Not a regular file")
                 status = 1
                 continue
-            content = InputBuffer.from_file(source)
+            content = ctx.system.fs.read_node(source)
+            if isinstance(content, str):
+                stderr.append(f"sed: {filename}: {content}")
+                status = 1
+                continue
 
         new = _apply_commands(content.lines, commands, suppress_print)
         if in_place:
             assert source is not None and source.parent is not None
+            if error := ctx.system.fs.permission_error(source, "w"):
+                stderr.append(f"sed: {filename}: {error}")
+                status = 1
+                continue
             if backup_suffix:
                 backup_name = source.name + backup_suffix
                 if source.parent.access(backup_name) is not None:
@@ -346,12 +357,16 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
                     continue
                 backup_inode = Inode(NodeType.FILE)
                 backup_inode.set_data(list(content.lines))
-                error = source.parent.add_child(backup_name, backup_inode)
+                error = ctx.system.fs.create_child(
+                    source.parent, backup_name, backup_inode
+                )
                 if error:
                     stderr.append(f"sed: {error}")
                     status = 1
                     continue
-            source.set_data(new)
+            if error := ctx.system.fs.write_node(source, new):
+                stderr.append(f"sed: {filename}: {error}")
+                status = 1
         else:
             stdout.extend(new)
     return CommandResult(status, stdout, stderr)

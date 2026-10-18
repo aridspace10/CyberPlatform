@@ -2,6 +2,8 @@ Usage: cp [OPTION]... [-T] SOURCE DEST
   or: cp [OPTION]... SOURCE... DIRECTORY
   or: cp [OPTION]... -t DIRECTORY SOURCE...
 Copy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.
+Copying requires read access to source files and write/search access to the
+destination directory. Recursive copies do not traverse symbolic links.
 
 Mandatory arguments to long options are mandatory for short options too.
   -a, --archive                same as -dR --preserve=all

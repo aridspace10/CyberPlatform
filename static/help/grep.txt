@@ -1,5 +1,7 @@
 Usage: grep [OPTION]... PATTERN [FILE]...
 Search for PATTERN in each FILE.
+File reads and recursive directory traversal enforce simulated permissions.
+Recursive grep skips symbolic links instead of following them.
 Example: grep -i 'hello world' menu.h main.c
 
 Pattern selection and interpretation:
