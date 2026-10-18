@@ -300,12 +300,14 @@ def test_mkdir_failed_creation_blocks_and_followup(
 
 def test_mkdir_basic(cl, shell_empty: ShellState):
     CmdResult = cl.enter_command("mkdir a", shell_empty)
+    assert CmdResult.status == 0
     assert CmdResult.stderr == []
     assert CmdResult.stdout == []
     assert len(shell_empty.fs.current.items) == 1
     assert shell_empty.fs.current.items[0].name == "a"
 
     CmdResult = cl.enter_command("mkdir a", shell_empty)
+    assert CmdResult.status != 0
     assert CmdResult.stderr == ["mkdir: Filename 'a' already exists"]
     assert CmdResult.stdout == []
     assert len(shell_empty.fs.current.items) == 1

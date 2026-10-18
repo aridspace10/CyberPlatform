@@ -326,19 +326,24 @@ class CommandLine:
     ) -> CommandResult:
         stdout: list[str] = []
         stderr: list[str] = []
-        cmd_result = None
+        cmd_result: CommandResult | None = None
         for job in parts:
             # background jobs not yet supported, just execute inline
-            cmd_result = self.execute_pipeline(
-                job.pipeline, sys, inherited_stdin=inherited_stdin
-            )
+            cmd_result = self.execute_pipeline(job.pipeline, sys, inherited_stdin)
             stdout.extend(cmd_result.stdout)
             stderr.extend(cmd_result.stderr)
+            if cmd_result.interaction is not None:
+                break
         if cmd_result is None:
             raise Exception("cmd being empty")
-        cmd_result.stdout = stdout
-        cmd_result.stderr = stderr
-        return cmd_result
+        return CommandResult(
+            status=cmd_result.status,
+            stdout=stdout,
+            stderr=stderr,
+            kind=cmd_result.kind,
+            interaction=cmd_result.interaction,
+            payload=cmd_result.payload,
+        )
 
     def execute(
         self, args: list[str], fdin: InputBuffer, sys: SystemContext

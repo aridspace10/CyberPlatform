@@ -13,6 +13,7 @@ from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import descendants, tree_state
 from tests.command_helpers import setup_names
+from tests.filesystem_helpers import restored_filesystem
 
 
 @pytest.mark.parametrize("supplied", [None, InputBuffer(), InputBuffer(("value",))])
@@ -410,9 +411,78 @@ def test_subshell_basic(cl, shell_basic: ShellState):
 
 
 def test_semicolon_basic(cl, shell_basic: ShellState):
-    CmdResult = cl.enter_command("cd d1; ls", shell_basic)
+    CmdResult = cl.enter_command("echo before; cd d1; echo after; ls", shell_basic)
     assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["f3.txt", "f4.txt"]
+    assert CmdResult.stdout == ["before", "after", "f3.txt", "f4.txt"]
+    assert shell_basic.cwd == "/d1"
+
+
+@pytest.mark.integration
+def test_shell_copy_then_write_preserves_source_and_rereads_copy(cl, shell_fouritems):
+    source = shell_fouritems.fs.resolve("f1.txt")
+    source_inode = source.inode
+    original = list(source.inode.data)
+
+    result = cl.enter_command(
+        "cp f1.txt copy.txt; echo independent > copy.txt; cat copy.txt; cat f1.txt",
+        shell_fouritems,
+    )
+
+    copied = shell_fouritems.fs.resolve("copy.txt")
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["independent", *original]
+    assert copied.inode is not source_inode
+    assert copied.inode.data == ["independent"]
+    assert source.inode.data == original
+
+
+@pytest.mark.integration
+def test_shell_failed_lookup_does_not_suppress_following_command(cl, shell_basic):
+    original_cwd = shell_basic.fs.current
+
+    result = cl.enter_command("cat missing.txt; echo recovered", shell_basic)
+
+    assert result.status == 0
+    assert result.stdout == ["recovered"]
+    assert result.stderr == ["File missing.txt does not exist"]
+    assert shell_basic.fs.current is original_cwd
+
+
+@pytest.mark.integration
+def test_shell_sed_then_sort_and_cat_reread_persisted_contents(cl, shell_empty):
+    shell_empty.fs.add_file("source.txt")
+    source = shell_empty.fs.resolve("source.txt")
+    source.set_data(["zeta", "alpha"])
+
+    result = cl.enter_command(
+        "sed -i 's/zeta/omega/' source.txt; sort source.txt; cat source.txt",
+        shell_empty,
+    )
+
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["alpha", "omega", "omega", "alpha"]
+    assert source.inode.data == ["omega", "alpha"]
+
+
+@pytest.mark.integration
+def test_shell_copy_and_edit_state_survives_filesystem_roundtrip(cl, shell_fouritems):
+    source = shell_fouritems.fs.resolve("f1.txt")
+    original = list(source.inode.data)
+    result = cl.enter_command(
+        "cp f1.txt copy.txt; echo persisted > copy.txt", shell_fouritems
+    )
+    assert result.status == 0
+    assert result.stdout == []
+    assert result.stderr == []
+
+    restored = restored_filesystem(shell_fouritems.fs)
+    restored_source = restored.resolve("f1.txt")
+    restored_copy = restored.resolve("copy.txt")
+    assert restored_source.inode.data == original
+    assert restored_copy.inode.data == ["persisted"]
+    assert restored_source.inode is not restored_copy.inode
 
 
 def test_sequence_accumulates_output_and_diagnostics(cl, shell_basic):
