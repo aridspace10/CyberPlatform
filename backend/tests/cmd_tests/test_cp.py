@@ -23,6 +23,36 @@ def test_cp_dot_paths_copy_source_and_destination(
     assert_success(result)
 
 
+def test_cp_requires_source_read_and_destination_parent_write(cl, shell_basic):
+    source = shell_basic.fs.filehead.access("f1.txt")
+    source.inode.permissions["user"]["r"] = False
+
+    result = cl.enter_command("cp f1.txt copied.txt", shell_basic)
+
+    assert_failure(result)
+    assert shell_basic.fs.filehead.access("copied.txt") is None
+
+    source.inode.permissions["user"]["r"] = True
+    shell_basic.fs.filehead.inode.permissions["user"]["w"] = False
+    result = cl.enter_command("cp f1.txt copied.txt", shell_basic)
+    assert_failure(result)
+    assert shell_basic.fs.filehead.access("copied.txt") is None
+
+
+def test_recursive_cp_preserves_links_without_following_targets(cl, shell_basic):
+    assert_success(cl.enter_command("ln -s f1.txt d1/link", shell_basic))
+    source = shell_basic.fs.filehead.access("f1.txt")
+    source.inode.permissions["user"]["r"] = False
+
+    result = cl.enter_command("cp -R d1 copy", shell_basic)
+
+    assert_success(result)
+    copied = shell_basic.fs.filehead.access("copy")
+    link = copied.access("link")
+    assert link.get_type().value == "symlink"
+    assert link.inode.data == ["f1.txt"]
+
+
 def test_cp_dot_paths_destination_directory(run_dot_command, dot_shell, dot_directory):
     operand, destination = dot_directory
     source = dot_shell.fs.current.access("branch").access("leaf.txt")

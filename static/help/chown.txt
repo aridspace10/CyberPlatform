@@ -1,0 +1,9 @@
+Usage: chown [-R] OWNER[:GROUP] FILE...
+Change the simulated owner and optionally group of each FILE.
+Only the simulated privileged `root` user may change ownership.
+
+  -R, --recursive  change a directory and its contents recursively
+      --help       display this help and exit
+
+Recursive changes skip symbolic links found inside directories. These are
+game filesystem rules and do not control access to host files.

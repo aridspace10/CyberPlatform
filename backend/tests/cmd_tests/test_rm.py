@@ -152,5 +152,17 @@ def test_rm_nested_delete_restores_filesystem_pointer(cl, shell_basic: ShellStat
     assert shell_basic.fs.get_file("f3.txt") is None
 
 
+def test_recursive_rm_requires_directory_traversal_before_mutating(cl, shell_basic):
+    directory = shell_basic.fs.filehead.access("d1")
+    directory.inode.permissions["user"]["x"] = False
+    before = [child.name for child in directory.items]
+
+    result = cl.enter_command("rm -r d1", shell_basic)
+
+    assert_failure(result)
+    assert [child.name for child in directory.items] == before
+    assert shell_basic.fs.filehead.access("d1") is directory
+
+
 def test_rm_help(cl, shell_empty):
     assert_help(cl, shell_empty, "rm")

@@ -92,6 +92,7 @@ class CommandLine:
             "tail": self.tail,
             "echo": self.echo,
             "chmod": self.chmod,
+            "chown": self.chown,
             "cp": self.cp,
             "mv": self.mv,
             "grep": self.grep,
@@ -119,18 +120,19 @@ class CommandLine:
             node = sys.fs.resolve(path)
             if isinstance(node, str):
                 return node
-            if node.get_type() != NodeType.FILE:
-                return "Not a regular file"
-            return InputBuffer.from_file(node)
+            return sys.fs.read_node(node)
 
         parent_result = sys.fs.resolve_parent(path)
         if isinstance(parent_result, str):
             return parent_result
         parent, name = parent_result
+        for permission in ("w", "x"):
+            if error := sys.fs.permission_error(parent, permission):
+                return error
         node = parent.access(name)
         if node is None:
             inode = Inode(NodeType.FILE)
-            error = parent.add_child(name, inode)
+            error = sys.fs.create_child(parent, name, inode)
             if error:
                 return error
             node = parent.access(name)
@@ -141,14 +143,17 @@ class CommandLine:
 
         if node.get_type() != NodeType.FILE:
             return "Not a regular file"
+        if error := sys.fs.permission_error(node, "w"):
+            return error
         if mode == "truncate":
-            node.set_data([])
+            sys.fs.write_node(node, [])
         return node
 
     def enter_command(self, raw: str, shell: ShellState) -> CommandResult:
         if not raw.strip():
             return CommandResult(status=shell.last_status)
 
+        shell.fs.identity = shell.identity
         sys = SystemContext(shell.fs, self.process_manager, self.network, shell)
         try:
             tokens = lex(raw)
@@ -398,7 +403,10 @@ class CommandLine:
                     return CommandResult(1, stderr=[local_ctx.stdout])
         cmd_result = self.execute_atom(command.atom, sys, local_ctx)
         if isinstance(local_ctx.stdout, FileNode):
-            local_ctx.stdout.append_data(cmd_result.stdout)
+            error = sys.fs.write_node(local_ctx.stdout, cmd_result.stdout, append=True)
+            if error:
+                cmd_result.status = 1
+                cmd_result.stderr.append(error)
             cmd_result.stdout = []
         return cmd_result
 
@@ -757,7 +765,10 @@ class CommandLine:
                 if node.get_type() == NodeType.DIRECTORY:
                     stderr.append(f"cut: {filename}: Is a directory")
                     continue
-                content = InputBuffer.from_file(node)
+                content = ctx.system.fs.read_node(node)
+                if isinstance(content, str):
+                    stderr.append(f"cut: {filename}: {content}")
+                    continue
 
             for line in content.lines:
                 if delimiter not in line:
@@ -984,6 +995,32 @@ class CommandLine:
                 stderr.append(start_node)
                 continue
 
+            pending_directories = (
+                [start_node]
+                if start_node.get_type() == NodeType.DIRECTORY
+                else []
+            )
+            traversal_denied = None
+            visited_directories: set[int] = set()
+            while pending_directories and traversal_denied is None:
+                directory = pending_directories.pop()
+                if id(directory) in visited_directories:
+                    traversal_denied = "Filesystem cycle detected"
+                    break
+                visited_directories.add(id(directory))
+                for permission in ("r", "x"):
+                    if error := ctx.system.fs.permission_error(directory, permission):
+                        traversal_denied = error
+                        break
+                pending_directories.extend(
+                    child
+                    for child in directory.items
+                    if child.get_type() == NodeType.DIRECTORY
+                )
+            if traversal_denied:
+                stderr.append(f"find: {start}: {traversal_denied}")
+                continue
+
             try:
                 path_prefix = start.rstrip("/") or "/"
                 toprints, execs = start_node.find(node, ".", path_prefix)
@@ -1046,7 +1083,11 @@ class CommandLine:
                     stderr.append(f"wc: cannot perform operation on directory ({file})")
                     status = 1
                     continue
-                content = InputBuffer.from_file(node)
+                content = ctx.system.fs.read_node(node)
+                if isinstance(content, str):
+                    stderr.append(f"wc: {file}: {content}")
+                    status = 1
+                    continue
 
             text = _input_text(content)
             lcount = text.count("\n")
@@ -1156,6 +1197,45 @@ class CommandLine:
             resolved_sources.append((source_path, source))
 
         target_type = target.get_type() if target_exists else None
+        if not target_exists and target_parent is not None:
+            for permission in ("w", "x"):
+                if error := fs.permission_error(target_parent, permission):
+                    return CommandResult(1, stderr=[f"cp: {target_path}: {error}"])
+        elif target_type == NodeType.DIRECTORY:
+            for permission in ("w", "x"):
+                if error := fs.permission_error(target, permission):
+                    return CommandResult(1, stderr=[f"cp: {target_path}: {error}"])
+        elif target_type == NodeType.FILE:
+            if error := fs.permission_error(target, "w"):
+                return CommandResult(1, stderr=[f"cp: {target_path}: {error}"])
+
+        readable_nodes: set[int] = set()
+
+        def readable_tree(source_node: FileNode) -> str | None:
+            if id(source_node) in readable_nodes:
+                return "Filesystem cycle detected"
+            readable_nodes.add(id(source_node))
+            if source_node.get_type() == NodeType.DIRECTORY:
+                for permission in ("r", "x"):
+                    if error := fs.permission_error(source_node, permission):
+                        return error
+                for child in source_node.items:
+                    if child.get_type() != NodeType.SYMLINK:
+                        if error := readable_tree(child):
+                            return error
+            elif source_node.get_type() == NodeType.FILE:
+                return fs.permission_error(source_node, "r")
+            return None
+
+        for source_path, source in resolved_sources:
+            if source.get_type() == NodeType.DIRECTORY and not recursive:
+                continue
+            readable_nodes.clear()
+            if error := readable_tree(source):
+                return CommandResult(
+                    1, stderr=[f"cp: cannot read '{source_path}': {error}"]
+                )
+
         if (
             len(resolved_sources) > 1
             and target_exists
@@ -1209,6 +1289,7 @@ class CommandLine:
 
         def clone_with_name(node: FileNode, name: str, parent: FileNode) -> FileNode:
             clone = FileNode(parent, name, clone_inode(node.inode))
+            fs._stamp_owner(clone.inode, parent)
             clone.depth = parent.depth + 1
             clone.items = [
                 clone_with_name(child, child.name, clone) for child in node.items
@@ -1243,6 +1324,8 @@ class CommandLine:
                 if source_type != NodeType.FILE:
                     continue
                 target.inode = clone_inode(source.inode)
+                if target.parent is not None:
+                    fs._stamp_owner(target.inode, target.parent)
             else:
                 if target_parent is None or target_name is None:
                     return CommandResult(
@@ -1302,12 +1385,26 @@ class CommandLine:
 
         # Resolve and validate all operands before changing any tree entries.
         moves: list[tuple[str, FileNode, FileNode, str, FileNode | None]] = []
+        for permission in ("w", "x"):
+            if error := fs.permission_error(destination_parent, permission):
+                return CommandResult(1, stderr=[f"mv: {target}: {error}"])
         for file in files:
             source = fs.resolve_parent(file)
             if isinstance(source, str):
                 stderr.append(f"mv: could not find file {file}")
                 continue
             source_parent, source_name = source
+            parent_error = next(
+                (
+                    fs.permission_error(source_parent, permission)
+                    for permission in ("w", "x")
+                    if fs.permission_error(source_parent, permission)
+                ),
+                None,
+            )
+            if parent_error:
+                stderr.append(f"mv: {file}: {parent_error}")
+                continue
             source_node = source_parent.access(source_name)
             if source_node is None:
                 stderr.append(f"mv: could not find file {file}")
@@ -1521,10 +1618,17 @@ class CommandLine:
             )
 
         def collect_file(node: FileNode, name: str) -> None:
+            nonlocal had_error
             if node.get_type() == NodeType.FILE and file_is_selected(node.name):
-                candidates.append((name, InputBuffer.from_file(node)))
+                content = ctx.system.fs.read_node(node)
+                if isinstance(content, str):
+                    stderr.append(f"grep: {name}: {content}")
+                    had_error = True
+                else:
+                    candidates.append((name, InputBuffer.from_lines(content)))
 
         def collect_directory(node: FileNode, display_path: str) -> None:
+            nonlocal had_error
             # Walk iteratively so deeply nested trees cannot exhaust Python's call
             # stack. Track node identities defensively in case a malformed tree cycles.
             pending = [(node, display_path)]
@@ -1535,6 +1639,13 @@ class CommandLine:
                     if id(current) in visited:
                         continue
                     visited.add(id(current))
+                    if any(
+                        ctx.system.fs.permission_error(current, permission)
+                        for permission in ("r", "x")
+                    ):
+                        stderr.append(f"grep: {current_path}: Permission denied")
+                        had_error = True
+                        continue
 
                     # Reverse the push order so popping keeps filesystem order.
                     # Directory symlinks are not pushed, which prevents link loops.
@@ -1556,6 +1667,7 @@ class CommandLine:
                 elif current.get_type() == NodeType.FILE:
                     collect_file(current, current_path)
 
+        visited_directories: set[int] = set()
         for file in files:
             if file == "-":
                 candidates.append(("(standard input)", ctx.stdin))
@@ -1678,9 +1790,47 @@ class CommandLine:
             if isinstance(target, str):
                 stderr.append(f"chmod: {target}")
                 continue
-            changes = target.update_permissions(d, recurse)
+            changes, permission_errors = ctx.system.fs.change_permissions(
+                target, d, recurse
+            )
+            stderr.extend(permission_errors)
             if verbose:
                 stdout.extend(changes)
+        return CommandResult(1 if stderr else 0, stdout, stderr)
+
+    def chown(self, ctx: CommandContext) -> CommandResult:
+        if ctx.args == ["--help"]:
+            return CommandResult(0, stdout=self.useage("chown"))
+        recurse = False
+        args = list(ctx.args)
+        while args and args[0].startswith("-") and args[0] != "-":
+            option = args.pop(0)
+            if option in ("-R", "--recursive"):
+                recurse = True
+            else:
+                return CommandResult(1, stderr=[f"chown: invalid option '{option}'"])
+        if len(args) < 2:
+            return CommandResult(1, stderr=["chown: expected OWNER[:GROUP] and FILE"])
+        owner_group = args.pop(0)
+        if owner_group.count(":") > 1:
+            return CommandResult(1, stderr=[f"chown: invalid owner/group '{owner_group}'"])
+        owner, separator, group = owner_group.partition(":")
+        if not owner or (separator and not group):
+            return CommandResult(1, stderr=[f"chown: invalid owner/group '{owner_group}'"])
+        if not ctx.system.fs.identity.privileged:
+            return CommandResult(1, stderr=["chown: Operation not permitted"])
+        stdout: list[str] = []
+        stderr: list[str] = []
+        for path in args:
+            node = ctx.system.fs.resolve(path)
+            if isinstance(node, str):
+                stderr.append(f"chown: {path}: {node}")
+                continue
+            updated_group = group if separator else node.inode.group
+            errors = ctx.system.fs.change_ownership(
+                node, owner, updated_group, recurse
+            )
+            stderr.extend(errors)
         return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def echo(self, ctx: CommandContext) -> CommandResult:
@@ -1783,7 +1933,7 @@ class CommandLine:
                     continue
 
                 parent, filename = resolved_parent
-                error = parent.add_child(filename, Inode(NodeType.FILE))
+                error = fs.create_child(parent, filename, Inode(NodeType.FILE))
                 if error:
                     stderr.append(f"touch: {file}: {error}")
                     status = 1
@@ -1796,8 +1946,16 @@ class CommandLine:
                     continue
 
             if changeaccess:
+                if not fs.can_chmod(fn):
+                    stderr.append(f"touch: cannot touch '{file}': Operation not permitted")
+                    status = 1
+                    continue
                 fn.inode.atime = date
             if changemod:
+                if not fs.can_chmod(fn):
+                    stderr.append(f"touch: cannot touch '{file}': Operation not permitted")
+                    status = 1
+                    continue
                 fn.inode.mtime = date
         return CommandResult(status, stdout, stderr)
 
@@ -1845,7 +2003,11 @@ class CommandLine:
                     stderr.append(f"cat: {filename}: Is a directory")
                     status = 1
                     continue
-                content = InputBuffer.from_file(node)
+                content = ctx.system.fs.read_node(node)
+                if isinstance(content, str):
+                    stderr.append(f"cat: {filename}: {content}")
+                    status = 1
+                    continue
 
             for line in content.lines:
                 if numbering:
@@ -1948,7 +2110,11 @@ class CommandLine:
                     stderr.append(f"head: {file} is a directory")
                     status = 1
                     continue
-                content = InputBuffer.from_file(node)
+                content = ctx.system.fs.read_node(node)
+                if isinstance(content, str):
+                    stderr.append(f"head: {file}: {content}")
+                    status = 1
+                    continue
             if len(files) > 1:
                 stdout.append(f"==> {file} <==")
             text = _input_text(content)
@@ -1972,8 +2138,6 @@ class CommandLine:
                 else:
                     selected_lines = data[:line_count]
                 stdout.extend(selected_lines)
-            else:
-                stdout.extend(content.lines[:10])
         return CommandResult(status, stdout, stderr)
 
     def tail(self, ctx: CommandContext) -> CommandResult:
@@ -2079,7 +2243,11 @@ class CommandLine:
                     status = 1
                     stderr.append(f"tail: {file} is a directory")
                     continue
-                content = InputBuffer.from_file(node)
+                content = ctx.system.fs.read_node(node)
+                if isinstance(content, str):
+                    stderr.append(f"tail: {file}: {content}")
+                    status = 1
+                    continue
 
             text = _input_text(content)
             if byte_count is not None:
@@ -2141,11 +2309,17 @@ class CommandLine:
             for file in files:
                 node = ctx.system.fs.get_file(file)
                 if isinstance(node, FileNode):
+                    if error := ctx.system.fs._can_recurse_delete(node):
+                        stderr.append(f"rm: {file}: {error}")
+                        continue
                     targets.extend(node.expand_targets(file))
                 else:
                     targets.append(file)
         else:
             targets = files
+
+        if interactive and stderr:
+            return CommandResult(1, stderr=stderr)
 
         if interactive:
             proc = self.process_manager.create_process(
@@ -2328,6 +2502,8 @@ class CommandLine:
             return CommandResult(1, stderr=["cd:" + str(target)])
         if target.get_type() != NodeType.DIRECTORY:
             return CommandResult(1, stderr=[f"cd: {target.name} is not a directory"])
+        if error := ctx.system.fs.permission_error(target, "x"):
+            return CommandResult(1, stderr=[f"cd: {error}"])
         ctx.system.fs.current = target
         cwd = ctx.system.fs.display_path(target)
         ctx.system.shell.cwd = cwd
@@ -2374,7 +2550,9 @@ class CommandLine:
             inode = Inode(NodeType.SYMLINK)
             inode.symlink_target = target
 
-        if error := parent.add_child(name, inode):
+        if error := ctx.system.fs.create_child(
+            parent, name, inode, stamp_owner=linkty == "sym"
+        ):
             return CommandResult(1, stderr=[f"ln: {error}"])
         if linkty == "hard":
             inode.link_count += 1
@@ -2506,7 +2684,9 @@ class CommandLine:
                 return CommandResult(1, stderr=[f"uniq: {input_file}: Is a directory"])
             if node.get_type() != NodeType.FILE:
                 return CommandResult(1, stderr=[f"uniq: {input_file}: Not a regular file"])
-            content = InputBuffer.from_file(node)
+            content = ctx.system.fs.read_node(node)
+            if isinstance(content, str):
+                return CommandResult(1, stderr=[f"uniq: {input_file}: {content}"])
         else:
             content = ctx.stdin
 
@@ -2607,7 +2787,10 @@ class CommandLine:
                 return CommandResult(1, stderr=[f"sort: {file}: Is a directory"])
             if tmp.get_type() != NodeType.FILE:
                 return CommandResult(1, stderr=[f"sort: {file}: Not a regular file"])
-            content.extend(InputBuffer.from_file(tmp).lines)
+            read_result = ctx.system.fs.read_node(tmp)
+            if isinstance(read_result, str):
+                return CommandResult(1, stderr=[f"sort: {file}: {read_result}"])
+            content.extend(read_result.lines)
 
         def comparison_key(line: str) -> str:
             key = line.lstrip() if igblanks else line
@@ -2684,7 +2867,7 @@ class CommandLine:
                 if isinstance(destination, str):
                     return CommandResult(1, stderr=[f"sort: {output}: {destination}"])
                 parent, name = destination
-                error = parent.add_child(name, Inode(NodeType.FILE))
+                error = ctx.system.fs.create_child(parent, name, Inode(NodeType.FILE))
                 if error:
                     return CommandResult(1, stderr=[f"sort: {output}: {error}"])
                 target = parent.access(name)
@@ -2692,6 +2875,7 @@ class CommandLine:
                 return CommandResult(1, stderr=[f"sort: {output}: Is a directory"])
             elif target.get_type() != NodeType.FILE:
                 return CommandResult(1, stderr=[f"sort: {output}: Not a regular file"])
-            target.set_data(modified)
+            if error := ctx.system.fs.write_node(target, modified):
+                return CommandResult(1, stderr=[f"sort: {output}: {error}"])
             return CommandResult(0)
         return CommandResult(0, stdout=modified)
