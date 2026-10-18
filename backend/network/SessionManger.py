@@ -86,6 +86,25 @@ class GameSession:
                 event = self.process_manager.events.pop(0)
                 if isinstance(event, ProcessTerminatedEvent):
                     for player in self.players.values():
+                        if event.process.pid in player.shell.background_jobs:
+                            command = player.shell.background_jobs.pop(
+                                event.process.pid
+                            )
+                            player.shell.background_children.pop(
+                                event.process.pid, None
+                            )
+                            if player.websocket:
+                                await self.send_to(
+                                    player.websocket,
+                                    {
+                                        "type": "background_job_complete",
+                                        "job_id": event.process.pid,
+                                        "command": command,
+                                        "stdout": event.process.stdout,
+                                        "stderr": event.process.stderr,
+                                        "status": event.process.exit_status,
+                                    },
+                                )
                         if player.shell.foreground_pid == event.process.pid:
                             had_continuation = player.shell.continuation is not None
                             try:
@@ -147,6 +166,13 @@ class GameSession:
         return self.scheduler_task
 
     async def stop_scheduler(self) -> None:
+        for player in self.players.values():
+            for pid in list(player.shell.background_jobs):
+                self.commandline.cancel_background_job(pid, player.shell)
+                for child in player.shell.background_children.pop(pid, []):
+                    self.process_manager.processes.pop(child.pid, None)
+                self.process_manager.processes.pop(pid, None)
+                player.shell.background_jobs.pop(pid, None)
         task = self.scheduler_task
         if task is None:
             return

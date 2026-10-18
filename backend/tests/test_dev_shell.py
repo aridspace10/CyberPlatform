@@ -145,6 +145,28 @@ def test_console_waits_for_scheduler_then_accepts_next_command(monkeypatch, caps
     assert capsys.readouterr().out == "ready\n"
 
 
+def test_background_console_job_does_not_claim_foreground_and_collects_output():
+    console = DevShell(empty=True)
+    result = console.execute("echo background &")
+
+    assert result.stdout[0].startswith("[job ")
+    assert console.shell.foreground_pid is None
+    console.reap()
+    completed = console.take_background_output()
+    assert completed == [(100, 0, ["background"], [])]
+
+
+def test_background_sleep_allows_a_foreground_command():
+    console = DevShell(empty=True)
+    result = console.execute("sleep 5 &")
+
+    assert result.interaction is None
+    assert console.shell.foreground_pid is None
+    console.reap()
+    response = console.execute("echo foreground")
+    assert response.stdout == ["foreground"]
+
+
 def test_launcher_waits_for_real_sleep_before_next_input(console_workdir):
     started = time.monotonic()
     result = run_console(console_workdir, "-c", "sleep 1", "-c", "echo awake")

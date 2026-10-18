@@ -35,6 +35,46 @@ class SleepProgram(Program):
             self.process.status = ProcessState.TERMINATED
 
 
+class BackgroundJobProgram(Program):
+    """Run one shell job on a scheduler tick and collect its eventual result."""
+
+    def __init__(self, process: Process, run, children: list[Process]):
+        super().__init__()
+        self.process = process
+        self.run = run
+        self.children = children
+        self.started = False
+
+    def tick(self):
+        if not self.started:
+            self.started = True
+            try:
+                stdout, stderr, status, interaction = self.run()
+            except Exception as error:
+                self.process.stderr.append(f"background job failed: {error}")
+                for child in self.children:
+                    child.status = ProcessState.TERMINATED
+                self.process.exit_status = 1
+                self.process.status = ProcessState.TERMINATED
+                return
+
+            self.process.stdout.extend(stdout)
+            self.process.stderr.extend(stderr)
+            self.process.exit_status = status
+            if interaction is not None:
+                self.process.stderr.append(
+                    "background job cannot wait for interactive input"
+                )
+                self.process.exit_status = 1
+                for child in self.children:
+                    child.status = ProcessState.TERMINATED
+                self.process.status = ProcessState.TERMINATED
+                return
+
+        if all(child.status == ProcessState.TERMINATED for child in self.children):
+            self.process.status = ProcessState.TERMINATED
+
+
 class RmProgram(Program):
     def __init__(
         self,

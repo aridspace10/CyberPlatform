@@ -30,7 +30,7 @@ from game.Parser import (
 )
 from game.Process import ProcessState
 from game.ProcessManager import ProcessManager
-from game.Program import HeredocProgram, RmProgram, SleepProgram
+from game.Program import BackgroundJobProgram, HeredocProgram, RmProgram, SleepProgram
 from game.ShellState import ShellState
 
 from .helpers import (
@@ -449,8 +449,12 @@ class CommandLine:
             raise Exception("cmd being empty")
         job = parts[index]
         if job.background:
-            return CommandResult(
-                status=2, stderr=["background execution is not supported"]
+            result = self._schedule_background_job(job, sys, stdin)
+            aggregate = self._combine_results(accumulated, result)
+            if index + 1 == len(parts):
+                return aggregate
+            return self._run_sequence(
+                parts, index + 1, sys, stdin, aggregate
             )
 
         result = self.execute_andor(job.pipeline, sys, ExecutionContext(stdin=stdin))
@@ -472,6 +476,111 @@ class CommandLine:
         if result.interaction or index + 1 == len(parts):
             return aggregate
         return self._run_sequence(parts, index + 1, sys, stdin, aggregate)
+
+    def _schedule_background_job(
+        self, job: Job, sys: SystemContext, stdin: InputBuffer | None
+    ) -> CommandResult:
+        description = self.describe_andor(job.pipeline)
+        launch_cwd = sys.shell.cwd
+        launch_vars = sys.shell.vars.copy()
+        launch_fs_current = sys.fs.current
+        launch_fs_cwd = sys.fs.cwd
+        process = self.process_manager.create_process(
+            description, parent=self.process_manager.default_parent_pid
+        )
+        sys.shell.background_jobs[process.pid] = description
+
+        def run_background(
+            job=job,
+            process=process,
+            launch_cwd=launch_cwd,
+            launch_vars=launch_vars,
+            launch_fs_current=launch_fs_current,
+            launch_fs_cwd=launch_fs_cwd,
+        ):
+            prior_status = sys.shell.last_status
+            current_cwd = sys.shell.cwd
+            current_vars = sys.shell.vars.copy()
+            current_fs_current = sys.fs.current
+            current_fs_cwd = sys.fs.cwd
+            sys.shell.cwd = launch_cwd
+            sys.shell.vars = launch_vars.copy()
+            sys.fs.current = launch_fs_current
+            sys.fs.cwd = launch_fs_cwd
+            sys.shell.background_pid = process.pid
+            sys.shell.background_children.setdefault(process.pid, [])
+            try:
+                result = self.execute_andor(
+                    job.pipeline,
+                    sys,
+                    ExecutionContext(stdin=stdin),
+                )
+                if result.interaction is not None:
+                    interactive_pid = sys.shell.foreground_pid
+                    interactive = (
+                        self.process_manager.get_process(interactive_pid)
+                        if interactive_pid is not None
+                        else None
+                    )
+                    if interactive is not None:
+                        interactive.status = ProcessState.TERMINATED
+                    if sys.shell.foreground_pid == interactive_pid:
+                        sys.shell.foreground_pid = None
+                return (
+                    result.stdout,
+                    result.stderr,
+                    result.status,
+                    result.interaction,
+                )
+            finally:
+                sys.shell.background_pid = None
+                sys.shell.cwd = current_cwd
+                sys.shell.vars = current_vars
+                sys.fs.current = current_fs_current
+                sys.fs.cwd = current_fs_cwd
+                sys.shell.last_status = prior_status
+
+        children = sys.shell.background_children.setdefault(process.pid, [])
+        process.program = BackgroundJobProgram(process, run_background, children)
+        return CommandResult(stdout=[f"[job {process.pid}] started {description}"])
+
+    @staticmethod
+    def describe_andor(andor: AndOr) -> str:
+        def describe_word(word) -> str:
+            return "".join(
+                part if isinstance(part, str) else f"${part.name}"
+                for part in word.parts
+            )
+
+        def describe_command(command: Command) -> str:
+            if isinstance(command.atom, SimpleCommand):
+                text = " ".join(describe_word(arg) for arg in command.atom.args)
+            else:
+                text = "( … )"
+            for redirection in command.pre_redirs + command.post_redirs:
+                text += f" {redirection.op} {redirection.target}"
+            return text.strip()
+
+        def describe_pipe(pipe: Pipe) -> str:
+            return " | ".join(describe_command(command) for command in pipe.parts)
+
+        text = describe_pipe(andor.first)
+        for operator, pipe in andor.rest:
+            text += f" {operator} {describe_pipe(pipe)}"
+        return text
+
+    def cancel_background_job(self, pid: int, shell: ShellState) -> bool:
+        if pid not in shell.background_jobs:
+            return False
+        process = self.process_manager.get_process(pid)
+        if process is None or process.status == ProcessState.TERMINATED:
+            return False
+        for child in shell.background_children.get(pid, []):
+            child.status = ProcessState.TERMINATED
+        process.exit_status = 130
+        process.stderr.append("background job cancelled")
+        process.status = ProcessState.TERMINATED
+        return True
 
     def execute(
         self, args: list[str], fdin: InputBuffer, sys: SystemContext
@@ -525,13 +634,21 @@ class CommandLine:
         # Create process
         proc = self.process_manager.create_process(
             f"sleep {" ".join(ctx.args)}",
-            parent=self.process_manager.default_parent_pid,
+            parent=(
+                ctx.system.shell.background_pid
+                if ctx.system.shell.background_pid is not None
+                else self.process_manager.default_parent_pid
+            ),
         )
 
         proc.program = SleepProgram(proc, ticks=val)
+        shell = ctx.system.shell
+        if shell.background_pid is not None:
+            shell.background_children.setdefault(shell.background_pid, []).append(proc)
+            return CommandResult(0)
 
-        ctx.system.shell.foreground_pid = proc.pid
-
+        proc.foreground = True
+        shell.foreground_pid = proc.pid
         return CommandResult(0, interaction=Interaction(mode="foreground"))
 
     def cut(self, ctx: CommandContext) -> CommandResult:
