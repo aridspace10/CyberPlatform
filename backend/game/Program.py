@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import Callable
 
 from game.Context import SystemContext
@@ -44,12 +45,30 @@ class BackgroundJobProgram(Program):
         self.run = run
         self.children = children
         self.started = False
+        self.continuation = None
 
     def tick(self):
-        if not self.started:
+        if not self.started or (
+            self.continuation is not None
+            and all(child.status == ProcessState.TERMINATED for child in self.children)
+        ):
+            continuation = self.continuation
+            completed = None
+            if continuation is not None:
+                completed = SimpleNamespace(
+                    status=self.children[-1].exit_status if self.children else 0,
+                    stdout=[],
+                    stderr=[],
+                    kind="text",
+                    interaction=None,
+                    payload=None,
+                )
+                self.continuation = None
             self.started = True
             try:
-                stdout, stderr, status, interaction = self.run()
+                stdout, stderr, status, interaction, next_continuation = self.run(
+                    continuation, completed
+                )
             except Exception as error:
                 self.process.stderr.append(f"background job failed: {error}")
                 for child in self.children:
@@ -61,6 +80,11 @@ class BackgroundJobProgram(Program):
             self.process.stdout.extend(stdout)
             self.process.stderr.extend(stderr)
             self.process.exit_status = status
+            if interaction is not None and interaction.mode == "background_wait":
+                # Even a final sleep has no AST tail to resume, but it still has
+                # to keep the job alive until its child exits.
+                self.continuation = next_continuation or (lambda completed: completed)
+                return
             if interaction is not None:
                 self.process.stderr.append(
                     "background job cannot wait for interactive input"
