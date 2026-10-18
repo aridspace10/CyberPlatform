@@ -1,5 +1,6 @@
 import asyncio
 
+from game.commandline import CommandResult
 from game.Events import ProcessTerminatedEvent
 from game.Process import ProcessState
 from game.Scheduler import Scheduler
@@ -231,3 +232,107 @@ def test_background_interactive_command_fails_without_stealing_prompt(cl, shell_
     assert job.exit_status == 1
     assert "cannot wait for interactive input" in job.stderr[0]
     assert shell_empty.fs.get_file("victim") is not None
+
+
+def test_background_andor_waits_for_sleep_before_running_tail(cl, shell_empty):
+    result = cl.enter_command("echo before && sleep 2 && echo after &", shell_empty)
+    job_id = next(iter(shell_empty.background_jobs))
+    job = cl.process_manager.get_process(job_id)
+    scheduler = Scheduler(cl.process_manager)
+
+    assert result.stdout[0].startswith("[job ")
+    scheduler.tick()
+    assert job.stdout == ["before"]
+    assert job.status == ProcessState.RUNNING
+
+    scheduler.tick()
+    scheduler.tick()
+    assert job.stdout == ["before"]
+    assert job.status == ProcessState.RUNNING
+
+    scheduler.tick()
+    assert job.stdout == ["before", "after"]
+    assert job.status == ProcessState.TERMINATED
+    assert job.exit_status == 0
+
+
+def test_rejected_background_interaction_keeps_foreground_continuation(cl, shell_empty):
+    shell_empty.fs.add_file("victim")
+    result = cl.enter_command(
+        "rm -i victim && echo should-not-run & sleep 2; echo foreground", shell_empty
+    )
+    background_id = next(iter(shell_empty.background_jobs))
+    background = cl.process_manager.get_process(background_id)
+    foreground_id = shell_empty.foreground_pid
+    foreground = cl.process_manager.get_process(foreground_id)
+    foreground_continuation = shell_empty.continuation
+
+    assert result.interaction is not None
+    assert foreground is not None
+    assert foreground_continuation is not None
+
+    scheduler = Scheduler(cl.process_manager)
+    for _ in range(5):
+        scheduler.tick()
+        pending = list(cl.process_manager.events)
+        cl.process_manager.events.clear()
+        for event in pending:
+            if event.process.pid == foreground_id:
+                cl.resume_foreground(
+                    shell_empty,
+                    event.process,
+                    CommandResult(
+                        status=event.process.exit_status,
+                        stdout=event.process.stdout.copy(),
+                        stderr=event.process.stderr.copy(),
+                    ),
+                )
+
+    assert background is not None
+    assert background.status == ProcessState.TERMINATED
+    assert background.exit_status == 1
+    assert "should-not-run" not in background.stdout
+    assert shell_empty.foreground_pid is None
+    assert shell_empty.last_status == 0
+
+
+def test_disconnected_background_completion_replays_once_on_reconnect():
+    class FakeWebSocket:
+        def __init__(self):
+            self.messages = []
+
+        async def send_json(self, message):
+            self.messages.append(message)
+
+    async def scenario():
+        session = GameSession("background-reconnect")
+        player = Player(None, "worker", "1")
+        session.players[player.username] = player
+        session.commandline.enter_command("sleep 2 && echo done &", player.shell)
+        session.ensure_scheduler()
+
+        await asyncio.sleep(3.2)
+        assert len(player.background_completions) == 1
+        assert player.background_completions[0]["stdout"] == ["done"]
+
+        first_socket = FakeWebSocket()
+        await session.connect(first_socket, player.username, player.user_id)
+        completions = [
+            message
+            for message in first_socket.messages
+            if message.get("type") == "background_job_complete"
+        ]
+        assert len(completions) == 1
+        assert completions[0]["stdout"] == ["done"]
+        assert player.background_completions == []
+
+        second_socket = FakeWebSocket()
+        await session.disconnect(first_socket)
+        await session.connect(second_socket, player.username, player.user_id)
+        assert not any(
+            message.get("type") == "background_job_complete"
+            for message in second_socket.messages
+        )
+        await session.stop_scheduler()
+
+    asyncio.run(scenario())

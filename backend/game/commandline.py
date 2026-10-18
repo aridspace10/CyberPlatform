@@ -491,6 +491,8 @@ class CommandLine:
         sys.shell.background_jobs[process.pid] = description
 
         def run_background(
+            continuation=None,
+            completed=None,
             job=job,
             process=process,
             launch_cwd=launch_cwd,
@@ -503,6 +505,10 @@ class CommandLine:
             current_vars = sys.shell.vars.copy()
             current_fs_current = sys.fs.current
             current_fs_cwd = sys.fs.cwd
+            current_foreground_pid = sys.shell.foreground_pid
+            current_continuation = sys.shell.continuation
+            sys.shell.continuation = None
+            sys.shell.foreground_pid = None
             sys.shell.cwd = launch_cwd
             sys.shell.vars = launch_vars.copy()
             sys.fs.current = launch_fs_current
@@ -510,30 +516,41 @@ class CommandLine:
             sys.shell.background_pid = process.pid
             sys.shell.background_children.setdefault(process.pid, [])
             try:
-                result = self.execute_andor(
-                    job.pipeline,
-                    sys,
-                    ExecutionContext(stdin=stdin),
-                )
-                if result.interaction is not None:
-                    interactive_pid = sys.shell.foreground_pid
-                    interactive = (
-                        self.process_manager.get_process(interactive_pid)
-                        if interactive_pid is not None
-                        else None
+                result = (
+                    continuation(completed)
+                    if continuation is not None
+                    else self.execute_andor(
+                        job.pipeline,
+                        sys,
+                        ExecutionContext(stdin=stdin),
                     )
-                    if interactive is not None:
-                        interactive.status = ProcessState.TERMINATED
-                    if sys.shell.foreground_pid == interactive_pid:
-                        sys.shell.foreground_pid = None
+                )
+                job_continuation = sys.shell.continuation
+                sys.shell.continuation = None
+                if result.interaction is not None:
+                    if result.interaction.mode != "background_wait":
+                        interactive_pid = sys.shell.foreground_pid
+                        interactive = (
+                            self.process_manager.get_process(interactive_pid)
+                            if interactive_pid is not None
+                            else None
+                        )
+                        if interactive is not None:
+                            interactive.status = ProcessState.TERMINATED
+                        if sys.shell.foreground_pid == interactive_pid:
+                            sys.shell.foreground_pid = None
+                        job_continuation = None
                 return (
                     result.stdout,
                     result.stderr,
                     result.status,
                     result.interaction,
+                    job_continuation,
                 )
             finally:
                 sys.shell.background_pid = None
+                sys.shell.continuation = current_continuation
+                sys.shell.foreground_pid = current_foreground_pid
                 sys.shell.cwd = current_cwd
                 sys.shell.vars = current_vars
                 sys.fs.current = current_fs_current
@@ -645,7 +662,7 @@ class CommandLine:
         shell = ctx.system.shell
         if shell.background_pid is not None:
             shell.background_children.setdefault(shell.background_pid, []).append(proc)
-            return CommandResult(0)
+            return CommandResult(0, interaction=Interaction(mode="background_wait"))
 
         proc.foreground = True
         shell.foreground_pid = proc.pid

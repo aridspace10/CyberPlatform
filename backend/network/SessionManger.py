@@ -22,6 +22,7 @@ class Player:
         self.user_id = user_id
         self.shell = ShellState()
         self.shell.fs = FileSystem()
+        self.background_completions: list[dict] = []
 
     def serialize(self) -> dict:
         return {
@@ -93,18 +94,21 @@ class GameSession:
                             player.shell.background_children.pop(
                                 event.process.pid, None
                             )
+                            completion = {
+                                "type": "background_job_complete",
+                                "job_id": event.process.pid,
+                                "command": command,
+                                "stdout": event.process.stdout.copy(),
+                                "stderr": event.process.stderr.copy(),
+                                "status": event.process.exit_status,
+                            }
                             if player.websocket:
-                                await self.send_to(
-                                    player.websocket,
-                                    {
-                                        "type": "background_job_complete",
-                                        "job_id": event.process.pid,
-                                        "command": command,
-                                        "stdout": event.process.stdout,
-                                        "stderr": event.process.stderr,
-                                        "status": event.process.exit_status,
-                                    },
-                                )
+                                try:
+                                    await self.send_to(player.websocket, completion)
+                                except Exception:
+                                    player.background_completions.append(completion)
+                            else:
+                                player.background_completions.append(completion)
                         if player.shell.foreground_pid == event.process.pid:
                             had_continuation = player.shell.continuation is not None
                             try:
@@ -198,6 +202,15 @@ class GameSession:
         else:
             # Reconnecting
             self.players[username].websocket = websocket
+            player = self.players[username]
+            while player.background_completions:
+                completion = player.background_completions[0]
+                try:
+                    await self.send_to(websocket, completion)
+                except Exception:
+                    player.websocket = None
+                    raise
+                player.background_completions.pop(0)
 
         await self.broadcast(
             {"type": "system", "message": f"{username} joined session"}
