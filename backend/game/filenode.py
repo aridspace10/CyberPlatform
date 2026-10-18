@@ -230,10 +230,14 @@ class FileNode:
             return f"./{self.name}"
         return f"{past}/{self.name}"
 
-    def find(self, filter: Node, past: str) -> Tuple[List[str], List[str]]:
+    def find(
+        self, filter: Node, past: str, path_prefix: str | None = None
+    ) -> Tuple[List[str], List[str]]:
         output = []
         actions: list[str] = []
-        start_path = "." if self.parent is None else self._join(past)
+        start_path = path_prefix
+        if start_path is None:
+            start_path = "." if self.parent is None else self._join(past)
         pending: list[tuple[FileNode, str, int]] = [(self, start_path, 0)]
         visited: set[int] = set()
         max_depth = 512
@@ -255,7 +259,12 @@ class FileNode:
             if current.get_type() == NodeType.SYMLINK:
                 continue
             for item in reversed(current.items):
-                pending.append((item, f"{current_path}/{item.name}", depth + 1))
+                child_path = (
+                    f"/{item.name}"
+                    if current_path == "/"
+                    else f"{current_path}/{item.name}"
+                )
+                pending.append((item, child_path, depth + 1))
         return output, actions
 
     def len(self) -> int:

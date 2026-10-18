@@ -160,7 +160,7 @@ def test_find_multiple_roots_are_independent_and_preserve_cwd(cl, shell_basic):
 
     assert result.status == 0
     assert result.stderr == []
-    assert result.stdout == ["./d1", "./d1/sub", ".", "./d1", "./d1/sub"]
+    assert result.stdout == [".", "./sub", "..", "../d1", "../d1/sub"]
     assert shell_basic.fs.current is current
     assert shell_basic.fs.cwd == fs_cwd
     assert shell_basic.cwd == shell_cwd
@@ -175,7 +175,16 @@ def test_find_reports_symlinks_without_following_them(cl, shell_basic):
 
     result = cl.enter_command("find link -type l", shell_basic)
     assert result.status == 0
-    assert result.stdout == ["./link"]
+    assert result.stdout == ["link"]
+
+
+def test_find_absolute_start_preserves_operand_and_child_paths(cl, shell_basic):
+    shell_basic.fs.add_directory("d1/sub")
+    result = cl.enter_command("find /d1 -type d", shell_basic)
+
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["/d1", "/d1/sub"]
 
 
 @pytest.mark.parametrize(

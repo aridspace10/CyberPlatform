@@ -596,7 +596,8 @@ class CommandLine:
                 continue
 
             try:
-                toprints, execs = start_node.find(node, ".")
+                path_prefix = start.rstrip("/") or "/"
+                toprints, execs = start_node.find(node, ".", path_prefix)
             except (SyntaxError, ValueError, re.error, RecursionError) as error:
                 return CommandResult(2, stderr=[f"find: {error}"])
             stdout.extend(toprints)
