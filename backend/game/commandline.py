@@ -159,17 +159,13 @@ class CommandLine:
         cmd_result = None
         prev_pipe = inherited_stdin
         stderr: list[str] = []
-
-        exec_ctx = ExecutionContext()
-
-        for part in pipe.parts:
-            exec_ctx.stdin = prev_pipe
-            exec_ctx.stdout = None
-
-            cmd_result = self.execute_andor(part, sys, exec_ctx)
+        for command in pipe.parts:
+            cmd_result = self.execute_command(
+                command, sys, ExecutionContext(stdin=prev_pipe)
+            )
             stderr.extend(cmd_result.stderr)
-
             prev_pipe = InputBuffer.from_lines(cmd_result.stdout)
+            sys.shell.last_status = cmd_result.status
 
         if cmd_result is None:
             raise Exception("No Cmd Result given")
@@ -181,7 +177,7 @@ class CommandLine:
     def execute_andor(
         self, elem: AndOr, sys: SystemContext, exec_ctx: ExecutionContext
     ) -> CommandResult:
-        cmd_result = self.execute_command(elem.first, sys, exec_ctx)
+        cmd_result = self.execute_pipeline(elem.first, sys, exec_ctx.stdin)
         stdout = list(cmd_result.stdout)
         stderr = list(cmd_result.stderr)
         sys.shell.last_status = cmd_result.status
@@ -189,7 +185,7 @@ class CommandLine:
             if (op == "&&" and not cmd_result.status) or (
                 op == "||" and cmd_result.status
             ):
-                tmp_result = self.execute_command(cmd, sys, exec_ctx)
+                tmp_result = self.execute_pipeline(cmd, sys, exec_ctx.stdin)
                 stdout.extend(tmp_result.stdout)
                 stderr.extend(tmp_result.stderr)
                 cmd_result.status = tmp_result.status
