@@ -1,11 +1,12 @@
 import pytest
-
-from game.ShellState import ShellState
 from game.filenode import FileNode
 from game.inode import Inode, NodeType
+from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure
 from tests.cmd_tests.path_helpers import descendants
 from tests.command_helpers import assert_help
+
+
 def test_find_help(cl, shell_empty):
     assert_help(cl, shell_empty, "find")
 
