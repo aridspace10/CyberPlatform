@@ -105,6 +105,8 @@ def test_chmod_help_describes_supported_numeric_scope(cl, shell_empty):
     assert "--verbose" in help_text
     assert "--reference" not in help_text
     assert "Each MODE is of the form" not in help_text
+    assert "educational metadata only" in help_text
+    assert "no effective user/group or ownership policy" in help_text
 
 
 def test_chmod_applies_one_numeric_mode_to_every_target(cl, shell_basic):

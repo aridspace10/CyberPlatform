@@ -1,6 +1,8 @@
 Usage: ls [OPTION]... [FILE]...
 List information about the FILEs (the current directory by default).
 Sort entries alphabetically if none of -cftuvSUX nor --sort is specified.
+Mode bits shown by `-l` are educational metadata only and are not enforced by
+commands. The simulator does not model effective users, groups, or ownership.
 
 Mandatory arguments to long options are mandatory for short options too.
   -a, --all                  do not ignore entries starting with .
