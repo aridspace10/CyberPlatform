@@ -1659,15 +1659,9 @@ class CommandLine:
             return CommandResult(0, stdout=self.useage("pwd"))
         if ctx.args:
             return CommandResult(1, stderr=[f"pwd: unexpected operand '{ctx.args[0]}'"])
-        pointer = ctx.system.fs.current
-        direct = ""
-        while pointer is not None:
-            if direct:
-                direct = pointer.name + "/" + direct
-            else:
-                direct = pointer.name
-            pointer = pointer.parent
-        return CommandResult(0, stdout=[direct])
+        return CommandResult(
+            0, stdout=[ctx.system.fs.display_path(ctx.system.fs.current)]
+        )
 
     def mkdir(self, ctx: CommandContext) -> CommandResult:
         perms = {
@@ -1794,20 +1788,13 @@ class CommandLine:
         if not ctx.args:
             return CommandResult(1, stderr=["cd: must give argument"])
         arg = ctx.args[0]
-        sc = ctx.system.fs.current
-        if error := ctx.system.fs.search(arg):
-            ctx.system.fs.current = sc
-            return CommandResult(1, stderr=["cd:" + error])
-        if ctx.system.fs.current.get_type() != NodeType.DIRECTORY:
-            name = ctx.system.fs.current.name
-            ctx.system.fs.current = sc
-            return CommandResult(1, stderr=[f"cd: {name} is not a directory"])
-        parts = []
-        node = ctx.system.fs.current
-        while node.parent is not None:
-            parts.append(node.name)
-            node = node.parent
-        cwd = "/" + "/".join(reversed(parts))
+        target = ctx.system.fs.resolve(arg)
+        if isinstance(target, str):
+            return CommandResult(1, stderr=["cd:" + str(target)])
+        if target.get_type() != NodeType.DIRECTORY:
+            return CommandResult(1, stderr=[f"cd: {target.name} is not a directory"])
+        ctx.system.fs.current = target
+        cwd = ctx.system.fs.display_path(target)
         ctx.system.shell.cwd = cwd
         ctx.system.fs.cwd = cwd
         return CommandResult(0)

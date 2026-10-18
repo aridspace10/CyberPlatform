@@ -105,9 +105,7 @@ def test_sort_dups(cl, shell_basic: ShellState):
 def test_sort_output(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     CmdResult = cl.enter_command("sort -o f1.txt f2.txt", shell_basic)
-    shell_basic.fs.search("f1.txt")
-    data = shell_basic.fs.current.get_data()
-    shell_basic.fs.current = shell_basic.fs.filehead
+    data = shell_basic.fs.get_file("f1.txt").get_data()
     assert CmdResult.stderr == []
     assert CmdResult.stdout == []
     for i in range(0, len(names)):
@@ -137,9 +135,7 @@ def test_sort_output_requires_a_path_without_mutation(cl, shell_basic):
 def test_sort_sorted(cl, shell_basic: ShellState):
     names = setup_names(shell_basic, "f2.txt")
     CmdResult = cl.enter_command("sort -o s1.txt f2.txt", shell_basic)
-    shell_basic.fs.search("s1.txt")
-    data = shell_basic.fs.current.get_data()
-    shell_basic.fs.current = shell_basic.fs.filehead
+    data = shell_basic.fs.get_file("s1.txt").get_data()
     assert CmdResult.stderr == []
     assert CmdResult.stdout == []
     for i in range(0, len(names)):

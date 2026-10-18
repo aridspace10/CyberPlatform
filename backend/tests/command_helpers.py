@@ -12,9 +12,9 @@ def setup_names(s: ShellState, name: str) -> list[str]:
     r = RandomWord()
     for _ in range(0, amount):
         names.append(r.word())
-    s.fs.search(name)
-    s.fs.current.set_data(names)
-    s.fs.current = s.fs.filehead
+    node = s.fs.resolve(name)
+    assert not isinstance(node, str)
+    node.set_data(names)
     names.sort()
     return names
 

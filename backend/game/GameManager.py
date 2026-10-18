@@ -138,7 +138,11 @@ class GameManager:
         if choice == "dir" and dirs > 0:
             name = "THE NAME HERE WHEN DECIDE HOW DO THAT"
             self.shell.fs.add_directory(name)
-            self.shell.fs.search(name)
+            new_dir = self.shell.fs.resolve(name)
+            if not isinstance(new_dir, str):
+                self.shell.fs.current = new_dir
+                self.shell.fs.cwd = self.shell.fs.display_path(new_dir)
+                self.shell.cwd = self.shell.fs.cwd
 
             # Take some files for nested stuff (will rework more solid logic later)
             ftaken = biased_randint(0, files, std_factor=3)
@@ -148,6 +152,8 @@ class GameManager:
             self.auto_generate_fs(ftaken, dtaken)
             # Else case is not possible however type checking
             self.shell.fs.current = self.shell.fs.current.parent if self.shell.fs.current.parent != None else self.shell.fs.current
+            self.shell.fs.cwd = self.shell.fs.display_path(self.shell.fs.current)
+            self.shell.cwd = self.shell.fs.cwd
             
             # Continue at current level with the remainder
             self.auto_generate_fs(files - ftaken, dirs - 1 - dtaken)

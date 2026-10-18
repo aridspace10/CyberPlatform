@@ -33,8 +33,8 @@ def test_interactive_session_preserves_files_directory_and_pipes(console_workdir
     )
     assert result.returncode == 0
     assert result.stderr == ""
-    assert "cyber:/root/work/demo$ hello\n" in result.stdout
-    assert "cyber:/root/work/demo$ root/work/demo\n" in result.stdout
+    assert "cyber:/work/demo$ hello\n" in result.stdout
+    assert "cyber:/work/demo$ /work/demo\n" in result.stdout
     assert not (console_workdir / "work").exists()
     assert not (console_workdir / "app.db").exists()
 
@@ -53,7 +53,7 @@ def test_foreground_responses_and_heredoc_content_use_the_same_session(console_w
     assert result.stderr == ""
     assert result.stdout.count("hello\n\n:exit\n") == 2
     assert result.stdout.count("rm: remove regular file 'example.txt'? ") == 2
-    assert result.stdout.endswith("cyber:/root$ cyber:/root$ ")
+    assert result.stdout.endswith("cyber:/$ cyber:/$ ")
 
 
 @pytest.mark.parametrize("empty", [False, True])
@@ -66,7 +66,7 @@ def test_reset_restores_starting_state_and_eof_exits(console_workdir, empty):
     assert result.returncode == 0
     assert result.stderr == ""
     after_reset = result.stdout.split("Fresh filesystem ready.", 1)[1]
-    assert "cyber:/root$ " in after_reset
+    assert "cyber:/$ " in after_reset
     assert "scratch" not in after_reset
     assert "file.txt" not in after_reset
     assert ("notes.txt" in after_reset) is not empty
@@ -128,8 +128,8 @@ def test_blank_input_and_error_do_not_end_the_console(console_workdir):
     )
     assert result.returncode == 0
     assert result.stderr == "Unknown command given\n"
-    assert "cyber:/root$ 1\n" in result.stdout
-    assert "cyber:/root$ recovered\n" in result.stdout
+    assert "cyber:/$ 1\n" in result.stdout
+    assert "cyber:/$ recovered\n" in result.stdout
 
 
 def test_console_waits_for_scheduler_then_accepts_next_command(monkeypatch, capsys):

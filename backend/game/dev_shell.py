@@ -56,12 +56,7 @@ class DevShell:
         proc = self.foreground
         if proc and proc.program and proc.program.prompt is not None:
             return proc.program.prompt + " "
-        parts = []
-        node: FileNode | None = self.shell.fs.current
-        while node is not None:
-            parts.append(node.name)
-            node = node.parent
-        return f"cyber:/{'/'.join(reversed(parts))}$ "
+        return f"cyber:{self.shell.fs.display_path(self.shell.fs.current)}$ "
 
     def reap(self) -> None:
         self.scheduler.tick()
