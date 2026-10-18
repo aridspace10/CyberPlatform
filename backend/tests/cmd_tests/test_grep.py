@@ -1,5 +1,7 @@
 import pytest
 from game.ShellState import ShellState
+from game.filenode import FileNode
+from game.inode import Inode, NodeType
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error, descendants
 from tests.command_helpers import assert_help
@@ -10,7 +12,9 @@ from tests.command_helpers import assert_help
     [([], []), (["cat", "", "wolf", "cat dog"], ["cat", "cat dog"])],
 )
 def test_grep_buffered_input(run_buffered_command, lines, expected):
-    assert_success(run_buffered_command("grep cat", lines), expected)
+    result = run_buffered_command("grep cat", lines)
+    assert result.stdout == expected
+    assert result.stderr == []
 
 
 @pytest.mark.parametrize("input_prefix", ["", "echo cat | "])
@@ -31,6 +35,7 @@ def test_grep_count(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("grep -c ERROR f1.txt", shell_basic)
     assert CmdResult.stderr == []
     assert CmdResult.stdout == ["2"]
+    assert CmdResult.status == 0
 
 
 def test_grep_error(cl, shell_basic: ShellState):
@@ -39,7 +44,7 @@ def test_grep_error(cl, shell_basic: ShellState):
     assert CmdResult.stdout == []
 
     CmdResult = cl.enter_command("grep -a", shell_basic)
-    assert CmdResult.stderr == ["grep: unknown argument given"]
+    assert CmdResult.stderr == ["grep: unsupported option '-a'"]
     assert CmdResult.stdout == []
 
     CmdResult = cl.enter_command("grep text notexist.txt", shell_basic)
@@ -62,19 +67,247 @@ def test_grep_matchwhole(cl, shell_basic: ShellState):
 def test_grep_dir(cl, shell_fouritems: ShellState):
     CmdResult = cl.enter_command("grep -r ERROR .", shell_fouritems)
     assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR 1", "ERROR 2", "ERROR 3", "ERROR 4"]
+    assert CmdResult.stdout == [
+        "./f1.txt:ERROR 1",
+        "./f1.txt:ERROR 2",
+        "./f2.txt:ERROR 3",
+        "./f2.txt:ERROR 4",
+    ]
 
 
 def test_grep_dir2(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("grep -r ERROR .", shell_basic)
     assert CmdResult.stderr == []
-    assert CmdResult.stdout == ["ERROR no", "ERROR no2", "ERROR 1", "ERROR 2"]
+    assert CmdResult.stdout == [
+        "./f1.txt:ERROR no",
+        "./f1.txt:ERROR no2",
+        "./d1/f4.txt:ERROR 1",
+        "./d1/f4.txt:ERROR 2",
+    ]
 
 
 def test_grep_dir3(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("grep ERROR .", shell_basic)
-    assert CmdResult.stderr == ["Can't recursivly search directory without -r option"]
+    assert CmdResult.stderr == ["Can't recursively search directory without -r option"]
     assert CmdResult.stdout == []
+    assert CmdResult.status == 2
+
+
+def test_grep_regex_anchors_and_distinct_no_match_status(cl, shell_empty):
+    shell_empty.fs.add_file("a.txt")
+    shell_empty.fs.current.access("a.txt").set_data(["xalpha", "alpha beta"])
+
+    matched = cl.enter_command("grep '^alpha' a.txt", shell_empty)
+    unmatched = cl.enter_command("grep NOMATCH a.txt", shell_empty)
+
+    assert matched.status == 0
+    assert matched.stdout == ["alpha beta"]
+    assert unmatched.status == 1
+    assert unmatched.stdout == []
+
+
+def test_grep_empty_pattern_matches_every_line(cl, shell_empty):
+    shell_empty.fs.add_file("a.txt")
+    shell_empty.fs.current.access("a.txt").set_data(["alpha", "", "beta"])
+
+    result = cl.enter_command("grep -e '' a.txt", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["alpha", "", "beta"]
+
+
+def test_grep_reports_invalid_regex_as_an_error(cl, shell_empty):
+    result = cl.enter_command("grep '['", shell_empty)
+
+    assert result.status == 2
+    assert result.stdout == []
+    assert result.stderr
+
+
+def test_grep_end_of_options_reads_dash_prefixed_file(cl, shell_empty):
+    shell_empty.fs.add_file("-dash.txt")
+    shell_empty.fs.current.access("-dash.txt").set_data(["alpha"])
+
+    result = cl.enter_command("grep alpha -- -dash.txt", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["alpha"]
+
+
+def test_grep_word_matching_uses_punctuation_boundaries(cl, shell_empty):
+    shell_empty.fs.add_file("punct.txt")
+    shell_empty.fs.current.access("punct.txt").set_data(
+        ["alpha-beta", "xalpha", "alpha!"]
+    )
+
+    result = cl.enter_command("grep -w alpha punct.txt", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["alpha-beta", "alpha!"]
+
+
+def test_grep_only_matching_emits_all_original_case_occurrences(cl, shell_empty):
+    shell_empty.fs.add_file("word.txt")
+    shell_empty.fs.current.access("word.txt").set_data(["xALPHAx Alpha"])
+
+    result = cl.enter_command("grep -ion alpha word.txt", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["1:ALPHA", "1:Alpha"]
+
+
+def test_grep_line_and_invert_filters_are_consistent(cl, shell_empty):
+    shell_empty.fs.add_file("lines.txt")
+    shell_empty.fs.current.access("lines.txt").set_data(["alpha", "alpha beta", "beta"])
+
+    exact = cl.enter_command("grep -x alpha lines.txt", shell_empty)
+    inverted = cl.enter_command("grep -v alpha lines.txt", shell_empty)
+
+    assert exact.status == 0
+    assert exact.stdout == ["alpha"]
+    assert inverted.status == 0
+    assert inverted.stdout == ["beta"]
+
+
+def test_grep_count_is_per_file_and_retains_missing_file_error(cl, shell_empty):
+    shell_empty.fs.add_file("first.txt")
+    shell_empty.fs.current.access("first.txt").set_data(["alpha", "alpha"])
+    shell_empty.fs.add_file("second.txt")
+    shell_empty.fs.current.access("second.txt").set_data(["beta"])
+
+    result = cl.enter_command("grep -c alpha first.txt missing.txt second.txt", shell_empty)
+
+    assert result.status == 2
+    assert result.stdout == ["first.txt:2", "second.txt:0"]
+    assert result.stderr == ["grep: missing.txt can not be found"]
+
+    no_matches = cl.enter_command("grep -c NOMATCH first.txt", shell_empty)
+    assert no_matches.status == 1
+    assert no_matches.stdout == ["0"]
+    assert no_matches.stderr == []
+
+
+def test_grep_matching_multiple_files_prefixes_each_filename(cl, shell_empty):
+    shell_empty.fs.add_file("first.txt")
+    shell_empty.fs.current.access("first.txt").set_data(["alpha"])
+    shell_empty.fs.add_file("second.txt")
+    shell_empty.fs.current.access("second.txt").set_data(["alpha"])
+
+    result = cl.enter_command("grep alpha first.txt second.txt", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["first.txt:alpha", "second.txt:alpha"]
+
+
+def test_grep_recursive_matching_prefixes_each_filename(cl, shell_empty):
+    shell_empty.fs.add_directory("search")
+    shell_empty.fs.add_file("search/first.txt")
+    shell_empty.fs.current.access("search").access("first.txt").set_data(["alpha"])
+    shell_empty.fs.add_file("search/second.txt")
+    shell_empty.fs.current.access("search").access("second.txt").set_data(["alpha"])
+
+    result = cl.enter_command("grep -r alpha search", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["search/first.txt:alpha", "search/second.txt:alpha"]
+
+
+def test_grep_recursion_applies_include_exclude_and_directory_filters(
+    cl, shell_empty
+):
+    fs = shell_empty.fs
+    fs.add_directory("search")
+    fs.add_file("search/keep.zzz")
+    fs.current.access("search").access("keep.zzz").set_data(["alpha"])
+    fs.add_file("search/skip.txt")
+    fs.current.access("search").access("skip.txt").set_data(["alpha"])
+    fs.add_directory("search/ignored")
+    fs.add_file("search/ignored/inside.zzz")
+    fs.current.access("search").access("ignored").access("inside.zzz").set_data(
+        ["alpha"]
+    )
+
+    result = cl.enter_command(
+        "grep -r --include=*.zzz --exclude-dir=ignored alpha search", shell_empty
+    )
+
+    assert result.status == 0
+    assert result.stdout == ["alpha"]
+    assert result.stderr == []
+
+    excluded = cl.enter_command("grep -r --exclude=keep.zzz alpha search", shell_empty)
+    assert excluded.status == 0
+    assert excluded.stdout == ["search/skip.txt:alpha", "search/ignored/inside.zzz:alpha"]
+    assert excluded.stderr == []
+
+
+def test_grep_recursive_filters_keep_equals_and_match_basenames(cl, shell_empty):
+    fs = shell_empty.fs
+    fs.add_directory("search")
+    for name in ("match=one.txt", "match=two.log", "skip=three.txt"):
+        fs.add_file(f"search/{name}")
+        fs.current.access("search").access(name).set_data(["alpha"])
+
+    result = cl.enter_command(
+        "grep -r --include=match=*.txt --include=match=*.log "
+        "--exclude=skip=*.txt alpha search",
+        shell_empty,
+    )
+
+    assert result.status == 0
+    assert result.stdout == [
+        "search/match=one.txt:alpha",
+        "search/match=two.log:alpha",
+    ]
+    assert result.stderr == []
+
+
+def test_grep_recursive_search_does_not_follow_directory_symlinks(cl, shell_empty):
+    fs = shell_empty.fs
+    fs.add_directory("search")
+    fs.add_file("search/inside.txt")
+    fs.current.access("search").access("inside.txt").set_data(["alpha"])
+    fs.add_file("search/other.txt")
+    fs.current.access("search").access("other.txt").set_data(["beta"])
+    assert_success(cl.enter_command("ln -s . search/loop", shell_empty))
+
+    result = cl.enter_command("grep -r alpha search", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["search/inside.txt:alpha"]
+    assert result.stderr == []
+
+
+def test_grep_recursive_search_handles_deep_directory_trees(cl, shell_empty):
+    shell_empty.fs.add_directory("search")
+    directory = shell_empty.fs.resolve("search")
+    assert not isinstance(directory, str)
+    parent = directory
+    for index in range(1100):
+        child = FileNode(parent, f"nested-{index}", Inode(NodeType.DIRECTORY))
+        parent.items.append(child)
+        parent = child
+    file_node = FileNode(parent, "match.txt", Inode(NodeType.FILE))
+    file_node.set_data(["alpha"])
+    parent.items.append(file_node)
+
+    result = cl.enter_command("grep -r alpha search", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == ["alpha"]
+    assert result.stderr == []
+
+
+@pytest.mark.parametrize(
+    ("command", "expected_status", "expected_stdout"),
+    [("grep ERROR f1.txt", 0, ["ERROR no", "ERROR no2"]),
+     ("grep NOMATCH f1.txt", 1, [])],
+)
+def test_grep_match_and_no_match_statuses(cl, shell_basic, command, expected_status, expected_stdout):
+    result = cl.enter_command(command, shell_basic)
+
+    assert result.status == expected_status
+    assert result.stdout == expected_stdout
 
 
 def test_grep_help(cl, shell_empty):
@@ -108,7 +341,8 @@ def test_grep_dot_paths_recursive_search(run_dot_command, dot_directory):
     result = run_dot_command(f"grep -r : {operand}")
     assert result.status == 0
     assert result.stderr == []
-    assert sorted(result.stdout) == sorted(expected)
+    actual = [next(item for item in expected if output.endswith(item)) for output in result.stdout]
+    assert sorted(actual) == sorted(expected)
 
 
 def test_grep_dot_paths_read_parent_file(run_dot_command, dot_shell):
