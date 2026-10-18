@@ -257,15 +257,13 @@ def test_redirection_path_error(cl, shell_basic: ShellState, fs_basic):
 
 def test_redirection_rewrites_file(cl, shell_basic: ShellState, fs_basic: FileSystem):
     cl.enter_command("echo hi >> f1.txt", shell_basic)
-    fs_basic.search("f1.txt")
-    fnode = fs_basic.current
+    fnode = fs_basic.get_file("f1.txt")
     assert fnode.get_data() == ["ERROR no", "INFO hey", "ERROR no2", "error 1", "hi"]
 
 
 def test_redirection_writes_newfile(cl, shell_basic: ShellState, fs_basic: FileSystem):
     cl.enter_command("echo hi >> f3.txt", shell_basic)
-    fs_basic.search("f3.txt")
-    fnode = fs_basic.current
+    fnode = fs_basic.get_file("f3.txt")
     assert fnode.get_data() == ["hi"]
 
 

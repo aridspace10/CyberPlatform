@@ -12,13 +12,7 @@ router = APIRouter()
 
 def get_current_path(player: Player) -> str:
     """Return the player's current filesystem path for the terminal prompt."""
-    parts: list[str] = []
-    node = player.shell.fs.current
-    while node is not None:
-        if node.name:
-            parts.append(node.name)
-        node = node.parent
-    return "/" + "/".join(reversed(parts))
+    return player.shell.fs.display_path(player.shell.fs.current)
 
 
 def execute_terminal_input(session, player: Player, raw: str):

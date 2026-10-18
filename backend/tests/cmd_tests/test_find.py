@@ -34,6 +34,23 @@ def test_find_invalid_type_predicate_returns_command_error_without_mutation(
     assert result.stderr
 
 
+def test_find_multiple_operands_from_non_root_does_not_navigate(cl, shell_basic):
+    directory = shell_basic.fs.resolve("d1")
+    assert not isinstance(directory, str)
+    shell_basic.fs.current = directory
+    shell_basic.fs.cwd = shell_basic.fs.display_path(directory)
+    shell_basic.cwd = shell_basic.fs.cwd
+
+    result = cl.enter_command("find . .. -type d", shell_basic)
+
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["./d1", ".", "./d1"]
+    assert shell_basic.fs.current is directory
+    assert shell_basic.fs.cwd == "/d1"
+    assert shell_basic.cwd == "/d1"
+
+
 ################# FIND ##################
 def test_find_error(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("find", shell_basic)

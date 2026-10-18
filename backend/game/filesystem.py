@@ -4,13 +4,23 @@ from game.filenode import FileNode
 from game.inode import Inode, NodeType
 
 
+class PathResolutionError(str):
+    """A readable path error with the original path and a machine-usable code."""
+
+    def __new__(cls, path: str, message: str, code: str):
+        error = super().__new__(cls, message)
+        error.path = path
+        error.code = code
+        return error
+
+
 class FileSystem:
     def __init__(self):
         inode = Inode(NodeType.DIRECTORY)
         self.filehead = FileNode(None, "root", inode)
         self.current: FileNode = self.filehead
         self.lcs = 0
-        self.cwd = ""
+        self.cwd = "/"
 
     def to_dict(self) -> dict:
         return {"lcs": self.lcs, "nodes": self.filehead.to_dict()}
@@ -37,19 +47,18 @@ class FileSystem:
             self.lcs = fs["lcs"]
             self.filehead = root
             self.current = root
-            self.cwd = ""
+            self.cwd = "/"
         except Exception as err:
             raise Exception("Syncronization failure") from err
 
     def get_file(self, path: str) -> FileNode | str | None:
-        saved_current = self.current
-        lst = path.split("/")
-        if (error := self.search("/".join(lst[0:-1]))) != "":
-            self.current = saved_current
-            return error
-        tmp = self.current
-        self.current = saved_current
-        return tmp.access(lst[-1])
+        parent_path, name = posixpath.split(path)
+        if name in ("", ".", ".."):
+            return PathResolutionError(path, f"Invalid filename: {path}", "invalid")
+        parent = self.resolve(parent_path or ".")
+        if isinstance(parent, str):
+            return parent
+        return parent.access(name)
 
     def list_files(
         self,
@@ -58,65 +67,86 @@ class FileSystem:
         detail: int = 0,
         extras: dict[str, bool | str] | None = None,
     ) -> list[list[str]] | str:
-        if path != "":
-            if (error := self.search(path)) != "":
-                return error
-        display_path = path if self.current.get_type() != NodeType.DIRECTORY else ""
-        return self.current.list_content(display_path, deep, detail, extras)
+        node = self.current if path == "" else self.resolve(path)
+        if isinstance(node, str):
+            return node
+        display_path = path if node.get_type() != NodeType.DIRECTORY else ""
+        return node.list_content(display_path, deep, detail, extras)
+
+    def _resolve(
+        self,
+        path: str,
+        start: FileNode,
+        seen_links: set[int],
+        creating: bool = False,
+    ) -> FileNode | PathResolutionError:
+        node = self.filehead if path.startswith("/") else start
+        if path == "":
+            return node
+        for part in path.split("/"):
+            if node.get_type() != NodeType.DIRECTORY:
+                return PathResolutionError(
+                    path, f"{node.name} is not a directory", "not_directory"
+                )
+            if part in ("", "."):
+                continue
+            if part == "..":
+                node = node.parent or node
+                continue
+            child = node.access(part)
+            if child is None and creating:
+                node.add_child(part, Inode(NodeType.DIRECTORY))
+                child = node.access(part)
+            if child is None:
+                return PathResolutionError(
+                    path, f"No directory named {part}", "missing"
+                )
+            if child.get_type() == NodeType.SYMLINK:
+                if child.inode.id in seen_links:
+                    return PathResolutionError(
+                        path, "Too many levels of symbolic links", "symlink_loop"
+                    )
+                if not child.inode.data:
+                    return PathResolutionError(
+                        path, f"Invalid symbolic link: {child.name}", "invalid_symlink"
+                    )
+                target = self._resolve(
+                    child.inode.data[0], node, seen_links | {child.inode.id}, creating
+                )
+                if isinstance(target, PathResolutionError):
+                    return PathResolutionError(path, str(target), target.code)
+                node = target
+            else:
+                node = child
+        return node
+
+    def resolve(self, path: str) -> FileNode | PathResolutionError:
+        """Resolve a path without changing the current directory."""
+        return self._resolve(path, self.current, set())
+
+    def display_path(self, node: FileNode) -> str:
+        """Return a canonical absolute path, with the filesystem root as '/'."""
+        parts = []
+        while node.parent is not None:
+            parts.append(node.name)
+            node = node.parent
+        return "/" + "/".join(reversed(parts))
 
     def search(self, path: str, creating: bool = False) -> str:
-        lst = path.split("/")
-        saved = self.current
-
-        if path.startswith("/"):
-            self.current = self.filehead
-
-        while len(lst) > 0 and lst != [""]:
-            if (self.current.get_type() == NodeType.FILE):
-                return f"{self.current.name} is not a directory"
-
-            cur = lst.pop(0)
-            # if we are staying still
-            if cur == "" or cur == ".":
-                continue
-            # if we going back
-            if cur == "..":
-                if self.current.parent is not None:
-                    self.current = self.current.parent
-                continue
-
-            if self.current.get_type() == NodeType.FILE:
-                non_directory = self.current.name
-                self.current = saved
-                return f"{non_directory} is not a directory"
-
-            if self.current.access(cur) is None and creating:
-                inode = Inode(NodeType.DIRECTORY)
-                self.current.add_child(cur, inode)
-            node = self.current.access(cur)
-            if node is None:
-                self.current = saved
-                return f"No directory named {cur}"
-            if node.inode.type == NodeType.SYMLINK:
-                target = node.inode.data[0]
-                # Resolve target relative to symlink's parent
-                saved = self.current
-                err = self.search(target)
-                if err != "":
-                    return err
-                node = self.current
-                self.current = saved
-            self.current = node
+        node = self._resolve(path, self.current, set(), creating)
+        if isinstance(node, PathResolutionError):
+            return str(node)
         return ""
 
     def search_withaccess(self, path: str, creating: bool = False) -> NodeType | None:
-        lst = path.split("/")
-        self.search("/".join(lst[0:-1]))
-        for item in self.current.items:
-            if item.name == lst[-1]:
-                self.current = item
-                return item.get_type()
-        return None
+        parent_path, name = posixpath.split(path)
+        parent = self.resolve(parent_path or ".")
+        if isinstance(parent, str) or parent.get_type() != NodeType.DIRECTORY:
+            return None
+        item = parent.access(name)
+        if item is None:
+            return None
+        return item.get_type()
 
     def add(self, path: str) -> str:
         if "." in path:
@@ -131,46 +161,39 @@ class FileSystem:
             permissions = {}
         if path == "." or path == "/":
             return ""
-        error = ""
-        saved_current = self.current
-        lst = path.split("/")
-        if (error := self.search("/".join(lst[0:-1]), creating)) != "":
-            self.current = saved_current
-            return error
-        if self.current.get_type() == NodeType.FILE:
-            self.current = saved_current
-            return f"{path} is a file"
+        parent_path, name = posixpath.split(path)
+        if name in ("", ".", ".."):
+            return f"Invalid filename: {path}"
+        parent = self._resolve(parent_path or ".", self.current, set(), creating)
+        if isinstance(parent, PathResolutionError):
+            return str(parent)
+        if parent.get_type() != NodeType.DIRECTORY:
+            return f"{parent_path} is a file"
         inode = Inode(NodeType.DIRECTORY)
         inode.permissions = permissions
-        error = self.current.add_child(lst[-1], inode)
-        self.current = saved_current
-        return error
+        return parent.add_child(name, inode)
 
     def add_file(self, path: str, fn: FileNode | None = None):
-        saved_current = self.current
-        lst = path.split("/")
-        if (error := self.search("/".join(lst[0:-1]))) != "":
-            self.current = saved_current
-            return error
+        parent_path, name = posixpath.split(path)
+        if name in ("", ".", ".."):
+            return f"Invalid filename: {path}"
+        parent = self.resolve(parent_path or ".")
+        if isinstance(parent, PathResolutionError):
+            return str(parent)
+        if parent.get_type() != NodeType.DIRECTORY:
+            return f"{parent_path} is not a directory"
         if fn is None:
             inode = Inode(NodeType.FILE)
-            self.current.add_child(lst[-1], inode)
+            return parent.add_child(name, inode)
         else:
-            self.current.add_child(fn.name, fn.inode)
-        self.current = saved_current
-        return ""
+            return parent.add_child(fn.name, fn.inode)
 
     def delete(self, path: str, recursive: bool = False) -> FileNode | str:
-        saved_current = self.current
-        parts = path.rstrip("/").split("/")
-        parent_path = "/".join(parts[:-1])
-
-        if (error := self.search(parent_path)) != "":
-            self.current = saved_current
-            return error
-
-        result = self.current.delete_child(parts[-1], recurse=recursive)
-        self.current = saved_current
+        parent_info = self.resolve_parent(path.rstrip("/"))
+        if isinstance(parent_info, str):
+            return str(parent_info)
+        parent, name = parent_info
+        result = parent.delete_child(name, recurse=recursive)
 
         if result == "":
             return f"cannot remove '{path}': No such file or directory"
@@ -178,25 +201,11 @@ class FileSystem:
             return f"cannot remove '{path}': Is a directory"
         return result
 
-    def resolve(self, path: str) -> FileNode | str:
-        """Return an existing node or error while preserving the current node."""
-        saved_current = self.current
-
-        try:
-            error = self.search(path)
-
-            if error:
-                return error
-
-            return self.current
-        finally:
-            self.current = saved_current
-
     def resolve_parent(self, path: str) -> tuple[FileNode, str] | str:
         parent_path, filename = posixpath.split(path)
 
         if filename in ("", ".", ".."):
-            return f"Invalid filename: {path}"
+            return PathResolutionError(path, f"Invalid filename: {path}", "invalid")
 
         parent = self.resolve(parent_path or ".")
 
@@ -204,7 +213,9 @@ class FileSystem:
             return parent
 
         if parent.get_type() != NodeType.DIRECTORY:
-            return f"{parent_path} is not a directory"
+            return PathResolutionError(
+                path, f"{parent_path} is not a directory", "not_directory"
+            )
 
         return parent, filename
 

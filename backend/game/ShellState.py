@@ -3,7 +3,7 @@ from game.filesystem import FileSystem
 
 class ShellState:
     def __init__(self):
-        self.cwd = ""
+        self.cwd = "/"
         self.fs = FileSystem()
         self.commands: list[str] = []
         self.vars: dict = {}

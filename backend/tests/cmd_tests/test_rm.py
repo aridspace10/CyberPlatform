@@ -122,8 +122,11 @@ def test_rm_interactive_rejected_child_preserves_directory(cl, shell_basic):
 
 
 def test_rm_nested_delete_restores_filesystem_pointer(cl, shell_basic: ShellState):
-    assert shell_basic.fs.search("d1") == ""
-    directory = shell_basic.fs.current
+    directory = shell_basic.fs.resolve("d1")
+    assert not isinstance(directory, str)
+    shell_basic.fs.current = directory
+    shell_basic.fs.cwd = shell_basic.fs.display_path(directory)
+    shell_basic.cwd = shell_basic.fs.cwd
 
     result = cl.enter_command("rm f3.txt", shell_basic)
 
