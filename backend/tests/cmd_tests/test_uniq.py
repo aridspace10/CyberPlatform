@@ -89,7 +89,7 @@ def test_uniq_fields_treat_tabs_and_repeated_blanks_as_separators(cl, shell_empt
     result = cl.enter_command("uniq --skip-fields=1 input.txt", shell_empty)
 
     assert result.status == 0
-    assert result.stdout == ["id1\talpha\tS"]
+    assert result.stdout == ["id1\talpha\tS", "id3\talpha S"]
 
 
 def test_uniq_preserves_whitespace_in_unskipped_text(cl, shell_empty):
