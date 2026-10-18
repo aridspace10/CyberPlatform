@@ -1,11 +1,21 @@
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
+from tests.filesystem_helpers import restored_filesystem
 
 
 def test_cd_basic(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("cd d1", shell_basic)
     assert CmdResult.stderr == []
     assert len(shell_basic.fs.current.items) == 2
+
+
+def test_cd_parent_after_filesystem_restore(cl, shell_basic: ShellState):
+    shell_basic.fs = restored_filesystem(shell_basic.fs)
+
+    assert_success(cl.enter_command("cd d1", shell_basic))
+    assert shell_basic.fs.current.parent is shell_basic.fs.filehead
+    assert_success(cl.enter_command("cd ..", shell_basic))
+    assert shell_basic.fs.current is shell_basic.fs.filehead
 
 
 def test_cd_missing(cl, shell_empty: ShellState):

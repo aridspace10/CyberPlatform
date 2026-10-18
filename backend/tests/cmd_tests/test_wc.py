@@ -3,6 +3,7 @@ from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_command_error_without_mutation
+from tests.filesystem_helpers import restored_filesystem
 
 
 @pytest.mark.parametrize("lines", [[], ["cat wolf", "", "dog"]])
@@ -19,6 +20,20 @@ def test_wc_buffered_file_preserves_final_newline(
     source.inode.has_trailing_newline = has_trailing_newline
     assert_success(
         cl.enter_command(f"wc -l {input_args}", shell_no_final_newline),
+        ["2" if has_trailing_newline else "1"],
+    )
+
+
+@pytest.mark.parametrize("has_trailing_newline", [False, True])
+def test_wc_newline_count_survives_filesystem_restore(
+    cl, shell_no_final_newline, has_trailing_newline
+):
+    source = shell_no_final_newline.fs.resolve("t.txt")
+    source.inode.has_trailing_newline = has_trailing_newline
+    shell_no_final_newline.fs = restored_filesystem(shell_no_final_newline.fs)
+
+    assert_success(
+        cl.enter_command("wc -l t.txt", shell_no_final_newline),
         ["2" if has_trailing_newline else "1"],
     )
 
