@@ -1837,7 +1837,7 @@ class CommandLine:
             inode = target_inode
         else:
             inode = Inode(NodeType.SYMLINK)
-            inode.set_data([target])
+            inode.symlink_target = target
 
         if error := parent.add_child(name, inode):
             return CommandResult(1, stderr=[f"ln: {error}"])

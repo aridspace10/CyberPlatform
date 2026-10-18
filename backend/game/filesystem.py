@@ -52,12 +52,10 @@ class FileSystem:
             raise Exception("Syncronization failure") from err
 
     def get_file(self, path: str) -> FileNode | str | None:
-        parent_path, name = posixpath.split(path)
-        if name in ("", ".", ".."):
-            return PathResolutionError(path, f"Invalid filename: {path}", "invalid")
-        parent = self.resolve(parent_path or ".")
-        if isinstance(parent, str):
-            return parent
+        resolved_parent = self.resolve_parent(path)
+        if isinstance(resolved_parent, str):
+            return resolved_parent
+        parent, name = resolved_parent
         return parent.access(name)
 
     def list_files(
@@ -106,14 +104,24 @@ class FileSystem:
                     return PathResolutionError(
                         path, "Too many levels of symbolic links", "symlink_loop"
                     )
-                if not child.inode.data:
+                target_path = child.inode.symlink_target
+                if target_path is None and child.inode.data:
+                    # Older callers and save files stored the target in data.
+                    target_path = child.inode.data[0]
+                if target_path is None:
                     return PathResolutionError(
                         path, f"Invalid symbolic link: {child.name}", "invalid_symlink"
                     )
                 target = self._resolve(
-                    child.inode.data[0], node, seen_links | {child.inode.id}, creating
+                    target_path, node, seen_links | {child.inode.id}, creating
                 )
                 if isinstance(target, PathResolutionError):
+                    if target.code == "missing":
+                        return PathResolutionError(
+                            path,
+                            f"Dangling symbolic link: {child.name}",
+                            "dangling_symlink",
+                        )
                     return PathResolutionError(path, str(target), target.code)
                 node = target
             else:

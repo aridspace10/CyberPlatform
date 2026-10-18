@@ -20,6 +20,7 @@ class Inode:
         self.type: NodeType = type
         self.link_count = 1
         self.data: list[str] = []
+        self.symlink_target: str | None = None
         self.has_trailing_newline: bool = False
 
         self.permissions = {
@@ -39,6 +40,7 @@ class Inode:
             "id": self.id,
             "type": self.type.value,
             "data": self.data,
+            "symlink_target": self.symlink_target,
             "has_trailing_newline": self.has_trailing_newline,
             "link_count": self.link_count,
             "permissions": self.permissions,
@@ -53,6 +55,10 @@ class Inode:
         Inode._next_id = max(Inode._next_id, self.id + 1)
         self.type = NodeType(i["type"])
         self.data = i["data"]
+        self.symlink_target = i.get("symlink_target")
+        if self.type == NodeType.SYMLINK and self.symlink_target is None:
+            legacy_data = self.data
+            self.symlink_target = legacy_data[0] if legacy_data else None
         # Older saves have neither field. Their restored newline state was
         # false; keep that behavior because the original value is unknowable.
         self.has_trailing_newline = i.get("has_trailing_newline", False)

@@ -85,3 +85,27 @@ def test_duplicate_sibling_in_saved_tree_is_rejected_without_changing_fs():
     with pytest.raises(Exception, match="Syncronization failure"):
         fs.from_dict(saved)
     assert fs.filehead is original_root
+
+
+def test_symlink_target_round_trips_and_migrates_from_legacy_data():
+    fs = FileSystem()
+    fs.filehead.add_child("link", Inode(NodeType.SYMLINK))
+    link = fs.filehead.access("link")
+    link.inode.symlink_target = "../target"
+    saved = json.loads(json.dumps(fs.to_dict()))
+
+    restored = FileSystem()
+    restored.from_dict(saved)
+    assert restored.filehead.access("link").inode.symlink_target == "../target"
+
+    legacy = deepcopy(saved)
+    inode_data = legacy["nodes"]["items"][0]["inode"]
+    inode_data.pop("symlink_target")
+    inode_data["data"] = ["legacy-target"]
+    restored.from_dict(legacy)
+    assert restored.filehead.access("link").inode.symlink_target == "legacy-target"
+
+
+def test_get_file_returns_error_for_missing_parent_path():
+    fs = FileSystem()
+    assert fs.get_file("missing/child") == "No directory named missing"
