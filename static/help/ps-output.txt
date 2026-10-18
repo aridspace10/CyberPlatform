@@ -1,0 +1,5 @@
+Usage:
+ ps [-l]
+
+Output columns are PID, STATE, PPID, and COMMAND. State values are shown in
+lowercase. The -l option selects the long output header.

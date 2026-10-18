@@ -1,14 +1,5 @@
-  Usage:
- ps [options]
+Usage:
+ ps [-e|-A] [-l]
 
-Basic options:
- -A, -e               all processes
- -a                   all with tty, except session leaders
-  a                   all with tty, including other users
- -d                   all except session leaders
- -N, --deselect       negate selection
-  r                   only running processes
-  T                   all processes on this terminal
-  x                   processes without controlling ttys
-
-For more details see ps(1).
+List every process in the simulated process table. The default output contains
+PID, state, parent PID, and command columns. Completed processes are omitted.
