@@ -308,10 +308,10 @@ class FileSystem:
         return "/" + "/".join(reversed(parts))
 
     def search(self, path: str, creating: bool = False) -> str:
-        node = self._resolve(path, self.current, set(), creating)
+        """Validate a path without changing cwd or creating filesystem entries."""
+        node = self._resolve(path, self.current, set())
         if isinstance(node, PathResolutionError):
             return str(node)
-        self.current = node
         return ""
 
     def search_withaccess(self, path: str, creating: bool = False) -> NodeType | None:
