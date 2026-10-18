@@ -367,7 +367,7 @@ class CommandLine:
 
         # Help is shared by all registered commands. echo explicitly treats
         # --help as ordinary text, as documented by its contract.
-        if command != "echo" and "--help" in ctx.args:
+        if command not in {"echo", "cat"} and "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage(command))
 
         return handler(ctx)
@@ -654,7 +654,7 @@ class CommandLine:
         stderr = []
         status = 0
         words = bytes_flag = chars = lines = False
-        files = []
+        files: list[str] = []
 
         for arg in ctx.args:
             if arg in ("-c", "--bytes"):
@@ -1292,11 +1292,20 @@ class CommandLine:
         stderr = []
         status = 0
         numbering = False
-        if "--help" in ctx.args:
-            return CommandResult(0, stdout=self.useage("cat"))
-
-        while ctx.args and ctx.args[0].startswith("-") and ctx.args[0] != "-":
+        files = []
+        while ctx.args:
             arg = ctx.args.pop(0)
+            if arg == "--":
+                files.extend(ctx.args)
+                ctx.args.clear()
+                break
+            if arg == "--help":
+                return CommandResult(0, stdout=self.useage("cat"))
+            if arg == "-" or not arg.startswith("-"):
+                files.append(arg)
+                files.extend(ctx.args)
+                ctx.args.clear()
+                break
             for option in arg[1:]:
                 match option:
                     case "n":
@@ -1306,7 +1315,7 @@ class CommandLine:
                             1, stderr=[f"cat: Unknown Argument Given ({option})"]
                         )
 
-        files: list[str] = ctx.args or ["-"]
+        files = files or ["-"]
         line_number = 1
         for filename in files:
             if filename == "-":
@@ -1314,12 +1323,12 @@ class CommandLine:
             else:
                 node = ctx.system.fs.resolve(filename)
                 if isinstance(node, str):
-                    stderr.append(f"File {filename} does not exist")
+                    stderr.append(f"cat: {filename}: {node}")
                     status = 1
                     continue
 
                 if node.get_type() == NodeType.DIRECTORY:
-                    stderr.append("cat: Non directory is given")
+                    stderr.append(f"cat: {filename}: Is a directory")
                     status = 1
                     continue
                 content = InputBuffer.from_file(node)
