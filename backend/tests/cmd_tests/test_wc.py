@@ -139,8 +139,9 @@ def test_wc_l_multiple_files_one_empty(cl, shell_mixfiles: ShellState):
 
 def test_wc_l_file_not_found(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("wc -l fake.txt", shell_basic)
+    assert CmdResult.status == 1
     assert CmdResult.stdout == []
-    assert len(CmdResult.stderr) > 0
+    assert CmdResult.stderr == ["No directory named fake.txt"]
 
 
 def test_wc_l_directory_error(cl, shell_basic: ShellState):
