@@ -1,5 +1,6 @@
 import copy
 import datetime
+import fnmatch
 import random
 import re
 from dataclasses import dataclass, field
@@ -35,9 +36,6 @@ from game.ShellState import ShellState
 
 from .helpers import (
     determine_perms_fromstr,
-    match_contains,
-    match_line,
-    match_whole_word,
 )
 
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
@@ -1002,126 +1000,236 @@ class CommandLine:
         return CommandResult(1 if stderr else 0, stdout, stderr)
 
     def grep(self, ctx: CommandContext) -> CommandResult:
-        case_insentive = False
+        ignore_case = False
         invert = False
-        linenum = False
-        filename = False
-        countmatch = False
-        matchwhole = False
-        matchline = False
-        showmatched = False
+        line_numbers = False
+        list_files = False
+        count_lines = False
+        whole_word = False
+        whole_line = False
+        only_matching = False
         recursive = False
-        pattern = ""
-        files = []
-        include = []
-        exclude = []
-        stdout = []
-        stderr = []
-        while ctx.args:
-            arg = ctx.args.pop(0)
-            if arg.startswith("--include="):
-                lst = arg.split("=")
-                include.append(lst[1])
-            elif arg.startswith("--exclude-dir="):
-                lst = arg.split("=")
-                exclude.append(lst[1])
-            elif arg == "--help":
-                return CommandResult(0, stdout=self.useage("grep"))
-            elif arg.startswith("-"):
-                for option in arg[1:]:
-                    match (option):
-                        case "i":
-                            case_insentive = True
-                        case "v":
-                            invert = True
-                        case "n":
-                            linenum = True
-                        case "l":
-                            filename = True
-                        case "c":
-                            countmatch = True
-                        case "w":
-                            matchwhole = True
-                        case "x":
-                            matchline = True
-                        case "o":
-                            showmatched = True
-                        case "r":
-                            recursive = True
-                        case _:
-                            return CommandResult(
-                                1, stderr=["grep: unknown argument given"]
-                            )
-            else:
-                pattern = arg
-                files = ctx.args
+        force_filename = False
+        suppress_filename = False
+        includes: list[str] = []
+        excludes: list[str] = []
+        excluded_dirs: list[str] = []
+        pattern: str | None = None
+        args = list(ctx.args)
+        files: list[str] = []
+        index = 0
+
+        while index < len(args):
+            arg = args[index]
+            index += 1
+            if arg == "--":
+                if pattern is None:
+                    if index >= len(args):
+                        return CommandResult(2, stderr=["grep: pattern not given"])
+                    pattern = args[index]
+                    index += 1
+                files.extend(args[index:])
                 break
-
-        if not pattern:
-            return CommandResult(1, stderr=["grep: pattern not given"])
-        if not len(files):
-            files = ["-"]
-        if matchwhole:
-            match_cond_func = match_whole_word
-        elif matchline:
-            match_cond_func = match_line
-        else:
-            match_cond_func = match_contains
-
-        def search_input(content: InputBuffer, name: str) -> None:
-            for idx, line in enumerate(content.lines):
-                if case_insentive:
-                    line_cmp = line.lower()
-                    pattern_cmp = pattern.lower()
+            if arg == "--help":
+                return CommandResult(0, stdout=self.useage("grep"))
+            if arg.startswith("--include="):
+                includes.append(arg.split("=", 1)[1])
+            elif arg.startswith("--exclude="):
+                excludes.append(arg.split("=", 1)[1])
+            elif arg.startswith("--exclude-dir="):
+                excluded_dirs.append(arg.split("=", 1)[1])
+            elif arg in ("--include", "--exclude", "--exclude-dir"):
+                if index >= len(args):
+                    return CommandResult(2, stderr=[f"grep: argument required for {arg}"])
+                value = args[index]
+                index += 1
+                {"--include": includes, "--exclude": excludes, "--exclude-dir": excluded_dirs}[arg].append(value)
+            elif arg == "-e" or arg.startswith("--regexp="):
+                if pattern is not None:
+                    return CommandResult(2, stderr=["grep: only one pattern is supported"])
+                if arg == "-e":
+                    if index >= len(args):
+                        return CommandResult(2, stderr=["grep: pattern not given"])
+                    pattern = args[index]
+                    index += 1
                 else:
-                    line_cmp = line
-                    pattern_cmp = pattern
-                matched = match_cond_func(line_cmp, pattern_cmp)
-                if matched ^ invert:
-                    if filename:
-                        tmp = name
-                    elif showmatched:
-                        tmp = [w for w in line.split() if pattern in w][0]
+                    pattern = arg.split("=", 1)[1]
+            elif arg in (
+                "--ignore-case", "--invert-match", "--line-number",
+                "--files-with-matches", "--count", "--word-regexp",
+                "--line-regexp", "--only-matching", "--recursive",
+                "--with-filename", "--no-filename",
+            ):
+                if arg == "--ignore-case":
+                    ignore_case = True
+                elif arg == "--invert-match":
+                    invert = True
+                elif arg == "--line-number":
+                    line_numbers = True
+                elif arg == "--files-with-matches":
+                    list_files = True
+                elif arg == "--count":
+                    count_lines = True
+                elif arg == "--word-regexp":
+                    whole_word = True
+                elif arg == "--line-regexp":
+                    whole_line = True
+                elif arg == "--only-matching":
+                    only_matching = True
+                elif arg == "--recursive":
+                    recursive = True
+                elif arg == "--with-filename":
+                    force_filename = True
+                else:
+                    suppress_filename = True
+            elif arg.startswith("-") and arg != "-":
+                for option in arg[1:]:
+                    if option == "i":
+                        ignore_case = True
+                    elif option == "v":
+                        invert = True
+                    elif option == "n":
+                        line_numbers = True
+                    elif option == "l":
+                        list_files = True
+                    elif option == "c":
+                        count_lines = True
+                    elif option == "w":
+                        whole_word = True
+                    elif option == "x":
+                        whole_line = True
+                    elif option == "o":
+                        only_matching = True
+                    elif option == "r":
+                        recursive = True
+                    elif option == "H":
+                        force_filename = True
+                    elif option == "h":
+                        suppress_filename = True
                     else:
-                        tmp = line
-                    if linenum:
-                        tmp = f"{idx+1}:{tmp}"
-                    stdout.append(tmp)
-                    if filename and not linenum:
-                        return
+                        return CommandResult(2, stderr=[f"grep: unsupported option '-{option}'"])
+            elif pattern is None:
+                pattern = arg
+                files = args[index:]
+                if files and files[0] == "--":
+                    files = files[1:]
+                break
+            else:
+                files.append(arg)
+
+        if pattern is None:
+            return CommandResult(2, stderr=["grep: pattern not given"])
+        if not files:
+            files = ["-"]
+        if list_files and count_lines:
+            return CommandResult(2, stderr=["grep: -l and -c cannot be combined"])
+
+        regex_pattern = pattern
+        if whole_word:
+            regex_pattern = rf"(?<!\w)(?:{regex_pattern})(?!\w)"
+        try:
+            regex = re.compile(regex_pattern, re.IGNORECASE if ignore_case else 0)
+        except re.error as error:
+            return CommandResult(2, stderr=[f"grep: invalid regular expression: {error}"])
+
+        stderr: list[str] = []
+        candidates: list[tuple[str, InputBuffer]] = []
+        had_error = False
+
+        def file_is_selected(name: str) -> bool:
+            return (not includes or any(fnmatch.fnmatch(name, item) for item in includes)) and not any(
+                fnmatch.fnmatch(name, item) for item in excludes
+            )
+
+        def collect_file(node: FileNode, name: str) -> None:
+            if node.get_type() == NodeType.FILE and file_is_selected(node.name):
+                candidates.append((name, InputBuffer.from_file(node)))
+
+        def collect_directory(node: FileNode, display_path: str) -> None:
+            for child in node.items:
+                child_path = f"{display_path.rstrip('/')}/{child.name}" if display_path else child.name
+                if child.get_type() == NodeType.DIRECTORY:
+                    if any(fnmatch.fnmatch(child.name, item) for item in excluded_dirs):
+                        continue
+                    collect_directory(child, child_path)
+                else:
+                    collect_file(child, child_path)
 
         for file in files:
             if file == "-":
-                search_input(ctx.stdin, "(standard input)")
+                candidates.append(("(standard input)", ctx.stdin))
                 continue
-            file_node = ctx.system.fs.resolve(file)
-            if isinstance(file_node, str):
+            node = ctx.system.fs.resolve(file)
+            if isinstance(node, str):
                 stderr.append(f"grep: {file} can not be found")
-                continue
-            ty = file_node.get_type()
-            if ty == NodeType.DIRECTORY:
-                if recursive:
-
-                    def recursively_search(pointer: FileNode):
-                        for item in pointer.items:
-                            if item.get_type() == NodeType.DIRECTORY:
-                                recursively_search(item)
-                            else:
-                                search_input(InputBuffer.from_file(item), item.name)
-
-                    recursively_search(file_node)
+                had_error = True
+            elif node.get_type() == NodeType.DIRECTORY:
+                if not recursive:
+                    stderr.append("Can't recursively search directory without -r option")
+                    had_error = True
                 else:
-                    stderr.append("Can't recursivly search directory without -r option")
-            elif ty == NodeType.FILE:
-                search_input(InputBuffer.from_file(file_node), file_node.name)
+                    collect_directory(node, file)
+            elif node.get_type() == NodeType.FILE:
+                collect_file(node, file)
             else:
-                stderr.append(f"Can't open file/directory given: {file}")
-        if countmatch:
-            return CommandResult(
-                1 if stderr else 0, stdout=[str(len(stdout))], stderr=stderr
-            )
-        else:
-            return CommandResult(1 if stderr else 0, stdout, stderr)
+                stderr.append(f"grep: {file}: Not a regular file")
+                had_error = True
+
+        show_filenames = force_filename or (
+            not suppress_filename
+            and ((count_lines and (len(files) > 1 or len(candidates) > 1)))
+        )
+        stdout: list[str] = []
+        any_selected = False
+        for name, content in candidates:
+            file_selected = False
+            selected_count = 0
+            file_output: list[str] = []
+            for line_index, line in enumerate(content.lines, start=1):
+                matches = list(regex.finditer(line))
+                matched = regex.fullmatch(line) is not None if whole_line else bool(matches)
+                selected = matched != invert
+                if not selected:
+                    continue
+                file_selected = True
+                selected_count += 1
+                if count_lines or list_files:
+                    continue
+                if only_matching:
+                    if invert:
+                        continue
+                    line_matches = [regex.fullmatch(line)] if whole_line else matches
+                    for match in line_matches:
+                        if match is None:
+                            continue
+                        text = match.group(0)
+                        if line_numbers:
+                            text = f"{line_index}:{text}"
+                        if show_filenames:
+                            text = f"{name}:{text}"
+                        file_output.append(text)
+                else:
+                    text = line
+                    if line_numbers:
+                        text = f"{line_index}:{text}"
+                    if show_filenames:
+                        text = f"{name}:{text}"
+                    file_output.append(text)
+
+            any_selected |= file_selected
+            if list_files:
+                if file_selected:
+                    stdout.append(name)
+            elif count_lines:
+                count_text = str(selected_count)
+                if show_filenames:
+                    count_text = f"{name}:{count_text}"
+                stdout.append(count_text)
+            else:
+                stdout.extend(file_output)
+
+        status = 2 if had_error else (0 if any_selected else 1)
+        return CommandResult(status, stdout, stderr)
 
     def chmod(self, ctx: CommandContext) -> CommandResult:
         recurse = False
