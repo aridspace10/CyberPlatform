@@ -127,7 +127,7 @@ class CommandLine:
 
     def enter_command(self, raw: str, shell: ShellState) -> CommandResult:
         if not raw.strip():
-            return CommandResult()
+            return CommandResult(status=shell.last_status)
 
         sys = SystemContext(shell.fs, self.process_manager, self.network, shell)
         try:
@@ -136,41 +136,65 @@ class CommandLine:
             ast = parser.parse()
         except SyntaxError as error:
             message = str(error) or "invalid command syntax"
-            return CommandResult(2, stderr=[f"syntax error: {message}"])
+            result = CommandResult(2, stderr=[f"syntax error: {message}"])
+            shell.last_status = result.status
+            return result
         if isinstance(ast, Sequence):
-            return self.execute_sequence(ast.parts, sys)
-        return CommandResult(2, stderr=["syntax error: expected a command"])
+            result = self.execute_sequence(ast.parts, sys)
+        else:
+            result = CommandResult(2, stderr=["syntax error: expected a command"])
+        shell.last_status = result.status
+        return result
 
     def execute_pipeline(
-        self, pipe: Pipe, sys: SystemContext, inherited_stdin: InputBuffer | None = None
+        self,
+        pipe: Pipe,
+        sys: SystemContext,
+        inherited_stdin: InputBuffer | None = None,
     ) -> CommandResult:
         cmd_result = None
         prev_pipe = inherited_stdin
+        stderr: list[str] = []
+
+        exec_ctx = ExecutionContext()
 
         for part in pipe.parts:
-            cmd_result = self.execute_andor(part, sys, ExecutionContext(stdin=prev_pipe))
+            exec_ctx.stdin = prev_pipe
+            exec_ctx.stdout = None
+
+            cmd_result = self.execute_andor(part, sys, exec_ctx)
+            stderr.extend(cmd_result.stderr)
 
             prev_pipe = InputBuffer.from_lines(cmd_result.stdout)
 
         if cmd_result is None:
             raise Exception("No Cmd Result given")
 
+        cmd_result.stderr = stderr
+        sys.shell.last_status = cmd_result.status
         return cmd_result
 
     def execute_andor(
         self, elem: AndOr, sys: SystemContext, exec_ctx: ExecutionContext
     ) -> CommandResult:
         cmd_result = self.execute_command(elem.first, sys, exec_ctx)
+        stdout = list(cmd_result.stdout)
+        stderr = list(cmd_result.stderr)
+        sys.shell.last_status = cmd_result.status
         for op, cmd in elem.rest:
             if (op == "&&" and not cmd_result.status) or (
                 op == "||" and cmd_result.status
             ):
                 tmp_result = self.execute_command(cmd, sys, exec_ctx)
-                cmd_result.stderr.extend(tmp_result.stderr)
-                cmd_result.stdout.extend(tmp_result.stdout)
+                stdout.extend(tmp_result.stdout)
+                stderr.extend(tmp_result.stderr)
                 cmd_result.status = tmp_result.status
-            else:
-                break
+                cmd_result.kind = tmp_result.kind
+                cmd_result.interaction = tmp_result.interaction
+                cmd_result.payload = tmp_result.payload
+                sys.shell.last_status = cmd_result.status
+        cmd_result.stdout = stdout
+        cmd_result.stderr = stderr
         return cmd_result
 
     def execute_command(
@@ -261,7 +285,9 @@ class CommandLine:
                     if isinstance(part, str):
                         word += part
                     else:
-                        if part.name not in sys.shell.vars:
+                        if part.name == "?":
+                            word += str(sys.shell.last_status)
+                        elif part.name not in sys.shell.vars:
                             return CommandResult(
                                 1,
                                 [],
@@ -269,7 +295,8 @@ class CommandLine:
                                 "text",
                                 None,
                             )
-                        word += sys.shell.vars[part.name]
+                        else:
+                            word += sys.shell.vars[part.name]
                 args.append(word)
             return self.execute(args, fdin, sys)
         else:
@@ -292,12 +319,20 @@ class CommandLine:
         sys: SystemContext,
         inherited_stdin: InputBuffer | None = None,
     ) -> CommandResult:
+        stdout: list[str] = []
+        stderr: list[str] = []
         cmd_result = None
         for job in parts:
             # background jobs not yet supported, just execute inline
-            cmd_result = self.execute_pipeline(job.pipeline, sys, inherited_stdin)
+            cmd_result = self.execute_pipeline(
+                job.pipeline, sys, inherited_stdin=inherited_stdin
+            )
+            stdout.extend(cmd_result.stdout)
+            stderr.extend(cmd_result.stderr)
         if cmd_result is None:
             raise Exception("cmd being empty")
+        cmd_result.stdout = stdout
+        cmd_result.stderr = stderr
         return cmd_result
 
     def execute(
