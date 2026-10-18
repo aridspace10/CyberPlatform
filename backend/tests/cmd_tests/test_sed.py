@@ -86,15 +86,33 @@ def test_sed_basic(cl, shell_sed: ShellState):
 
 
 def test_sed_global(cl, shell_sed: ShellState):
-    CmdResult = cl.enter_command("sed -f f1.txt 's/cat/dog/g'", shell_sed)
+    CmdResult = cl.enter_command("sed -e 's/cat/dog/g' f1.txt", shell_sed)
     assert CmdResult.stdout == ["dog wolf dog", "hi dog"]
     assert CmdResult.stderr == []
 
 
 def test_sed_nochange(cl, shell_sed: ShellState):
-    CmdResult = cl.enter_command("sed --file=f1.txt 's/not/exist/'", shell_sed)
+    CmdResult = cl.enter_command("sed -e 's/not/exist/' f1.txt", shell_sed)
     assert CmdResult.stderr == []
     assert CmdResult.stdout == ["cat wolf cat", "hi cat"]
+
+
+def test_sed_reads_script_file_separately_from_input(cl, shell_sed):
+    shell_sed.fs.add_file("script.sed")
+    shell_sed.fs.get_file("script.sed").set_data(["s/cat/dog/g"])
+
+    result = cl.enter_command("sed -f script.sed f1.txt", shell_sed)
+
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["dog wolf dog", "hi dog"]
+
+
+def test_sed_explicit_stdin_operand(cl, shell_empty):
+    result = cl.enter_command("sed -e 's/cat/dog/' -", shell_empty)
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == []
 
 
 def test_sed_emreplace(cl, shell_sed: ShellState):
@@ -137,6 +155,12 @@ def test_sed_addressing(cl, shell_sed: ShellState):
     assert CmdResult.stdout == ["cat wolf cat", "hi dog"]
     assert CmdResult.stderr == []
 
+
+def test_sed_regex_address_miss_does_not_substitute(cl, shell_sed):
+    result = cl.enter_command("sed '/NOMATCH/s/cat/dog/' f1.txt", shell_sed)
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["cat wolf cat", "hi cat"]
 
 def test_sed_addressing2(cl, shell_sed: ShellState):
     CmdResult = cl.enter_command("sed '2,4s/cat/dog/' f3.txt", shell_sed)
@@ -182,6 +206,12 @@ def test_sed_print_flag_no_match(cl, shell_sed):
     CmdResult = cl.enter_command("sed -n 's/bird/fish/p' f1.txt", shell_sed)
     assert CmdResult.stderr == []
     assert CmdResult.stdout == []
+
+
+def test_sed_substitution_print_flag_with_default_output(cl, shell_sed):
+    result = cl.enter_command("sed 's/cat/dog/p' f1.txt", shell_sed)
+    assert result.status == 0
+    assert result.stdout == ["dog wolf cat", "dog wolf cat", "hi dog", "hi dog"]
 
 
 def test_sed_expression_order(cl, shell_sed):
