@@ -2200,7 +2200,7 @@ class CommandLine:
     def sort(self, ctx: CommandContext) -> CommandResult:
         if "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage("sort"))
-        file = ""
+        files = []
         igblanks = False
         reverse = False
         randomize = False
@@ -2216,7 +2216,7 @@ class CommandLine:
                 return CommandResult(2, stderr=["sort: empty path"])
             if arg.startswith("-"):
                 if arg == "-":
-                    file = "-"
+                    files.append("-")
                     continue
                 for option in arg[1:]:
                     match (option):
@@ -2247,40 +2247,68 @@ class CommandLine:
                                 2, stderr=[f"sort: unknown option given ({arg})"]
                             )
             else:
-                file = arg
-        if file == "" or file == "-":
-            source = ctx.stdin
-        else:
+                files.append(arg)
+        if not files:
+            files = ["-"]
+        content = []
+        for file in files:
+            if file == "-":
+                content.extend(ctx.stdin.lines)
+                continue
             tmp = ctx.system.fs.resolve(file)
             if isinstance(tmp, str):
-                return CommandResult(1, stderr=[f"sort: {tmp}"])
+                return CommandResult(1, stderr=[f"sort: {file}: {tmp}"])
             if tmp.get_type() == NodeType.DIRECTORY:
                 return CommandResult(1, stderr=[f"sort: {file}: Is a directory"])
             if tmp.get_type() != NodeType.FILE:
                 return CommandResult(1, stderr=[f"sort: {file}: Not a regular file"])
-            source = InputBuffer.from_file(tmp)
-        content = list(source.lines)
-        for idx, line in enumerate(content):
-            if igblanks:
-                content[idx] = line.lstrip()
-            if fold:
-                content[idx] = line.upper()
+            content.extend(InputBuffer.from_file(tmp).lines)
+
+        def comparison_key(line: str) -> str:
+            key = line.lstrip() if igblanks else line
             if clean:
-                content[idx] = "".join(c for c in line if c.isprintable())
-        modified = sorted(content, reverse=reverse)
+                key = "".join(character for character in key if character.isprintable())
+            if fold:
+                key = key.casefold()
+            return key
+
+        keys = [comparison_key(line) for line in content]
+        indexed = list(enumerate(content))
+        modified = [
+            line
+            for _, line in sorted(
+                indexed,
+                key=lambda item: (
+                    comparison_key(item[1]), -item[0] if reverse else item[0]
+                ),
+                reverse=reverse,
+            )
+        ]
         if check or scheck:
-            for i in range(0, len(modified)):
-                if modified[i] != content[i]:
+            for i in range(1, len(content)):
+                out_of_order = (
+                    keys[i - 1] > keys[i]
+                    if not reverse
+                    else keys[i - 1] < keys[i]
+                )
+                if out_of_order:
                     # Silent check or not
                     if scheck:
                         return CommandResult(1)
                     else:
                         return CommandResult(
-                            1, stderr=[f"sort: {file}:{i}: disorder: {content[i]}"]
+                            1, stderr=[f"sort: {files[0]}:{i + 1}: disorder: {content[i]}"]
                         )
             return CommandResult(0)
         if remove_dups:
-            modified = list(dict.fromkeys(modified))
+            unique = []
+            previous = object()
+            for line in modified:
+                key = comparison_key(line)
+                if key != previous:
+                    unique.append(line)
+                    previous = key
+            modified = unique
         if randomize:
             r = []
             # while an element hasn't been moved
@@ -2288,13 +2316,20 @@ class CommandLine:
                 # Pick a random element in modified
                 vid = random.randrange(len(modified))
                 # if there is multiple of one element move backwards
-                while vid > 0 and modified[vid - 1] == modified[vid]:
+                while (
+                    vid > 0
+                    and comparison_key(modified[vid - 1])
+                    == comparison_key(modified[vid])
+                ):
                     vid -= 1
                 # Get element and append to end of new array
                 element = modified.pop(vid)
                 r.append(element)
                 # Keep removing element which are the saeme
-                while vid < len(modified) and modified[vid] == element:
+                while (
+                    vid < len(modified)
+                    and comparison_key(modified[vid]) == comparison_key(element)
+                ):
                     r.append(modified.pop(vid))
             modified = r
         if output:

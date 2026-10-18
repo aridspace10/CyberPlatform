@@ -15,9 +15,49 @@ def test_sort_buffered_input(run_buffered_command, lines):
 
 def test_sort_comparison_transforms_do_not_mutate_input(run_buffered_command):
     result = run_buffered_command("sort -bfi", [" cat", "Wolf\t", "dog"])
-    # Comparison/output semantics of -b/-f/-i are tracked separately in CYB-10.
-    assert result.status == 0
-    assert result.stderr == []
+    assert_success(result, [" cat", "dog", "Wolf\t"])
+
+
+def test_sort_combined_comparison_flags_compose(run_buffered_command):
+    result = run_buffered_command("sort -bf", ["  beta", "Alpha", " alpha"])
+    assert_success(result, ["Alpha", " alpha", "  beta"])
+
+
+def test_sort_reads_all_files_in_operand_order(cl, shell_basic: ShellState):
+    first = shell_basic.fs.get_file("f1.txt")
+    second = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(first, FileNode)
+    assert isinstance(second, FileNode)
+    first.set_data(["zulu", "Beta"])
+    second.set_data(["alpha", "gamma"])
+
+    result = cl.enter_command("sort f1.txt f2.txt", shell_basic)
+
+    assert_success(result, ["Beta", "alpha", "gamma", "zulu"])
+    assert first.get_data() == ["zulu", "Beta"]
+    assert second.get_data() == ["alpha", "gamma"]
+
+
+def test_sort_explicit_dash_reads_stdin(cl, shell_basic: ShellState):
+    fn = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data(["zulu", "alpha"])
+
+    result = cl.enter_command("cat f2.txt | sort -", shell_basic)
+
+    assert_success(result, ["alpha", "zulu"])
+
+
+def test_sort_missing_input_returns_error(cl, shell_empty):
+    result = cl.enter_command("sort missing.txt", shell_empty)
+    assert_failure(result)
+    assert result.stderr
+
+
+def test_sort_invalid_option_value_returns_error(cl, shell_empty):
+    result = cl.enter_command("sort -o", shell_empty)
+    assert_failure(result)
+    assert result.stderr
 
 
 def test_sort_basic(cl, shell_basic: ShellState):
@@ -74,6 +114,17 @@ def test_sort_output(cl, shell_basic: ShellState):
         assert data[i] == names[i]
 
 
+def test_sort_can_write_back_to_an_input_file_safely(cl, shell_basic):
+    fn = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data(["zulu", "alpha"])
+
+    result = cl.enter_command("sort -o f2.txt f2.txt", shell_basic)
+
+    assert_success(result)
+    assert fn.get_data() == ["alpha", "zulu"]
+
+
 def test_sort_output_requires_a_path_without_mutation(cl, shell_basic):
     before = tree_state(shell_basic)
     for command in ("sort -o", 'sort -o "" f2.txt'):
@@ -111,6 +162,22 @@ def test_sort_sorted(cl, shell_basic: ShellState):
     assert CmdResult.stderr[0].startswith("sort:")
     assert CmdResult.stdout == []
     assert shell_basic.ls == 0
+
+
+def test_sort_check_modes_compare_transformed_keys(cl, shell_basic: ShellState):
+    fn = shell_basic.fs.get_file("f2.txt")
+    assert isinstance(fn, FileNode)
+    fn.set_data([" Alpha", "alpha", "Beta"])
+    assert_success(cl.enter_command("sort -bcf f2.txt", shell_basic))
+    assert_success(cl.enter_command("sort -Cbf f2.txt", shell_basic))
+    fn.set_data(["Beta", " alpha"])
+    result = cl.enter_command("sort -bcf f2.txt", shell_basic)
+    assert_failure(result)
+    assert result.stderr
+    result = cl.enter_command("sort -Cbf f2.txt", shell_basic)
+    assert result.status != 0
+    assert result.stdout == []
+    assert result.stderr == []
 
 
 def test_sort_help(cl, shell_empty):
