@@ -8,7 +8,7 @@ from game.filenode import FileNode
 from game.filesystem import FileSystem
 from game.inode import Inode
 from game.InputBuffer import InputBuffer
-from game.Parser import CommandParser, lex
+from game.Parser import CommandParser, VarUse, lex
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import descendants, tree_state
@@ -25,7 +25,7 @@ def test_command_setup_preserves_explicit_input(cl, shell_empty, supplied):
         return CommandResult()
 
     cl.commands["probe"] = probe
-    command = CommandParser(lex("probe")).parse().parts[0].pipeline.parts[0].first
+    command = CommandParser(lex("probe")).parse().parts[0].pipeline.first.parts[0]
     system = SystemContext(shell_empty.fs, cl.process_manager, cl.network, shell_empty)
     execution = ExecutionContext(stdin=supplied)
     cl.execute_command(command, system, execution)
@@ -43,11 +43,11 @@ def test_pipeline_keeps_explicit_empty_input_and_snapshots_output(
     cl, shell_empty, monkeypatch, lines
 ):
     setup_inputs = []
-    execute_andor = cl.execute_andor
+    execute_command = cl.execute_command
 
-    def record_setup(elem, system, execution):
+    def record_setup(command, system, execution):
         setup_inputs.append(execution.stdin)
-        return execute_andor(elem, system, execution)
+        return execute_command(command, system, execution)
 
     def emit(ctx):
         return CommandResult(stdout=lines)
@@ -60,7 +60,7 @@ def test_pipeline_keeps_explicit_empty_input_and_snapshots_output(
         assert "changed upstream" not in ctx.stdin.lines
         return CommandResult(stdout=list(ctx.stdin.lines))
 
-    monkeypatch.setattr(cl, "execute_andor", record_setup)
+    monkeypatch.setattr(cl, "execute_command", record_setup)
     cl.commands.update(emit=emit, probe=probe)
     expected = list(lines)
     assert_success(cl.enter_command("emit | probe", shell_empty), expected)
@@ -535,6 +535,16 @@ def test_last_status_expansion_tracks_previous_command(cl, shell_basic):
     assert status.stderr == []
 
 
+def test_last_status_expansion_tracks_completed_conditional_list(cl, shell_basic):
+    result = cl.enter_command(
+        "cat missing || echo recovered; echo $?", shell_basic
+    )
+
+    assert result.status == 0
+    assert result.stdout == ["recovered", "0"]
+    assert result.stderr == ["File missing does not exist"]
+
+
 def test_var_basic(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("X=5", shell_basic)
     assert CmdResult.stderr == []
@@ -728,6 +738,69 @@ def test_malformed_shell_syntax_returns_a_command_error(cl, shell_basic, command
     assert result.status != 0
     assert result.stderr
     assert tree_state(shell_basic) == before
+
+
+def test_parser_groups_pipelines_before_left_associative_conditionals():
+    ast = CommandParser(
+        lex("echo first || echo second | touch marker")
+    ).parse()
+
+    conditional = ast.parts[0].pipeline
+    assert len(conditional.first.parts) == 1
+    assert [operator for operator, _ in conditional.rest] == ["||"]
+    assert len(conditional.rest[0][1].parts) == 2
+
+
+def test_parser_preserves_double_quote_variable_segment():
+    ast = CommandParser(lex('echo "$NAME"')).parse()
+    word = ast.parts[0].pipeline.first.parts[0].atom.args[1]
+    assert word.parts == [VarUse("NAME")]
+
+
+def test_parser_assigns_background_to_preceding_job_and_allows_trailing_separator():
+    ast = CommandParser(lex("echo hello; sleep 1 &")).parse()
+    assert [job.background for job in ast.parts] == [False, True]
+
+    trailing = CommandParser(lex("echo hello;")).parse()
+    assert len(trailing.parts) == 1
+
+
+def test_parser_rejects_incomplete_redirect_and_unconsumed_closer(cl, shell_empty):
+    for command in ("touch marker >", "touch marker )", "(touch marker"):
+        result = cl.enter_command(command, shell_empty)
+        assert result.status != 0
+        assert result.stderr
+        assert shell_empty.fs.current.access("marker") is None
+
+
+def test_quoted_and_adjacent_word_segments_expand_as_one_argument(cl, shell_empty):
+    result = cl.enter_command(
+        "NAME=alice; echo \"hello $NAME\"world '$NAME' --include='\\*.zzz'",
+        shell_empty,
+    )
+
+    assert result.status == 0
+    assert result.stdout == ["hello aliceworld $NAME --include=\\*.zzz"]
+
+
+def test_redirections_can_be_interleaved_with_arguments(cl, shell_empty):
+    result = cl.enter_command("echo hello > out.txt second", shell_empty)
+
+    assert result.status == 0
+    assert result.stdout == []
+    output = shell_empty.fs.current.access("out.txt")
+    assert output is not None
+    assert output.inode.data == ["hello second"]
+
+
+def test_conditional_operator_applies_to_whole_following_pipeline(cl, shell_empty):
+    result = cl.enter_command(
+        "echo first || echo second | touch marker", shell_empty
+    )
+
+    assert result.status == 0
+    assert result.stdout == ["first"]
+    assert shell_empty.fs.current.access("marker") is None
 
 
 def test_unexpected_subshell_exception_restores_shell_state(cl, shell_basic):
