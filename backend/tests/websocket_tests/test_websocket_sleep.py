@@ -1,3 +1,6 @@
+import pytest
+
+
 def test_websocket_sleep(session):
     session.send_command("sleep 2")
     response = session.receive_until(lambda m: m.get("type") == "command_output")
@@ -19,6 +22,32 @@ def test_sleep_conditional_runs_only_after_scheduler_completion(session):
     )
     assert response["stderr"] == []
     assert response["interaction"] is None
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo before; sleep 1; echo after",
+        "echo before && sleep 1 && echo after",
+    ],
+)
+def test_sleep_composed_commands_emit_each_line_once_and_keep_final_status(
+    session, command
+):
+    session.send_command(command)
+    initial = session.receive_until(lambda message: message.get("type") == "command_output")
+    assert initial["interaction"]["mode"] == "foreground"
+
+    resumed = session.receive_until(
+        lambda message: message.get("type") == "command_output"
+        and message.get("interaction") is None
+    )
+
+    all_output = initial["stdout"] + resumed["stdout"]
+    assert all_output == ["before", "after"]
+    assert initial["stdout"].count("before") + resumed["stdout"].count("before") == 1
+    assert initial["stdout"].count("after") + resumed["stdout"].count("after") == 1
+    assert session.game_session.players["jackson"].shell.last_status == 0
 
 
 def test_sleep_continuation_chains_or_then_and_operators(session):
