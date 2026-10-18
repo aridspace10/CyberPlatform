@@ -146,11 +146,46 @@ class CommandLine:
             shell.last_status = result.status
             return result
         if isinstance(ast, Sequence):
+            shell.continuation = None
             result = self.execute_sequence(ast.parts, sys)
         else:
             result = CommandResult(2, stderr=["syntax error: expected a command"])
         shell.last_status = result.status
         return result
+
+    def _chain_continuation(self, shell: ShellState, callback) -> None:
+        previous = shell.continuation
+
+        def resume(completed: CommandResult) -> CommandResult:
+            result = previous(completed) if previous is not None else completed
+            return callback(result)
+
+        shell.continuation = resume
+
+    def resume_foreground(
+        self, shell: ShellState, process, completed: CommandResult
+    ) -> CommandResult:
+        """Resume suspended AST execution after its foreground process ends."""
+        if shell.foreground_pid == process.pid:
+            shell.foreground_pid = None
+        shell.last_status = completed.status
+        continuation = shell.continuation
+        shell.continuation = None
+        if continuation is None:
+            return completed
+        try:
+            result = continuation(completed)
+            shell.last_status = result.status
+            return result
+        except Exception:
+            if shell.foreground_pid is not None:
+                active = self.process_manager.get_process(shell.foreground_pid)
+                if active is not None:
+                    active.status = ProcessState.TERMINATED
+                    active.exit_status = 1
+            shell.foreground_pid = None
+            shell.continuation = None
+            raise
 
     def execute_pipeline(
         self,
@@ -158,46 +193,124 @@ class CommandLine:
         sys: SystemContext,
         inherited_stdin: InputBuffer | None = None,
     ) -> CommandResult:
-        cmd_result = None
-        prev_pipe = inherited_stdin
-        stderr: list[str] = []
-        for command in pipe.parts:
-            cmd_result = self.execute_command(
-                command, sys, ExecutionContext(stdin=prev_pipe)
-            )
-            stderr.extend(cmd_result.stderr)
-            prev_pipe = InputBuffer.from_lines(cmd_result.stdout)
-            sys.shell.last_status = cmd_result.status
+        return self._run_pipeline(pipe.parts, 0, sys, inherited_stdin, [])
 
-        if cmd_result is None:
+    def _run_pipeline(
+        self,
+        parts: list[Command],
+        index: int,
+        sys: SystemContext,
+        stdin: InputBuffer | None,
+        prior_stderr: list[str],
+    ) -> CommandResult:
+        if index >= len(parts):
             raise Exception("No Cmd Result given")
+        result = self.execute_command(
+            parts[index], sys, ExecutionContext(stdin=stdin)
+        )
+        stderr = prior_stderr + result.stderr
+        sys.shell.last_status = result.status
 
-        cmd_result.stderr = stderr
-        sys.shell.last_status = cmd_result.status
-        return cmd_result
+        if result.interaction:
+            if index + 1 < len(parts):
+                # A suspended command's completed stdout becomes the next stage's
+                # stdin. Earlier pipeline stderr was returned with the prompt already.
+                self._chain_continuation(
+                    sys.shell,
+                    lambda completed: self._run_pipeline(
+                        parts,
+                        index + 1,
+                        sys,
+                        InputBuffer.from_lines(completed.stdout),
+                        [],
+                    ),
+                )
+                return CommandResult(
+                    status=result.status,
+                    stderr=stderr,
+                    kind=result.kind,
+                    interaction=result.interaction,
+                    payload=result.payload,
+                )
+            result.stderr = stderr
+            return result
+
+        if index + 1 == len(parts):
+            result.stderr = stderr
+            return result
+        return self._run_pipeline(
+            parts,
+            index + 1,
+            sys,
+            InputBuffer.from_lines(result.stdout),
+            stderr,
+        )
 
     def execute_andor(
         self, elem: AndOr, sys: SystemContext, exec_ctx: ExecutionContext
     ) -> CommandResult:
         cmd_result = self.execute_pipeline(elem.first, sys, exec_ctx.stdin)
-        stdout = list(cmd_result.stdout)
-        stderr = list(cmd_result.stderr)
         sys.shell.last_status = cmd_result.status
-        for op, cmd in elem.rest:
-            if (op == "&&" and not cmd_result.status) or (
-                op == "||" and cmd_result.status
-            ):
-                tmp_result = self.execute_pipeline(cmd, sys, exec_ctx.stdin)
-                stdout.extend(tmp_result.stdout)
-                stderr.extend(tmp_result.stderr)
-                cmd_result.status = tmp_result.status
-                cmd_result.kind = tmp_result.kind
-                cmd_result.interaction = tmp_result.interaction
-                cmd_result.payload = tmp_result.payload
-                sys.shell.last_status = cmd_result.status
-        cmd_result.stdout = stdout
-        cmd_result.stderr = stderr
-        return cmd_result
+        return self._run_andor_rest(cmd_result, elem.rest, sys, exec_ctx)
+
+    def _run_andor_rest(
+        self,
+        result: CommandResult,
+        rest: list[tuple[str, Pipe]],
+        sys: SystemContext,
+        exec_ctx: ExecutionContext,
+    ) -> CommandResult:
+        if result.interaction:
+            if rest:
+                self._chain_continuation(
+                    sys.shell,
+                    lambda completed: self._run_andor_rest(
+                        completed, rest, sys, exec_ctx
+                    ),
+                )
+            return result
+        if not rest:
+            sys.shell.last_status = result.status
+            return result
+
+        operator, next_pipe = rest[0]
+        should_run = (operator == "&&" and result.status == 0) or (
+            operator == "||" and result.status != 0
+        )
+        if not should_run:
+            return self._run_andor_rest(result, rest[1:], sys, exec_ctx)
+
+        next_result = self.execute_pipeline(next_pipe, sys, exec_ctx.stdin)
+        sys.shell.last_status = next_result.status
+        if next_result.interaction:
+            if rest[1:]:
+                # Results before this suspension have already been returned to the
+                # client; the continuation emits only output produced after resuming.
+                self._chain_continuation(
+                    sys.shell,
+                    lambda completed: self._run_andor_rest(
+                        completed, rest[1:], sys, exec_ctx
+                    ),
+                )
+            return self._combine_results(result, next_result)
+        return self._run_andor_rest(
+            self._combine_results(result, next_result), rest[1:], sys, exec_ctx
+        )
+
+    @staticmethod
+    def _combine_results(
+        first: CommandResult | None, second: CommandResult
+    ) -> CommandResult:
+        if first is None:
+            return second
+        return CommandResult(
+            status=second.status,
+            stdout=first.stdout + second.stdout,
+            stderr=first.stderr + second.stderr,
+            kind=second.kind,
+            interaction=second.interaction,
+            payload=second.payload,
+        )
 
     def execute_command(
         self, command: Command, sys: SystemContext, exec_ctx: ExecutionContext
@@ -229,21 +342,23 @@ class CommandLine:
                 heredoc_command.post_redirs = [
                     item for item in heredoc_command.post_redirs if item.op != "<<"
                 ]
+                proc = self.process_manager.create_process(
+                    f"heredoc {redir.target}",
+                    parent=self.process_manager.default_parent_pid,
+                )
 
                 def complete_heredoc(
-                    lines: list[str], pending_command: Command = heredoc_command
+                    lines: list[str],
+                    pending_command: Command = heredoc_command,
+                    heredoc_process=proc,
                 ):
                     result = self.execute_command(
                         pending_command,
                         sys,
                         ExecutionContext(stdin=InputBuffer.from_lines(lines)),
                     )
+                    heredoc_process.exit_status = result.status
                     return result.stdout, result.stderr
-
-                proc = self.process_manager.create_process(
-                    f"heredoc {redir.target}",
-                    parent=self.process_manager.default_parent_pid,
-                )
                 proc.program = HeredocProgram(
                     proc,
                     redir.target,
@@ -322,28 +437,43 @@ class CommandLine:
         sys: SystemContext,
         inherited_stdin: InputBuffer | None = None,
     ) -> CommandResult:
-        stdout: list[str] = []
-        stderr: list[str] = []
-        cmd_result: CommandResult | None = None
-        for job in parts:
-            # background jobs not yet supported, just execute inline
-            cmd_result = self.execute_andor(
-                job.pipeline, sys, ExecutionContext(stdin=inherited_stdin)
-            )
-            stdout.extend(cmd_result.stdout)
-            stderr.extend(cmd_result.stderr)
-            if cmd_result.interaction is not None:
-                break
-        if cmd_result is None:
+        return self._run_sequence(parts, 0, sys, inherited_stdin)
+
+    def _run_sequence(
+        self,
+        parts: list[Job],
+        index: int,
+        sys: SystemContext,
+        stdin: InputBuffer | None,
+        accumulated: CommandResult | None = None,
+    ) -> CommandResult:
+        if index >= len(parts):
             raise Exception("cmd being empty")
-        return CommandResult(
-            status=cmd_result.status,
-            stdout=stdout,
-            stderr=stderr,
-            kind=cmd_result.kind,
-            interaction=cmd_result.interaction,
-            payload=cmd_result.payload,
-        )
+        job = parts[index]
+        if job.background:
+            return CommandResult(
+                status=2, stderr=["background execution is not supported"]
+            )
+
+        result = self.execute_andor(job.pipeline, sys, ExecutionContext(stdin=stdin))
+        aggregate = self._combine_results(accumulated, result)
+        if result.interaction and index + 1 < len(parts):
+            self._chain_continuation(
+                sys.shell,
+                lambda completed: self._run_sequence(
+                    parts,
+                    index + 1,
+                    sys,
+                    stdin,
+                    self._combine_results(accumulated, completed),
+                ),
+            )
+            # Defer completed jobs' output while the list is suspended. The resumed
+            # result includes that prefix once, along with the commands that follow.
+            return result
+        if result.interaction or index + 1 == len(parts):
+            return aggregate
+        return self._run_sequence(parts, index + 1, sys, stdin, aggregate)
 
     def execute(
         self, args: list[str], fdin: InputBuffer, sys: SystemContext
