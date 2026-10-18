@@ -1193,7 +1193,7 @@ class CommandLine:
 
         show_filenames = force_filename or (
             not suppress_filename
-            and ((count_lines and (len(files) > 1 or len(candidates) > 1)))
+            and (len(files) > 1 or len(candidates) > 1)
         )
         stdout: list[str] = []
         any_selected = False
