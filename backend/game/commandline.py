@@ -1017,6 +1017,13 @@ class CommandLine:
                 action = "Moved" if target_directory else "Renamed"
                 connector = "to" if target_directory else "->"
                 stdout.append(f"{action} {file} {connector} {target}")
+
+        def update_subtree_depth(node: FileNode) -> int:
+            child_depths = [update_subtree_depth(child) for child in node.items]
+            node.depth = max((depth + 1 for depth in child_depths), default=0)
+            return node.depth
+
+        update_subtree_depth(fs.filehead)
         return CommandResult(0, stdout, stderr)
 
     def grep(self, ctx: CommandContext) -> CommandResult:

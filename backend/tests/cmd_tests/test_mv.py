@@ -138,6 +138,29 @@ def test_mv_moves_directory_into_existing_directory(cl, shell_empty):
     assert len([item for item in target.items if item.name == "source-dir"]) == 1
 
 
+def test_mv_nested_directory_move_recalculates_subtree_depth(cl, shell_empty):
+    fs = shell_empty.fs
+    fs.add_directory("branch")
+    fs.add_directory("branch/nested")
+    fs.add_file("branch/nested/leaf")
+    fs.add_directory("destination")
+    fs.add_directory("destination/deep")
+    branch = fs.current.access("branch")
+    destination = fs.current.access("destination")
+    deep = destination.access("deep")
+
+    result = cl.enter_command("mv branch destination/deep", shell_empty)
+
+    assert result.status == 0
+    assert fs.current.access("branch") is None
+    assert deep.access("branch") is branch
+    assert branch.parent is deep
+    assert branch.depth == 2
+    assert deep.depth == 3
+    assert destination.depth == 4
+    assert fs.filehead.depth == 5
+
+
 @pytest.mark.parametrize(
     "command",
     [
