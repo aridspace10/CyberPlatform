@@ -1,5 +1,9 @@
 # Background jobs
 
+This implementation depends on the shell grammar in PR #48 and the foreground
+continuation behavior in PR #50. Merge those changes in order: #48, then #50,
+then CYB-37.
+
 Append `&` to a shell job to schedule it in the background. For example,
 `echo before & sleep 2 & echo after` returns the foreground output and a
 `[job PID] started COMMAND` line without waiting for either background job.

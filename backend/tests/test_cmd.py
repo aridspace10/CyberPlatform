@@ -9,6 +9,7 @@ from game.filesystem import FileSystem
 from game.inode import Inode
 from game.InputBuffer import InputBuffer
 from game.Parser import CommandParser, VarUse, lex
+from game.Scheduler import Scheduler
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import descendants, tree_state
@@ -68,10 +69,18 @@ def test_pipeline_keeps_explicit_empty_input_and_snapshots_output(
     assert isinstance(setup_inputs[1], InputBuffer)
 
 
-def test_background_job_is_explicitly_rejected(cl, shell_empty):
+def test_background_job_is_scheduled_without_foreground_interaction(cl, shell_empty):
     result = cl.enter_command("echo unsupported &", shell_empty)
-    assert result.status == 2
-    assert result.stderr == ["background execution is not supported"]
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["[job 1] started echo unsupported"]
+    assert shell_empty.foreground_pid is None
+
+    job = cl.process_manager.get_process(1)
+    assert job is not None
+    Scheduler(cl.process_manager).tick()
+    assert job.stdout == ["unsupported"]
+    assert job.exit_status == 0
 
 
 @pytest.mark.parametrize("command", ["probe", "probe | probe", "probe < f1.txt"])
