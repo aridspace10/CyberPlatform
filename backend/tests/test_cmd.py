@@ -520,7 +520,7 @@ def test_subshell_inherits_pipeline_stdin_and_restores_nested_cwd(cl, shell_basi
 
     result = cl.enter_command("cd d1; ((cd ..; pwd)); pwd", shell_basic)
     assert result.status == 0
-    assert result.stdout == ["root", "root/d1"]
+    assert result.stdout == ["/", "/d1"]
     assert shell_basic.fs.current is shell_basic.fs.filehead.access("d1")
 
 

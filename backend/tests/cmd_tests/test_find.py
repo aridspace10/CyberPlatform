@@ -45,7 +45,7 @@ def test_find_multiple_operands_from_non_root_does_not_navigate(cl, shell_basic)
 
     assert result.status == 0
     assert result.stderr == []
-    assert result.stdout == ["./d1", ".", "./d1"]
+    assert result.stdout == [".", "..", "../d1"]
     assert shell_basic.fs.current is directory
     assert shell_basic.fs.cwd == "/d1"
     assert shell_basic.cwd == "/d1"
