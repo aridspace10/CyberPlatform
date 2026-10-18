@@ -14,13 +14,14 @@ class ProcessState(StrEnum):
 
 
 class Process:
-    _next_id = 1
-
     def __init__(
-        self, command: str, parent: int, status: ProcessState = ProcessState.RUNNING
+        self,
+        pid: int,
+        command: str,
+        parent: int,
+        status: ProcessState = ProcessState.RUNNING,
     ):
-        self.pid: int = Process._next_id
-        Process._next_id += 1
+        self.pid: int = pid
         self.ppid: int = parent
         self.command: str = command
         self.status: str = status

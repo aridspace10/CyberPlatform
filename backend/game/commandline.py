@@ -213,7 +213,8 @@ class CommandLine:
                     return result.stdout, result.stderr
 
                 proc = self.process_manager.create_process(
-                    f"heredoc {redir.target}", parent=1
+                    f"heredoc {redir.target}",
+                    parent=self.process_manager.default_parent_pid,
                 )
                 proc.program = HeredocProgram(
                     proc,
@@ -350,7 +351,8 @@ class CommandLine:
 
         # Create process
         proc = self.process_manager.create_process(
-            f"sleep {" ".join(ctx.args)}", parent=1
+            f"sleep {" ".join(ctx.args)}",
+            parent=self.process_manager.default_parent_pid,
         )
 
         proc.program = SleepProgram(proc, ticks=val)
@@ -1828,7 +1830,8 @@ class CommandLine:
 
         if interactive:
             proc = self.process_manager.create_process(
-                f"rm {" ".join(files)}", parent=1
+                f"rm {" ".join(files)}",
+                parent=self.process_manager.default_parent_pid,
             )
             proc.program = RmProgram(
                 proc,
