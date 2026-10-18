@@ -28,6 +28,7 @@ class DevShell:
         self.scheduler = Scheduler(self.process_manager)
         self.commandline = CommandLine(self.process_manager, NetworkManager())
         self.shell.last_status = 0
+        self.background_output: list[tuple[int, int, list[str], list[str]]] = []
         if not self.empty:
             self.shell.fs.add_directory("logs")
             for path, lines in {
@@ -83,8 +84,32 @@ class DevShell:
         proc = self.foreground
         if proc is None or proc.status == ProcessState.TERMINATED:
             self.shell.foreground_pid = None
-        # This console has one shell and no WebSocket event consumers.
+        for event in self.process_manager.events:
+            process = getattr(event, "process", None)
+            if process is not None and process.pid in self.shell.background_jobs:
+                self.background_output.append(
+                    (
+                        process.pid,
+                        process.exit_status,
+                        process.stdout,
+                        process.stderr,
+                    )
+                )
+                self.shell.background_jobs.pop(process.pid, None)
+                self.shell.background_children.pop(process.pid, None)
         self.process_manager.events.clear()
+
+    def take_background_output(self) -> list[tuple[int, int, list[str], list[str]]]:
+        output, self.background_output = self.background_output, []
+        return output
+
+    def cancel_background_job(self, pid: int) -> bool:
+        return self.commandline.cancel_background_job(pid, self.shell)
+
+    def shutdown(self) -> None:
+        for pid in list(self.shell.background_jobs):
+            self.cancel_background_job(pid)
+        self.reap()
 
     def interrupt(self) -> None:
         proc = self.foreground
@@ -150,6 +175,8 @@ class DevShell:
             if proc.status != ProcessState.TERMINATED:
                 time.sleep(1)
             self.reap()
+        if self.shell.background_jobs:
+            self.reap()
 
 
 def write_lines(lines: list[str], stream: TextIO) -> None:
@@ -164,6 +191,10 @@ def run_line(console: DevShell, raw: str, show_status: bool) -> None:
         write_lines(result.stdout, sys.stdout)
         write_lines(result.stderr, sys.stderr)
         console.wait_for_foreground()
+        for pid, status, stdout, stderr in console.take_background_output():
+            write_lines([f"[job {pid}] completed with status {status}"], sys.stdout)
+            write_lines(stdout, sys.stdout)
+            write_lines(stderr, sys.stderr)
     except KeyboardInterrupt:
         console.interrupt()
         print("^C", file=sys.stderr)
@@ -186,6 +217,7 @@ def repl(console: DevShell, show_status: bool = False) -> int:
             raw = input(console.prompt)
         except EOFError:
             console.interrupt()
+            console.shutdown()
             print()
             return 0
         except KeyboardInterrupt:
@@ -196,6 +228,7 @@ def repl(console: DevShell, show_status: bool = False) -> int:
         if console.foreground is None:
             control = raw.strip()
             if control in (":exit", "exit", "quit"):
+                console.shutdown()
                 return 0
             if control == ":reset":
                 console.reset()
@@ -206,10 +239,24 @@ def repl(console: DevShell, show_status: bool = False) -> int:
             if control == ":status":
                 print(console.last_status)
                 continue
+            if control.startswith(":cancel "):
+                try:
+                    pid = int(control.split(maxsplit=1)[1])
+                except (IndexError, ValueError):
+                    print("Usage: :cancel PID", file=sys.stderr)
+                else:
+                    print(
+                        "Background job cancelled"
+                        if console.cancel_background_job(pid)
+                        else "No active background job with that PID",
+                        file=sys.stderr,
+                    )
+                continue
             if control == ":help":
                 print("Commands: " + " ".join(sorted(console.commandline.commands)))
                 print(":reset  Reset files and shell state (keeps the current code).")
                 print(":status Show the last returned status; --status shows each one.")
+                print(":cancel PID Cancel a background job.")
                 print(":exit   Quit. Ctrl+C cancels foreground input or waiting.")
                 continue
         run_line(console, raw, show_status)

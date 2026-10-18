@@ -214,6 +214,23 @@ async def websocket_endpoint(
                     }
                 )
 
+            elif msg_type == "cancel_background_job":
+                player = session.players.get(username)
+                pid = data.get("job_id")
+                cancelled = (
+                    player is not None
+                    and isinstance(pid, int)
+                    and session.commandline.cancel_background_job(pid, player.shell)
+                )
+                await session.send_to(
+                    websocket,
+                    {
+                        "type": "background_job_cancelled",
+                        "job_id": pid,
+                        "cancelled": bool(cancelled),
+                    },
+                )
+
             elif msg_type == "command":
                 player = session.players.get(username)
                 if not player:

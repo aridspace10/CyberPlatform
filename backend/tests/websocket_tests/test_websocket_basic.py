@@ -11,6 +11,63 @@ def test_command_output_contains_echo(session):
     assert "hello" in output_msg["stdout"]
 
 
+def test_background_job_keeps_prompt_available_and_streams_completion(session):
+    session.send_command("echo background & echo foreground")
+    response = session.receive_until(
+        lambda message: message.get("type") == "command_output"
+    )
+
+    assert response["stdout"][0].startswith("[job ")
+    assert response["stdout"][-1] == "foreground"
+    assert response["interaction"] is None
+    assert session.game_session.players["jackson"].shell.foreground_pid is None
+
+    completion = session.receive_until(
+        lambda message: message.get("type") == "background_job_complete"
+    )
+    assert completion["stdout"] == ["background"]
+    assert completion["stderr"] == []
+    assert completion["status"] == 0
+
+
+def test_background_job_cancellation_stops_its_child(session):
+    session.send_command("sleep 30 &")
+    response = session.receive_until(
+        lambda message: message.get("type") == "command_output"
+    )
+    job_id = int(response["stdout"][0].split()[1].rstrip("]"))
+    session.ws.send_json(
+        {"type": "cancel_background_job", "job_id": job_id}
+    )
+    cancelled = session.receive_until(
+        lambda message: message.get("type") == "background_job_cancelled"
+    )
+    assert cancelled["cancelled"] is True
+    completion = session.receive_until(
+        lambda message: message.get("type") == "background_job_complete"
+    )
+    assert completion["job_id"] == job_id
+    assert completion["status"] == 130
+    assert "background job cancelled" in completion["stderr"]
+
+
+def test_background_job_uses_launch_directory_without_changing_foreground(session):
+    session.send_command("mkdir launch-dir && cd launch-dir && pwd")
+    session.receive_until(lambda message: message.get("type") == "command_output")
+    session.send_command("cd / && pwd & pwd")
+    response = session.receive_until(
+        lambda message: message.get("type") == "command_output"
+    )
+
+    assert response["stdout"][-1] == "root/launch-dir"
+    completion = session.receive_until(
+        lambda message: message.get("type") == "background_job_complete"
+    )
+    assert completion["stdout"] == ["root"]
+    assert completion["status"] == 0
+    assert session.game_session.players["jackson"].shell.cwd == "/launch-dir"
+
+
 def test_bad_input_and_unexpected_command_error_keep_websocket_usable(
     session, monkeypatch, tmp_path
 ):

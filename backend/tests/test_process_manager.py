@@ -1,8 +1,10 @@
+import asyncio
+
 from game.Events import ProcessTerminatedEvent
 from game.Process import ProcessState
 from game.Scheduler import Scheduler
 from game.ShellState import ShellState
-from network.SessionManger import GameSession
+from network.SessionManger import GameSession, Player
 
 
 def _session_shell():
@@ -141,3 +143,91 @@ def test_interleaved_sessions_keep_sleep_rm_and_heredoc_processes_isolated():
         for event in manager_b.events
     )
     assert manager_a.get_process(sleep_a.pid) is sleep_a
+
+
+
+
+def test_background_failure_reports_nonzero_status(cl, shell_empty):
+    result = cl.enter_command("unknown-command &", shell_empty)
+    job = cl.process_manager.get_process(next(iter(shell_empty.background_jobs)))
+    assert result.interaction is None
+    assert job is not None
+
+    Scheduler(cl.process_manager).tick()
+
+    assert job.status == ProcessState.TERMINATED
+    assert job.exit_status == 1
+    assert job.stderr == ["Unknown command given"]
+
+
+def test_session_shutdown_cleans_up_background_processes():
+    session = GameSession("background-shutdown")
+    player = Player(None, "worker", "1")
+    session.players[player.username] = player
+    session.commandline.enter_command("sleep 30 &", player.shell)
+    job_id = next(iter(player.shell.background_jobs))
+    session.scheduler.tick()
+    children = player.shell.background_children[job_id]
+    assert children
+
+    asyncio.run(session.stop_scheduler())
+
+    assert job_id not in session.process_manager.processes
+    assert all(child.pid not in session.process_manager.processes for child in children)
+    assert player.shell.background_jobs == {}
+
+
+def test_background_job_runs_on_scheduler_and_reports_its_result(cl, shell_empty):
+    result = cl.enter_command("echo before & echo foreground", shell_empty)
+
+    assert result.stdout == ["[job 1] started echo before", "foreground"]
+    assert shell_empty.foreground_pid is None
+    job = cl.process_manager.get_process(1)
+    assert job is not None
+    assert job.command == "echo before"
+    assert job.status == ProcessState.RUNNING
+    assert job.stdout == []
+
+    Scheduler(cl.process_manager).tick()
+
+    assert job.status == ProcessState.TERMINATED
+    assert job.stdout == ["before"]
+    assert job.exit_status == 0
+    assert shell_empty.last_status == result.status
+    assert shell_empty.foreground_pid is None
+
+
+def test_background_sleep_does_not_take_foreground_and_can_be_cancelled(
+    cl, shell_empty
+):
+    result = cl.enter_command("sleep 30 &", shell_empty)
+    job_id = next(iter(shell_empty.background_jobs))
+    job = cl.process_manager.get_process(job_id)
+
+    assert result.interaction is None
+    assert shell_empty.foreground_pid is None
+    assert job is not None
+    Scheduler(cl.process_manager).tick()
+    children = shell_empty.background_children[job_id]
+    assert len(children) == 1
+    assert children[0].program.remaining == 30
+
+    assert cl.cancel_background_job(job_id, shell_empty)
+    assert children[0].status == ProcessState.TERMINATED
+    assert job.exit_status == 130
+    Scheduler(cl.process_manager).tick()
+    assert any(event.process is job for event in cl.process_manager.events)
+
+
+def test_background_interactive_command_fails_without_stealing_prompt(cl, shell_empty):
+    shell_empty.fs.add_file("victim")
+    result = cl.enter_command("rm -i victim &", shell_empty)
+    job = cl.process_manager.get_process(next(iter(shell_empty.background_jobs)))
+
+    assert result.interaction is None
+    assert shell_empty.foreground_pid is None
+    Scheduler(cl.process_manager).tick()
+    assert job is not None
+    assert job.exit_status == 1
+    assert "cannot wait for interactive input" in job.stderr[0]
+    assert shell_empty.fs.get_file("victim") is not None
