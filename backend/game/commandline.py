@@ -999,7 +999,7 @@ class CommandLine:
             option_arg = args.pop(0)
             for option in option_arg[1:]:
                 if option in ("r", "R"):
-                    recursive = option == "r"
+                    recursive = True
                 elif option == "v":
                     verbose = True
                 else:
@@ -1010,6 +1010,10 @@ class CommandLine:
             return CommandResult(1, stderr=["cp: expected at least two arguments"])
 
         sources, target_path = args[:-1], args[-1]
+        if not target_path:
+            return CommandResult(1, stderr=["cp: invalid destination ''"])
+        if any(not source_path for source_path in sources):
+            return CommandResult(1, stderr=["cp: cannot stat '': Invalid path"])
         fs = ctx.system.fs
         stdout: list[str] = []
         stderr: list[str] = []
@@ -1041,6 +1045,15 @@ class CommandLine:
             resolved_sources.append((source_path, source))
 
         target_type = target.get_type() if target_exists else None
+        if (
+            len(resolved_sources) > 1
+            and target_exists
+            and target_type != NodeType.DIRECTORY
+        ):
+            return CommandResult(
+                1, stderr=[f"cp: target '{target_path}' is not a directory"]
+            )
+
         for source_path, source in resolved_sources:
             if target_exists and source is target:
                 return CommandResult(
@@ -1076,18 +1089,37 @@ class CommandLine:
                     )
                 ancestor = ancestor.parent
 
+        def clone_inode(source_inode: Inode) -> Inode:
+            inode = Inode(source_inode.type)
+            inode.data = copy.deepcopy(source_inode.data)
+            inode.has_trailing_newline = source_inode.has_trailing_newline
+            inode.permissions = copy.deepcopy(source_inode.permissions)
+            return inode
+
         def clone_with_name(node: FileNode, name: str, parent: FileNode) -> FileNode:
-            clone = copy.deepcopy(node)
-            clone.name = name
-            clone.parent = parent
-
-            def reset_parents(item: FileNode) -> None:
-                for child in item.items:
-                    child.parent = item
-                    reset_parents(child)
-
-            reset_parents(clone)
+            clone = FileNode(parent, name, clone_inode(node.inode))
+            clone.depth = node.depth
+            clone.items = [
+                clone_with_name(child, child.name, clone) for child in node.items
+            ]
             return clone
+
+        if target_exists and target_type == NodeType.DIRECTORY:
+            planned_names: set[str] = set()
+            for _, source in resolved_sources:
+                if source.get_type() == NodeType.DIRECTORY and not recursive:
+                    continue
+                if (
+                    source.name in planned_names
+                    or target.access(source.name) is not None
+                ):
+                    return CommandResult(
+                        1,
+                        stderr=[
+                            f"cp: cannot create '{target_path}/{source.name}': File exists"
+                        ],
+                    )
+                planned_names.add(source.name)
 
         for source_path, source in resolved_sources:
             source_type = source.get_type()
@@ -1095,21 +1127,11 @@ class CommandLine:
                 continue
             if target_exists and target_type == NodeType.DIRECTORY:
                 copied = clone_with_name(source, source.name, target)
-                if target.access(copied.name) is not None:
-                    return CommandResult(
-                        1,
-                        stdout,
-                        stderr
-                        + [
-                            f"cp: cannot create '{target_path}/{copied.name}': "
-                            "File exists"
-                        ],
-                    )
                 target.items.append(copied)
             elif target_exists and target_type == NodeType.FILE:
                 if source_type != NodeType.FILE:
                     continue
-                target.inode = copy.deepcopy(source.inode)
+                target.inode = clone_inode(source.inode)
             else:
                 if target_parent is None or target_name is None:
                     return CommandResult(
