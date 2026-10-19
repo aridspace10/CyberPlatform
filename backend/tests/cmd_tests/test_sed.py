@@ -73,6 +73,87 @@ def test_sed_invalid_regex_does_not_create_backup_or_mutate_file(cl, shell_basic
     assert shell_basic.fs.get_file("f1.txt.bak") is None
 
 
+def test_sed_output_only_preserves_source_data_and_mtime(cl, shell_sed):
+    source = shell_sed.fs.current.access("f1.txt")
+    before_data = list(source.inode.data)
+    before_mtime = source.inode.mtime
+    before_newline = source.inode.has_trailing_newline
+
+    result = cl.enter_command("sed 's/cat/changed/' f1.txt", shell_sed)
+
+    assert result.status == 0
+    assert result.stdout == ["changed wolf cat", "hi changed"]
+    assert source.inode.data == before_data
+    assert source.inode.mtime == before_mtime
+    assert source.inode.has_trailing_newline is before_newline
+
+
+def test_sed_output_only_multiple_expressions_leave_source_unchanged(cl, shell_sed):
+    source = shell_sed.fs.current.access("f1.txt")
+    before_data = list(source.inode.data)
+    before_mtime = source.inode.mtime
+
+    result = cl.enter_command(
+        "sed -e 's/cat/dog/' -e 's/dog/wolf/' f1.txt", shell_sed
+    )
+
+    assert result.status == 0
+    assert result.stdout == ["wolf wolf cat", "hi wolf"]
+    assert source.inode.data == before_data
+    assert source.inode.mtime == before_mtime
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "has_trailing_newline"),
+    [("shell_trailing_newline", True), ("shell_no_final_newline", False)],
+)
+def test_sed_in_place_backup_preserves_original_newline_metadata(
+    cl, request, fixture_name, has_trailing_newline
+):
+    shell = request.getfixturevalue(fixture_name)
+    source = shell.fs.current.access("t.txt")
+    original_data = list(source.inode.data)
+    source.inode.has_trailing_newline = has_trailing_newline
+
+    result = cl.enter_command("sed -i.bak 's/a/A/' t.txt", shell)
+
+    backup = shell.fs.current.access("t.txt.bak")
+    assert result.status == 0
+    assert result.stdout == []
+    assert result.stderr == []
+    assert source.inode.data == ["A", "b"]
+    assert backup.inode.data == original_data
+    assert backup.inode.has_trailing_newline is has_trailing_newline
+    assert source.inode.has_trailing_newline is has_trailing_newline
+
+
+def test_sed_in_place_without_suffix_only_updates_source(cl, shell_sed):
+    source = shell_sed.fs.current.access("f1.txt")
+
+    result = cl.enter_command("sed -i 's/cat/dog/g' f1.txt", shell_sed)
+
+    assert result.status == 0
+    assert result.stdout == []
+    assert source.inode.data == ["dog wolf dog", "hi dog"]
+    assert shell_sed.fs.current.access("f1.txt.bak") is None
+
+
+def test_sed_late_expression_error_leaves_source_and_backup_unchanged(cl, shell_sed):
+    source = shell_sed.fs.current.access("f1.txt")
+    original_data = list(source.inode.data)
+    original_mtime = source.inode.mtime
+
+    result = cl.enter_command(
+        "sed -i.bak -e 's/cat/dog/' -e 's/wolf/howl/z' f1.txt", shell_sed
+    )
+
+    assert result.status != 0
+    assert result.stderr == ["sed: unknown expression flag - z"]
+    assert source.inode.data == original_data
+    assert source.inode.mtime == original_mtime
+    assert shell_sed.fs.current.access("f1.txt.bak") is None
+
+
 def test_sed_empty_expression_is_a_command_error(cl, shell_basic):
     result = cl.enter_command('sed ""', shell_basic)
     assert result.status != 0

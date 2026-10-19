@@ -113,6 +113,9 @@ def _parse_script(script: str) -> list[SedCommand]:
         except ValueError:
             raise ValueError("sed: substution expects s/pattern/replacement/") from None
         replacement, index = _read_delimited(script, index, delimiter)
+        # This game supports global, case-insensitive, print-on-change, and
+        # numeric occurrence flags. Parse all script flags before processing
+        # inputs so an invalid later expression cannot leave partial edits.
         flags = ""
         occurrence_text = ""
         while index < len(script) and script[index] not in ";\n\r" and not script[index].isspace():
@@ -184,10 +187,12 @@ def _command_selected(
 
 def _apply_commands(
     lines: tuple[str, ...], commands: list[SedCommand], suppress_print: bool
-) -> list[str]:
+) -> tuple[list[str], list[str], int | None]:
     output: list[str] = []
+    edited_lines: list[str] = []
     ranges: dict[int, bool] = {}
     line_count = len(lines)
+    last_source_index = None
     for line_number, original in enumerate(lines, 1):
         line = original
         deleted = False
@@ -233,9 +238,12 @@ def _apply_commands(
                 if changed and command.print_substitution:
                     printed.append(line)
         output.extend(printed)
-        if not deleted and not suppress_print:
-            output.append(line)
-    return output
+        if not deleted:
+            edited_lines.append(line)
+            last_source_index = line_number - 1
+            if not suppress_print:
+                output.append(line)
+    return output, edited_lines, last_source_index
 
 
 def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandResult:
@@ -335,7 +343,9 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
                 continue
             content = InputBuffer.from_file(source)
 
-        new = _apply_commands(content.lines, commands, suppress_print)
+        output, new, last_source_index = _apply_commands(
+            content.lines, commands, suppress_print
+        )
         if in_place:
             assert source is not None and source.parent is not None
             if backup_suffix:
@@ -346,12 +356,18 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
                     continue
                 backup_inode = Inode(NodeType.FILE)
                 backup_inode.set_data(list(content.lines))
+                backup_inode.has_trailing_newline = content.has_trailing_newline
                 error = source.parent.add_child(backup_name, backup_inode)
                 if error:
                     stderr.append(f"sed: {error}")
                     status = 1
                     continue
             source.set_data(new)
+            source.inode.has_trailing_newline = bool(new) and (
+                content.has_trailing_newline
+                if last_source_index == len(content.lines) - 1
+                else True
+            )
         else:
-            stdout.extend(new)
+            stdout.extend(output)
     return CommandResult(status, stdout, stderr)
