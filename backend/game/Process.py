@@ -29,6 +29,7 @@ class Process:
         self.stderr: list[str] = []
         self.foreground: bool = False
         self.program: Program | None = None
+        self.exit_status: int = 0
 
     def __repr__(self):
         return f"PID={self.pid} PPID={self.ppid} {self.command}"

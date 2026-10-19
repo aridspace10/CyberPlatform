@@ -131,3 +131,73 @@ def test_heredoc_executes_captured_input(session):
     assert response["stdout"] == ["hello from heredoc"]
     assert response["stderr"] == []
     assert response["interaction"] is None
+
+
+def test_heredoc_pipeline_resumes_after_delimiter(session):
+    session.send_command("cat << EOF | cut -d : -f 1")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["interaction"] == {"mode": "foreground", "prompt": ">"}
+
+    session.send_command("alice:admin")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["stdout"] == []
+    assert response["interaction"] == {"mode": "foreground", "prompt": ">"}
+
+    session.send_command("EOF")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["stdout"] == ["alice"]
+    assert response["stderr"] == []
+    assert response["interaction"] is None
+
+
+def test_heredoc_redirection_resumes_following_list_command(session):
+    session.send_command("cat << EOF > input.txt; echo saved")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["interaction"] == {"mode": "foreground", "prompt": ">"}
+    session.send_command("contents")
+    session.receive_until(lambda m: m.get("type") == "command_output")
+    session.send_command("EOF")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["stdout"] == ["saved"]
+    assert response["interaction"] is None
+
+    session.send_command("cat input.txt")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["stdout"] == ["contents"]
+
+
+def test_rm_interactive_completion_resumes_conditional(session):
+    session.send_command("touch remove-me.txt")
+    session.receive_until(lambda m: m.get("type") == "command_output")
+    session.send_command("rm -i remove-me.txt && echo removed")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["interaction"]["prompt"].startswith("rm: remove regular file")
+
+    session.send_command("y")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["stdout"] == ["removed"]
+    assert response["interaction"] is None
+    session.send_command("ls remove-me.txt")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["stderr"]
+
+
+def test_sequential_foreground_programs_each_receive_input(session):
+    session.send_command("touch next.txt")
+    session.receive_until(lambda m: m.get("type") == "command_output")
+    session.send_command("cat << EOF; rm -i next.txt")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["interaction"] == {"mode": "foreground", "prompt": ">"}
+
+    session.send_command("captured")
+    session.receive_until(lambda m: m.get("type") == "command_output")
+    session.send_command("EOF")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["interaction"]["prompt"].startswith("rm: remove regular file")
+
+    session.send_command("y")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["interaction"] is None
+    session.send_command("ls next.txt")
+    response = session.receive_until(lambda m: m.get("type") == "command_output")
+    assert response["stderr"]

@@ -52,7 +52,10 @@ class RmProgram(Program):
 
     def start(self) -> ProgramOutput:
         self.process.status = ProcessState.RUNNING
-        return self.next_file()
+        output = self.next_file()
+        if output[1]:
+            self.process.exit_status = 1
+        return output
 
     def next_file(self) -> ProgramOutput:
         stderr = []
@@ -104,6 +107,8 @@ class RmProgram(Program):
 
         stdout, next_errors = self.next_file()
         stderr.extend(next_errors)
+        if stderr:
+            self.process.exit_status = 1
         return stdout, stderr
 
 

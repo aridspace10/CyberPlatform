@@ -194,6 +194,59 @@ def test_interrupt_during_wait_returns_control_to_shell(monkeypatch, capsys):
     assert captured.out == "recovered\n"
 
 
+def test_sleep_continuation_runs_after_scheduler_tick(monkeypatch, capsys):
+    console = DevShell(empty=True)
+    monkeypatch.setattr("game.dev_shell.time.sleep", lambda _seconds: None)
+    run_line(console, "sleep 1 && echo completed", False)
+    assert console.foreground is None
+    assert console.last_status == 0
+    assert capsys.readouterr().out == "completed\n"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo before; sleep 1; echo after",
+        "echo before && sleep 1 && echo after",
+    ],
+)
+def test_sleep_sequence_retains_output_before_and_after_foreground_job(
+    monkeypatch, capsys, command
+):
+    console = DevShell(empty=True)
+    monkeypatch.setattr("game.dev_shell.time.sleep", lambda _seconds: None)
+
+    run_line(console, command, False)
+
+    assert console.foreground is None
+    assert console.last_status == 0
+    assert capsys.readouterr().out == "before\nafter\n"
+
+
+def test_sleep_continuation_propagates_following_command_status(monkeypatch, capsys):
+    console = DevShell(empty=True)
+    monkeypatch.setattr("game.dev_shell.time.sleep", lambda _seconds: None)
+    run_line(console, "sleep 1 && missing-command", False)
+    assert console.foreground is None
+    assert console.last_status == 1
+    assert "Unknown command given" in capsys.readouterr().err
+
+
+def test_interrupt_resumes_failure_conditional(monkeypatch, capsys):
+    console = DevShell(empty=True)
+
+    def interrupt(_seconds):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("game.dev_shell.time.sleep", interrupt)
+    run_line(console, "sleep 100 || echo cancelled", False)
+    captured = capsys.readouterr()
+    assert captured.out == "cancelled\n"
+    assert captured.err == "^C\n"
+    assert console.foreground is None
+    assert console.last_status == 0
+
+
 def test_interrupt_during_prompt_discards_pending_input(monkeypatch, capsys):
     console = DevShell(empty=True)
     inputs = iter(
