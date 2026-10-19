@@ -85,21 +85,15 @@ def test_sort_random(cl, shell_basic: ShellState):
 
 
 def test_sort_dups(cl, shell_basic: ShellState):
-    names = setup_names(shell_basic, "f2.txt")
-    name = random.choice(names)
-    names = names.copy()
-    print(f"Extra name is {name}")
+    setup_names(shell_basic, "f2.txt")
     fn = shell_basic.fs.get_file("f2.txt")
     assert isinstance(fn, FileNode)
+    input_lines = fn.get_data()
+    name = input_lines[0]
     fn.append_data([name])
-    print(fn.get_data())
     CmdResult = cl.enter_command("sort -u f2.txt", shell_basic)
     assert CmdResult.stderr == []
-    # assert len(CmdResult.stdout) == len(names)
-    print(CmdResult.stdout)
-    print(names)
-    for i in range(0, len(names)):
-        assert CmdResult.stdout[i] == names[i]
+    assert CmdResult.stdout == sorted(set(input_lines))
 
 
 def test_sort_output(cl, shell_basic: ShellState):

@@ -169,6 +169,28 @@ def test_console_waits_for_scheduler_then_accepts_next_command(monkeypatch, caps
     assert capsys.readouterr().out == "ready\n"
 
 
+def test_background_console_job_does_not_claim_foreground_and_collects_output():
+    console = DevShell(empty=True)
+    result = console.execute("echo background &")
+
+    assert result.stdout[0].startswith("[job ")
+    assert console.shell.foreground_pid is None
+    console.reap()
+    completed = console.take_background_output()
+    assert completed == [(100, 0, ["background"], [])]
+
+
+def test_background_sleep_allows_a_foreground_command():
+    console = DevShell(empty=True)
+    result = console.execute("sleep 5 &")
+
+    assert result.interaction is None
+    assert console.shell.foreground_pid is None
+    console.reap()
+    response = console.execute("echo foreground")
+    assert response.stdout == ["foreground"]
+
+
 def test_launcher_waits_for_real_sleep_before_next_input(console_workdir):
     started = time.monotonic()
     result = run_console(console_workdir, "-c", "sleep 1", "-c", "echo awake")
@@ -192,6 +214,59 @@ def test_interrupt_during_wait_returns_control_to_shell(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert captured.err == "^C\n"
     assert captured.out == "recovered\n"
+
+
+def test_sleep_continuation_runs_after_scheduler_tick(monkeypatch, capsys):
+    console = DevShell(empty=True)
+    monkeypatch.setattr("game.dev_shell.time.sleep", lambda _seconds: None)
+    run_line(console, "sleep 1 && echo completed", False)
+    assert console.foreground is None
+    assert console.last_status == 0
+    assert capsys.readouterr().out == "completed\n"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo before; sleep 1; echo after",
+        "echo before && sleep 1 && echo after",
+    ],
+)
+def test_sleep_sequence_retains_output_before_and_after_foreground_job(
+    monkeypatch, capsys, command
+):
+    console = DevShell(empty=True)
+    monkeypatch.setattr("game.dev_shell.time.sleep", lambda _seconds: None)
+
+    run_line(console, command, False)
+
+    assert console.foreground is None
+    assert console.last_status == 0
+    assert capsys.readouterr().out == "before\nafter\n"
+
+
+def test_sleep_continuation_propagates_following_command_status(monkeypatch, capsys):
+    console = DevShell(empty=True)
+    monkeypatch.setattr("game.dev_shell.time.sleep", lambda _seconds: None)
+    run_line(console, "sleep 1 && missing-command", False)
+    assert console.foreground is None
+    assert console.last_status == 1
+    assert "Unknown command given" in capsys.readouterr().err
+
+
+def test_interrupt_resumes_failure_conditional(monkeypatch, capsys):
+    console = DevShell(empty=True)
+
+    def interrupt(_seconds):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("game.dev_shell.time.sleep", interrupt)
+    run_line(console, "sleep 100 || echo cancelled", False)
+    captured = capsys.readouterr()
+    assert captured.out == "cancelled\n"
+    assert captured.err == "^C\n"
+    assert console.foreground is None
+    assert console.last_status == 0
 
 
 def test_interrupt_during_prompt_discards_pending_input(monkeypatch, capsys):

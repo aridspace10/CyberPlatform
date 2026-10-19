@@ -74,6 +74,12 @@ export default function Game() {
                 data.stdout.forEach(line => addCommandLine(line));
                 data.stderr.forEach(line => addCommandLine(line));
             }
+
+            if (data.type === "background_job_complete") {
+                addCommandLine(`[job ${data.job_id}] completed with status ${data.status}`);
+                (data.stdout || []).forEach(line => addCommandLine(line));
+                (data.stderr || []).forEach(line => addCommandLine(line));
+            }
         };
 
         wsRef.current = socket;
