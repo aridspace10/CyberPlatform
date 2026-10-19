@@ -954,6 +954,8 @@ class CommandLine:
                 return CommandResult(1, stderr=[f"mv: {target}: {destination}"])
             destination_parent, destination_name = destination
 
+        # Resolve and validate all operands before changing any tree entries.
+        moves: list[tuple[str, FileNode, FileNode, str, FileNode | None]] = []
         for file in files:
             source = fs.resolve_parent(file)
             if isinstance(source, str):
@@ -965,40 +967,63 @@ class CommandLine:
                 stderr.append(f"mv: could not find file {file}")
                 continue
 
-            parent = destination_parent
             name = source_name if destination_name is None else destination_name
             if source_node.get_type() == NodeType.DIRECTORY:
-                ancestor = parent
+                ancestor = destination_parent
                 while ancestor is not None and ancestor is not source_node:
                     ancestor = ancestor.parent
                 if ancestor is source_node:
                     stderr.append(f"mv: cannot move '{file}' into itself")
                     continue
 
-            existing = parent.access(name)
+            existing = destination_parent.access(name)
             if existing is source_node:
                 stderr.append(f"mv: '{file}' and '{target}' are the same file")
                 continue
-            if existing is not None:
-                if (
-                    source_node.get_type() != NodeType.FILE
-                    or existing.get_type() != NodeType.FILE
-                ):
-                    stderr.append(f"mv: cannot overwrite '{target}' with '{file}'")
-                    continue
-                parent.items = [item for item in parent.items if item is not existing]
+            if existing is not None and (
+                source_node.get_type() != NodeType.FILE
+                or existing.get_type() != NodeType.FILE
+            ):
+                stderr.append(f"mv: cannot overwrite '{target}' with '{file}'")
+                continue
+            moves.append((file, source_parent, source_node, name, existing))
 
+        source_nodes = {id(move[2]) for move in moves}
+        final_names: set[str] = set()
+        for file, _, source_node, name, existing in moves:
+            if name in final_names:
+                stderr.append(f"mv: duplicate destination name '{name}'")
+            final_names.add(name)
+            if existing is not None and id(existing) in source_nodes:
+                stderr.append(f"mv: cannot overwrite '{target}' with '{file}'")
+
+        if stderr:
+            return CommandResult(1, stdout, stderr)
+
+        for _, _, _, _, existing in moves:
+            if existing is not None:
+                destination_parent.items = [
+                    item for item in destination_parent.items if item is not existing
+                ]
+        for file, source_parent, source_node, name, _ in moves:
             source_parent.items = [
                 item for item in source_parent.items if item is not source_node
             ]
             source_node.name = name
-            source_node.parent = parent
-            parent.items.append(source_node)
+            source_node.parent = destination_parent
+            destination_parent.items.append(source_node)
             if verbose:
                 action = "Moved" if target_directory else "Renamed"
                 connector = "to" if target_directory else "->"
                 stdout.append(f"{action} {file} {connector} {target}")
-        return CommandResult(1 if stderr else 0, stdout, stderr)
+
+        def update_subtree_depth(node: FileNode) -> int:
+            child_depths = [update_subtree_depth(child) for child in node.items]
+            node.depth = max((depth + 1 for depth in child_depths), default=0)
+            return node.depth
+
+        update_subtree_depth(fs.filehead)
+        return CommandResult(0, stdout, stderr)
 
     def grep(self, ctx: CommandContext) -> CommandResult:
         case_insentive = False
