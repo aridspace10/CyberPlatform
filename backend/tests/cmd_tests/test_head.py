@@ -29,6 +29,17 @@ def test_head_basic(cl, shell_basic: ShellState):
         assert line == str(i)
 
 
+def test_head_rejects_unreadable_input(cl, shell_basic):
+    source = shell_basic.fs.filehead.access("f2.txt")
+    source.inode.permissions["user"]["r"] = False
+
+    result = cl.enter_command("head f2.txt", shell_basic)
+
+    assert result.status == 1
+    assert result.stdout == []
+    assert result.stderr and "Permission denied" in result.stderr[0]
+
+
 def test_head_count(cl, shell_basic: ShellState):
     r = random.randint(1, 20)
     CmdResult = cl.enter_command(f"head -n {r} f2.txt", shell_basic)
