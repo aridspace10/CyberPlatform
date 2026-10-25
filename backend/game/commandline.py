@@ -549,36 +549,89 @@ class CommandLine:
         return CommandResult(stdout=self.process_manager.list_processes(parameters))
 
     def ping(self, ctx: CommandContext) -> CommandResult:
-        if "--help" in ctx.args or "-h" in ctx.args or "-help" in ctx.args:
+        if ctx.args in (["--help"], ["-h"]):
             return CommandResult(stdout=self.useage("ping"))
         args = list(ctx.args)
-        if not args:
-            return CommandResult(1, stderr=["ping: host required"])
         host = None
+        count = 4
+        timeout = Fraction(1)
         while args:
             arg = args.pop(0)
-            if arg in ("-i", "-l"):
+            if arg in ("-c", "-W"):
                 if not args or not args[0]:
                     return CommandResult(
                         1, stderr=[f"ping: argument required for {arg}"]
                     )
                 value = args.pop(0)
-                try:
-                    if int(value) <= 0:
-                        raise ValueError
-                except ValueError:
-                    return CommandResult(
-                        1, stderr=[f"ping: invalid value for {arg}: '{value}'"]
-                    )
+                if arg == "-c":
+                    if len(value) > 2 or not re.fullmatch(r"\d+", value):
+                        return CommandResult(
+                            1, stderr=[f"ping: invalid count: '{value}'"]
+                        )
+                    count = int(value)
+                    if not 1 <= count <= 10:
+                        return CommandResult(
+                            1, stderr=["ping: count must be between 1 and 10"]
+                        )
+                else:
+                    # Accept unsigned decimal seconds (including .5 or 1.) but
+                    # reject signs, exponent notation, whitespace, and suffixes.
+                    if len(value) > 20 or not re.fullmatch(
+                        r"(?:\d+(?:\.\d*)?|\.\d+)", value
+                    ):
+                        return CommandResult(
+                            1, stderr=[f"ping: invalid timeout: '{value}'"]
+                        )
+                    timeout = Fraction(value)
+                    if timeout <= 0 or timeout > 60:
+                        return CommandResult(
+                            1,
+                            stderr=[
+                                "ping: timeout must be greater than 0 and at most 60 seconds"
+                            ],
+                        )
             elif arg.startswith("-"):
                 return CommandResult(1, stderr=[f"ping: unknown option '{arg}'"])
             elif host is None:
                 host = arg
             else:
-                return CommandResult(1, stderr=["ping: expected one host"])
+                return CommandResult(1, stderr=["ping: expected one destination"])
         if not host:
-            return CommandResult(1, stderr=["ping: host required"])
-        return CommandResult()
+            return CommandResult(1, stderr=["ping: destination required"])
+
+        network = self.network.get_network(host)
+        if network is None:
+            return CommandResult(
+                2, stderr=[f"ping: unknown simulated destination '{host}'"]
+            )
+
+        stdout = [f"PING {host} ({network.ip}): 56 data bytes"]
+        received = 0
+        for sequence in range(1, count + 1):
+            if not network.online:
+                stdout.append(
+                    f"From {network.ip} icmp_seq={sequence} "
+                    "Destination Host Unreachable"
+                )
+            elif timeout < Fraction(1, 100):
+                stdout.append(f"Request timeout for icmp_seq={sequence}")
+            else:
+                received += 1
+                stdout.append(
+                    f"64 bytes from {network.ip}: icmp_seq={sequence} "
+                    "ttl=64 time=10.0 ms"
+                )
+
+        lost = count - received
+        loss_percent = lost * 100 // count
+        stdout.extend(
+            [
+                f"--- {host} ping statistics ---",
+                f"{count} packets transmitted, {received} received, "
+                f"{loss_percent}% packet loss",
+            ]
+        )
+        return CommandResult(0 if received == count else 1, stdout=stdout)
 
     def find(self, ctx: CommandContext) -> CommandResult:
         if len(ctx.args) < 1:
