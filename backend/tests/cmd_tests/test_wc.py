@@ -63,6 +63,32 @@ def test_wc_l_single_line_with_newline(cl, shell_one_line_newline: ShellState):
     assert CmdResult.stdout == ["1"]
 
 
+def test_wc_default_uses_three_standard_columns_and_exact_stream_counts(
+    cl, shell_empty
+):
+    shell_empty.fs.add_file("utf8.txt")
+    node = shell_empty.fs.get_file("utf8.txt")
+    node.set_data(["héllo x"])
+
+    assert_success(cl.enter_command("wc utf8.txt", shell_empty), ["1 2 9"])
+    assert_success(cl.enter_command("wc -m utf8.txt", shell_empty), ["8"])
+    assert_success(cl.enter_command("wc -c utf8.txt", shell_empty), ["9"])
+
+
+def test_wc_explicit_stdin_and_error_statuses(cl, shell_basic):
+    result = cl.enter_command("cat f1.txt | wc -c -", shell_basic)
+    assert result.status == 0
+    assert result.stderr == []
+
+    missing = cl.enter_command("wc missing.txt", shell_basic)
+    assert missing.status != 0
+    assert missing.stderr
+
+    directory = cl.enter_command("wc d1", shell_basic)
+    assert directory.status != 0
+    assert directory.stderr
+
+
 def test_wc_l_two_lines(cl, shell_sed: ShellState):
     CmdResult = cl.enter_command("wc -l f1.txt", shell_sed)
     assert CmdResult.stderr == []

@@ -45,13 +45,52 @@ def test_head_count(cl, shell_basic: ShellState):
         assert CmdResult.stdout[-i] == str(i)
 
 
+def test_head_zero_negative_and_positive_line_counts(cl, shell_empty):
+    shell_empty.fs.add_file("lines.txt")
+    node = shell_empty.fs.get_file("lines.txt")
+    node.set_data(["one", "two", "three"])
+
+    assert cl.enter_command("head -n 0 lines.txt", shell_empty).stdout == []
+    expected_without_final = [
+        "one",
+        "two",
+    ]
+    assert cl.enter_command("head --lines=-1 lines.txt", shell_empty).stdout == expected_without_final
+    assert cl.enter_command("head -n -1 lines.txt", shell_empty).stdout == expected_without_final
+    assert cl.enter_command("head -n +2 lines.txt", shell_empty).stdout == [
+        "two",
+        "three",
+    ]
+
+
+def test_head_byte_budget_resets_for_each_file_and_partial_utf8_is_replaced(
+    cl, shell_empty
+):
+    shell_empty.fs.add_file("a.txt")
+    shell_empty.fs.get_file("a.txt").set_data(["abc"])
+    shell_empty.fs.add_file("b.txt")
+    shell_empty.fs.get_file("b.txt").set_data(["éclair"])
+
+    result = cl.enter_command("head -c 1 a.txt b.txt", shell_empty)
+
+    assert result.status == 0
+    assert result.stderr == []
+    assert result.stdout == ["==> a.txt <==", "a", "==> b.txt <==", "�"]
+
+
 def test_head_error(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("head d1", shell_basic)
     assert CmdResult.stderr == ["head: d1 is a directory"]
 
 
+def test_head_missing_path_sets_failure_status(cl, shell_basic):
+    result = cl.enter_command("head d1/missing", shell_basic)
+    assert result.status != 0
+    assert result.stderr
+
+
 @pytest.mark.parametrize(
-    "command", ["head -n", "head -n nope", "head -c", "head --bytes="]
+    "command", ["head -n", "head -n nope", "head -n ++2", "head -c", "head --bytes="]
 )
 def test_head_invalid_count_is_a_command_error_without_mutation(
     cl, shell_basic, command

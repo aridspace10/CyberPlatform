@@ -45,6 +45,22 @@ from .helpers import (
 CommandReturn = Tuple[int, Tuple[list[str], list[str]]]
 
 
+def _input_text(content: InputBuffer) -> str:
+    """Materialize the exact text stream represented by an input buffer."""
+    text = "\n".join(content.lines)
+    return text + ("\n" if content.lines and content.has_trailing_newline else "")
+
+
+def _output_lines(text: str) -> list[str]:
+    """Convert selected stream text to the command output line protocol."""
+    if not text:
+        return []
+    lines = text.split("\n")
+    if text.endswith("\n"):
+        lines.pop()
+    return lines
+
+
 @dataclass
 class Interaction:
     mode: str  # "foreground", "prompt"
@@ -688,7 +704,8 @@ class CommandLine:
                 files.append(arg)
 
         if not any([words, bytes_flag, chars, lines]):
-            words = bytes_flag = chars = lines = True
+            # Match the conventional default wc columns: lines, words, bytes.
+            words = bytes_flag = lines = True
 
         if not len(files):
             files.append("-")
@@ -716,14 +733,11 @@ class CommandLine:
                     continue
                 content = InputBuffer.from_file(node)
 
-            data = content.lines
-
-            lcount = len(data)
-            if data and not content.has_trailing_newline:
-                lcount -= 1
-            wcount = len(" ".join(data).split())
-            ccount = len("\n".join(data))
-            bcount = len("\n".join(data).encode())
+            text = _input_text(content)
+            lcount = text.count("\n")
+            wcount = len(text.split())
+            ccount = len(text)
+            bcount = len(text.encode("utf-8"))
 
             total_lines += lcount
             total_words += wcount
@@ -1359,10 +1373,9 @@ class CommandLine:
         return CommandResult(status, stdout, stderr)
 
     def head(self, ctx: CommandContext) -> CommandResult:
-        lines = 10
-        b = -1
-        curb = 0
-        rev = False
+        line_count: int | None = 10
+        byte_count: int | None = None
+        from_start = False
         files = []
         stdout = []
         stderr = []
@@ -1374,14 +1387,17 @@ class CommandLine:
             elif arg.startswith("-"):
                 if arg == "--help":
                     return CommandResult(0, stdout=self.useage("head"))
-                elif arg == "-n":
+                elif arg in ("-n", "--lines"):
                     if not ctx.args:
                         return CommandResult(
                             1, stderr=["head: argument required for -n"]
                         )
                     value = ctx.args.pop(0)
                     try:
-                        lines = int(value)
+                        if value.startswith("++"):
+                            raise ValueError
+                        from_start = value.startswith("+")
+                        line_count = int(value.lstrip("+"))
                     except ValueError:
                         return CommandResult(
                             1, stderr=[f"head: invalid line count '{value}'"]
@@ -1389,23 +1405,25 @@ class CommandLine:
                 elif arg.startswith("--lines="):
                     val = arg.split("=", 1)[1]
                     try:
-                        if val.startswith("-"):
-                            rev = True
-                            lines = int(val[1:]) * -1
-                        else:
-                            lines = int(val)
+                        if val.startswith("++"):
+                            raise ValueError
+                        from_start = val.startswith("+")
+                        line_count = int(val.lstrip("+"))
                     except ValueError:
                         return CommandResult(
                             1, stderr=[f"head: invalid line count '{val}'"]
                         )
-                elif arg == "-c":
+                elif arg in ("-c", "--bytes"):
                     if not ctx.args:
                         return CommandResult(
                             1, stderr=["head: argument required for -c"]
                         )
                     value = ctx.args.pop(0)
                     try:
-                        b = int(value)
+                        if value.startswith("++"):
+                            raise ValueError
+                        from_start = value.startswith("+")
+                        byte_count = int(value.lstrip("+"))
                     except ValueError:
                         return CommandResult(
                             1, stderr=[f"head: invalid byte count '{value}'"]
@@ -1413,11 +1431,10 @@ class CommandLine:
                 elif arg.startswith("--bytes="):
                     val = arg.split("=", 1)[1]
                     try:
-                        if val.startswith("-"):
-                            rev = True
-                            b = int(val[1:]) * -1
-                        else:
-                            b = int(val)
+                        if val.startswith("++"):
+                            raise ValueError
+                        from_start = val.startswith("+")
+                        byte_count = int(val.lstrip("+"))
                     except ValueError:
                         return CommandResult(
                             1, stderr=[f"head: invalid byte count '{val}'"]
@@ -1428,6 +1445,13 @@ class CommandLine:
                 files.append(arg)
         if not len(files):
             files = ["-"]
+        if from_start and (
+            (line_count is not None and line_count < 1)
+            or (byte_count is not None and byte_count < 1)
+        ):
+            return CommandResult(
+                1, stderr=["head: starting position must be greater than zero"]
+            )
         for file in files:
             if file == "-":
                 content = ctx.stdin
@@ -1442,35 +1466,31 @@ class CommandLine:
                     status = 1
                     continue
                 content = InputBuffer.from_file(node)
-            counter = 0
-            data = content.lines
-            if not data:
-                continue
-            if rev and b != -1:
-                raw = "\n".join(data)
-                encoded = raw.encode("utf-8")
-                trimmed = encoded[:b]  # or [-b:] depending on mode
-
-                decoded = trimmed.decode("utf-8", errors="ignore")
-
-                for line in decoded.split("\n"):
-                    stdout.append(line)
+            if len(files) > 1:
+                stdout.append(f"==> {file} <==")
+            text = _input_text(content)
+            if byte_count is not None:
+                encoded = text.encode("utf-8")
+                if from_start:
+                    selected = encoded[max(byte_count - 1, 0):]
+                elif byte_count >= 0:
+                    selected = encoded[:byte_count]
+                else:
+                    selected = encoded[:byte_count]
+                stdout.extend(
+                    _output_lines(selected.decode("utf-8", errors="replace"))
+                )
+            elif line_count is not None:
+                data = content.lines
+                if from_start:
+                    selected_lines = data[max(line_count - 1, 0):]
+                elif line_count < 0:
+                    selected_lines = data[:line_count]
+                else:
+                    selected_lines = data[:line_count]
+                stdout.extend(selected_lines)
             else:
-                for line in data:
-                    line_bytes = len(line.encode("utf-8")) + 1
-                    if b != -1 and curb + line_bytes > b:
-                        # output partial line if there are remaining bytes
-                        remaining = b - curb
-                        if remaining > 0:
-                            stdout.append(
-                                line.encode("utf-8")[:remaining].decode("utf-8")
-                            )
-                        break
-                    stdout.append(line)
-                    curb += line_bytes
-                    counter += 1
-                    if b == -1 and counter >= lines:
-                        break
+                stdout.extend(content.lines[:10])
         return CommandResult(status, stdout, stderr)
 
     def tail(self, ctx: CommandContext) -> CommandResult:
@@ -1479,14 +1499,14 @@ class CommandLine:
         stdout = []
         stderr = []
         status = 0
-        lines = -1
-        byte = -1
-        ahead = False
+        line_count: int | None = None
+        byte_count: int | None = None
+        from_start = False
         outputType = 0
         while ctx.args and ctx.args[0].startswith("-") and ctx.args[0] != "-":
             arg = ctx.args.pop(0)
-            if arg == "-c" or arg.startswith("--bytes="):
-                if arg == "-c":
+            if arg in ("-c", "--bytes") or arg.startswith("--bytes="):
+                if arg in ("-c", "--bytes"):
                     if not len(ctx.args):
                         return CommandResult(
                             1, stderr=["tail: argument required for -c"]
@@ -1495,11 +1515,10 @@ class CommandLine:
                 else:
                     num = arg.split("=")[1]
                 try:
-                    if num[0] == "+":
-                        ahead = True
-                        byte = int(num[1:])
-                    else:
-                        lines = int(num)
+                    if num.startswith("++"):
+                        raise ValueError
+                    from_start = num.startswith("+")
+                    byte_count = int(num.lstrip("+"))
                 except ValueError:
                     return CommandResult(
                         1,
@@ -1509,8 +1528,8 @@ class CommandLine:
                         ],
                     )
 
-            elif arg == "-n" or arg.startswith("--lines="):
-                if arg == "-n":
+            elif arg in ("-n", "--lines") or arg.startswith("--lines="):
+                if arg in ("-n", "--lines"):
                     if not len(ctx.args):
                         return CommandResult(
                             1, stderr=["tail: argument required for -n"]
@@ -1519,11 +1538,10 @@ class CommandLine:
                 else:
                     num = arg.split("=")[1]
                 try:
-                    if num[0] == "+":
-                        ahead = True
-                        lines = int(num[1:])
-                    else:
-                        lines = int(num)
+                    if num.startswith("++"):
+                        raise ValueError
+                    from_start = num.startswith("+")
+                    line_count = int(num.lstrip("+"))
                 except ValueError:
                     return CommandResult(
                         1,
@@ -1538,9 +1556,22 @@ class CommandLine:
             elif arg == "-v" or arg == "--verbose":
                 outputType = 1
             elif arg[1:].isdigit():
-                lines = int(arg[1:])
+                line_count = int(arg[1:])
             else:
                 return CommandResult(1, stderr=[f"tail: unknown argument given {arg}"])
+
+        if from_start and (
+            (line_count is not None and line_count < 1)
+            or (byte_count is not None and byte_count < 1)
+        ):
+            return CommandResult(
+                1, stderr=["tail: starting position must be greater than zero"]
+            )
+        if not from_start and (
+            (line_count is not None and line_count < 0)
+            or (byte_count is not None and byte_count < 0)
+        ):
+            return CommandResult(1, stderr=["tail: count must not be negative"])
 
         files = ctx.args
         if len(files) == 0:
@@ -1557,7 +1588,9 @@ class CommandLine:
             else:
                 node = ctx.system.fs.resolve(file)
                 if isinstance(node, str):
-                    return CommandResult(1, stderr=[f"tail: {file} can not be found"])
+                    status = 1
+                    stderr.append(f"tail: {file} can not be found")
+                    continue
 
                 if node.get_type() == NodeType.DIRECTORY:
                     status = 1
@@ -1565,36 +1598,25 @@ class CommandLine:
                     continue
                 content = InputBuffer.from_file(node)
 
-            data = content.lines
-            if not data:
-                continue
-
-            if lines == -1 and byte == -1:
-                lines = 10
-
-            # modify data for return
-            if ahead:
-                if lines != -1:
-                    stdout.extend(data[lines - 1 :] if lines > 0 else data)
+            text = _input_text(content)
+            if byte_count is not None:
+                encoded = text.encode("utf-8")
+                if from_start:
+                    selected = encoded[max(byte_count - 1, 0):]
+                elif byte_count == 0:
+                    selected = b""
                 else:
-                    raw = "\n".join(data)
-                    encoded = raw.encode("utf-8")
-                    trimmed = encoded[byte - 1 :]
-                    decoded = trimmed.decode("utf-8", errors="ignore")
-                    for line in decoded.split("\n"):
-                        stdout.append(line)
+                    selected = encoded[-byte_count:]
+                stdout.extend(
+                    _output_lines(selected.decode("utf-8", errors="replace"))
+                )
             else:
-                if lines != -1:
-                    if lines == 0:
-                        continue
-                    stdout.extend(data[-lines:])
+                data = content.lines
+                count = 10 if line_count is None else line_count
+                if from_start:
+                    stdout.extend(data[max(count - 1, 0):])
                 else:
-                    raw = "\n".join(data)
-                    encoded = raw.encode("utf-8")
-                    trimmed = encoded[-byte:]
-                    decoded = trimmed.decode("utf-8", errors="ignore")
-                    for line in decoded.split("\n"):
-                        stdout.append(line)
+                    stdout.extend(data[-count:] if count > 0 else [])
         return CommandResult(status, stdout, stderr)
 
     def rm(self, ctx: CommandContext) -> CommandResult:
