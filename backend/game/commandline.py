@@ -5,9 +5,6 @@ import random
 import re
 from dataclasses import dataclass, field
 from fractions import Fraction
-<<<<<<< HEAD
-=======
->>>>>>> 15c7702 (Implement deterministic simulated ping)
 from typing import Any, Literal, Tuple
 
 from game.Context import CommandContext, ExecutionContext, SystemContext
