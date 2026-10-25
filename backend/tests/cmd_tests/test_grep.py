@@ -1,7 +1,7 @@
 import pytest
-from game.ShellState import ShellState
 from game.filenode import FileNode
 from game.inode import Inode, NodeType
+from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error, descendants
 from tests.command_helpers import assert_help
@@ -104,6 +104,15 @@ def test_grep_regex_anchors_and_distinct_no_match_status(cl, shell_empty):
     assert matched.stdout == ["alpha beta"]
     assert unmatched.status == 1
     assert unmatched.stdout == []
+
+
+def test_grep_help_describes_regex_and_status_contract(cl, shell_empty):
+    result = cl.enter_command("grep --help", shell_empty)
+
+    assert result.status == 0
+    assert any("Python regular expression" in line for line in result.stdout)
+    assert any("Status 0 means at least one line matched" in line for line in result.stdout)
+    assert any("--regexp=PATTERN" in line for line in result.stdout)
 
 
 def test_grep_empty_pattern_matches_every_line(cl, shell_empty):
