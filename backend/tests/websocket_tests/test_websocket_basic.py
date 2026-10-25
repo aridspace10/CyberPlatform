@@ -79,11 +79,11 @@ def test_background_job_uses_launch_directory_without_changing_foreground(sessio
         lambda message: message.get("type") == "command_output"
     )
 
-    assert response["stdout"][-1] == "root/launch-dir"
+    assert response["stdout"][-1] == "/launch-dir"
     completion = session.receive_until(
         lambda message: message.get("type") == "background_job_complete"
     )
-    assert completion["stdout"] == ["root"]
+    assert completion["stdout"] == ["/"]
     assert completion["status"] == 0
     assert session.game_session.players["jackson"].shell.cwd == "/launch-dir"
 
