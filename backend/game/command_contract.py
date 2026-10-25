@@ -28,7 +28,7 @@ COMMAND_CONTRACTS = {
     "wc": ("Count lines, words, and characters.", "[FILE...]; '-' means stdin", "yes", "-l -w -m -c --lines --words --chars --bytes --help", "Returns 1 if any input cannot be read.", "No maximum-line-length, locale byte accounting, or GNU formatting options."),
     "ping": ("Validate a host and optional positive interval and packet size values.", "HOST [-i VALUE] [-l VALUE]", "none", "-i VALUE -l VALUE -h/-help/--help", "Returns 1 when arguments are invalid; otherwise returns 0.", "This command does not send network packets or produce probe output; accepted option values are validated but unused."),
     "ps": ("List processes managed by this shell.", "none", "none", "-e/-A -l -C NAME -p PID -q PID --help", "Returns 0 for a valid listing.", "Shows simulated shell processes only; output selection is limited."),
-    "sleep": ("Wait for one integer duration.", "INTEGER[ s|m|h|d ]", "none", "--help", "Returns 1 for a missing, fractional, or invalid duration.", "One duration only; decimals and multiple durations are unsupported."),
+    "sleep": ("Wait for the sum of one or more nonnegative decimal durations.", "NUMBER[SUFFIX]...", "none", "--help", "Returns 1 when an interval is missing or invalid.", "Each duration may use s, m, h, or d; decimal intervals are supported and the total rounds up to whole one-second scheduler ticks."),
     "cut": ("Select delimiter-separated fields from lines.", "-f LIST [-d CHAR] [-s] [FILE...]; '-' means stdin", "yes", "-d CHAR -f N[,N...] -s -- --help", "Returns 1 for invalid options or input errors.", "Field numbers are positive comma-separated integers; ranges, character selection, and long/attached options are unsupported."),
 }
 

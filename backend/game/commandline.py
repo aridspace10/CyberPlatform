@@ -1,8 +1,10 @@
 import copy
 import datetime
+import math
 import random
 import re
 from dataclasses import dataclass, field
+from fractions import Fraction
 from typing import Any, Literal, Tuple
 
 from game.Context import CommandContext, ExecutionContext, SystemContext
@@ -378,20 +380,35 @@ class CommandLine:
         return format_command_help(type)
 
     def sleep(self, ctx: CommandContext) -> CommandResult:
-        if "--help" in ctx.args:
+        if ctx.args == ["--help"]:
             return CommandResult(0, stdout=self.useage("sleep"))
-        if not len(ctx.args):
+        if not ctx.args:
             return CommandResult(1, stderr=["sleep: Missing Argument"])
-        if len(ctx.args) != 1:
-            return CommandResult(1, stderr=["sleep: expected one duration"])
-        match = re.fullmatch(r"(\d+)([smhd]?)", ctx.args[0])
-        if match is None:
-            return CommandResult(
-                1, stderr=[f"sleep: invalid time interval '{ctx.args[0]}'"]
+
+        total_seconds = 0
+        multipliers = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
+        for duration in ctx.args:
+            # Match a complete signed decimal magnitude and an optional unit;
+            # fullmatch rejects unsupported suffixes and trailing text.
+            match = re.fullmatch(
+                r"([+-]?(?:\d+(?:\.\d*)?|\.\d+))([smhd]?)", duration
             )
-        val = int(match.group(1))
-        ty = match.group(2) or "s"
-        val *= {"s": 1, "m": 60, "h": 3600, "d": 86400}[ty]
+            if match is None:
+                return CommandResult(
+                    1, stderr=[f"sleep: invalid time interval '{duration}'"]
+                )
+            # Keep decimal durations exact so converting them to scheduler ticks
+            # never depends on binary floating point rounding.
+            value = Fraction(match.group(1))
+            if value < 0:
+                return CommandResult(
+                    1, stderr=[f"sleep: invalid time interval '{duration}'"]
+                )
+            total_seconds += value * multipliers[match.group(2)]
+
+        ticks = math.ceil(total_seconds)
+        if ticks == 0:
+            return CommandResult()
 
         # Create process
         proc = self.process_manager.create_process(
@@ -399,7 +416,7 @@ class CommandLine:
             parent=self.process_manager.default_parent_pid,
         )
 
-        proc.program = SleepProgram(proc, ticks=val)
+        proc.program = SleepProgram(proc, ticks=ticks)
 
         ctx.system.shell.foreground_pid = proc.pid
 
