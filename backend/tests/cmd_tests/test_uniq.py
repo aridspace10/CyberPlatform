@@ -16,6 +16,15 @@ def test_uniq_help(cl, shell_empty):
     assert_help(cl, shell_empty, "uniq")
 
 
+def test_uniq_help_lists_count_and_unique_only_options(cl, shell_empty):
+    result = cl.enter_command("uniq --help", shell_empty)
+
+    assert result.status == 0
+    assert any("-c/--count" in line for line in result.stdout)
+    assert any("-u/--unique" in line for line in result.stdout)
+    assert any("at most one input file" in line for line in result.stdout)
+
+
 @pytest.mark.parametrize(
     ("option", "expected"),
     [
