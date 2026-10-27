@@ -12,16 +12,6 @@ class FileSystem:
         self.lcs = 0
         self.cwd = ""
 
-    def recalculate_depths(self) -> None:
-        """Recompute cached subtree depths for the filesystem tree."""
-
-        def update_subtree_depth(node: FileNode) -> int:
-            child_depths = [update_subtree_depth(child) for child in node.items]
-            node.depth = max((depth + 1 for depth in child_depths), default=0)
-            return node.depth
-
-        update_subtree_depth(self.filehead)
-
     def to_dict(self) -> dict:
         return {"lcs": self.lcs, "nodes": self.filehead.to_dict()}
 

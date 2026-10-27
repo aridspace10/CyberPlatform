@@ -165,7 +165,7 @@ def test_mv_nested_directory_move_recalculates_subtree_depth(cl, shell_empty):
     deep.depth = 0
     destination.depth = 0
     fs.filehead.depth = 0
-    fs.recalculate_depths()
+    fs.filehead.update_subtree_depth()
 
     assert branch.depth == 2
     assert deep.depth == 3

@@ -1018,7 +1018,7 @@ class CommandLine:
                 connector = "to" if target_directory else "->"
                 stdout.append(f"{action} {file} {connector} {target}")
 
-        fs.recalculate_depths()
+        fs.filehead.update_subtree_depth()
         return CommandResult(0, stdout, stderr)
 
     def grep(self, ctx: CommandContext) -> CommandResult:
