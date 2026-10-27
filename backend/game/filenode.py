@@ -109,6 +109,12 @@ class FileNode:
     def append_data(self, data: list[str]) -> None:
         self.inode.append_data(data)
 
+    def update_subtree_depth(self) -> int:
+        """Recompute and return this node's cached subtree depth."""
+        child_depths = [child.update_subtree_depth() for child in self.items]
+        self.depth = max((depth + 1 for depth in child_depths), default=0)
+        return self.depth
+
     def random_insert(self, data: str) -> None:
         lst = data.split("\n")
         if (len(lst) > 1): 
