@@ -61,6 +61,12 @@ export default function Terminal() {
         stdout.forEach(line => addLine(line));
         stderr.forEach(line => addLine(line));
       }
+
+      if (data.type === "background_job_complete") {
+        addLine(`[job ${data.job_id}] completed with status ${data.status}`);
+        (data.stdout || []).forEach(line => addLine(line));
+        (data.stderr || []).forEach(line => addLine(line));
+      }
     };
 
     wsRef.current = socket;

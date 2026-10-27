@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import Callable
 
 from game.Context import SystemContext
@@ -35,6 +36,69 @@ class SleepProgram(Program):
             self.process.status = ProcessState.TERMINATED
 
 
+class BackgroundJobProgram(Program):
+    """Run one shell job on a scheduler tick and collect its eventual result."""
+
+    def __init__(self, process: Process, run, children: list[Process]):
+        super().__init__()
+        self.process = process
+        self.run = run
+        self.children = children
+        self.started = False
+        self.continuation = None
+
+    def tick(self):
+        if not self.started or (
+            self.continuation is not None
+            and all(child.status == ProcessState.TERMINATED for child in self.children)
+        ):
+            continuation = self.continuation
+            completed = None
+            if continuation is not None:
+                completed = SimpleNamespace(
+                    status=self.children[-1].exit_status if self.children else 0,
+                    stdout=[],
+                    stderr=[],
+                    kind="text",
+                    interaction=None,
+                    payload=None,
+                )
+                self.continuation = None
+            self.started = True
+            try:
+                stdout, stderr, status, interaction, next_continuation = self.run(
+                    continuation, completed
+                )
+            except Exception as error:
+                self.process.stderr.append(f"background job failed: {error}")
+                for child in self.children:
+                    child.status = ProcessState.TERMINATED
+                self.process.exit_status = 1
+                self.process.status = ProcessState.TERMINATED
+                return
+
+            self.process.stdout.extend(stdout)
+            self.process.stderr.extend(stderr)
+            self.process.exit_status = status
+            if interaction is not None and interaction.mode == "background_wait":
+                # Even a final sleep has no AST tail to resume, but it still has
+                # to keep the job alive until its child exits.
+                self.continuation = next_continuation or (lambda completed: completed)
+                return
+            if interaction is not None:
+                self.process.stderr.append(
+                    "background job cannot wait for interactive input"
+                )
+                self.process.exit_status = 1
+                for child in self.children:
+                    child.status = ProcessState.TERMINATED
+                self.process.status = ProcessState.TERMINATED
+                return
+
+        if all(child.status == ProcessState.TERMINATED for child in self.children):
+            self.process.status = ProcessState.TERMINATED
+
+
 class RmProgram(Program):
     def __init__(
         self,
@@ -52,7 +116,10 @@ class RmProgram(Program):
 
     def start(self) -> ProgramOutput:
         self.process.status = ProcessState.RUNNING
-        return self.next_file()
+        output = self.next_file()
+        if output[1]:
+            self.process.exit_status = 1
+        return output
 
     def next_file(self) -> ProgramOutput:
         stderr = []
@@ -104,6 +171,8 @@ class RmProgram(Program):
 
         stdout, next_errors = self.next_file()
         stderr.extend(next_errors)
+        if stderr:
+            self.process.exit_status = 1
         return stdout, stderr
 
 

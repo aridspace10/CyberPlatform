@@ -2,7 +2,7 @@ import asyncio
 from typing import Dict, Literal, Set
 
 from fastapi import WebSocket
-from game.commandline import CommandLine
+from game.commandline import CommandLine, CommandResult
 from game.Events import ProcessTerminatedEvent
 from game.filesystem import FileSystem
 from game.GameManager import GameManager
@@ -22,6 +22,7 @@ class Player:
         self.user_id = user_id
         self.shell = ShellState()
         self.shell.fs = FileSystem()
+        self.background_completions: list[dict] = []
 
     def serialize(self) -> dict:
         return {
@@ -38,6 +39,7 @@ class GameSession:
         self.logger = SessionLogger(session_id)
         self.state = "waiting"
         self.name = "Test"
+        self.closed = False
 
         # Player and Connecitons
         self.players: Dict[Username, Player] = {}
@@ -86,10 +88,71 @@ class GameSession:
                 event = self.process_manager.events.pop(0)
                 if isinstance(event, ProcessTerminatedEvent):
                     for player in self.players.values():
-                        if player.shell.foreground_pid == event.process.pid:
-                            player.shell.foreground_pid = None
-
+                        if event.process.pid in player.shell.background_jobs:
+                            command = player.shell.background_jobs.pop(
+                                event.process.pid
+                            )
+                            player.shell.background_children.pop(
+                                event.process.pid, None
+                            )
+                            completion = {
+                                "type": "background_job_complete",
+                                "job_id": event.process.pid,
+                                "command": command,
+                                "stdout": event.process.stdout.copy(),
+                                "stderr": event.process.stderr.copy(),
+                                "status": event.process.exit_status,
+                            }
                             if player.websocket:
+                                try:
+                                    await self.send_to(player.websocket, completion)
+                                except Exception:
+                                    player.background_completions.append(completion)
+                            else:
+                                player.background_completions.append(completion)
+                        if player.shell.foreground_pid == event.process.pid:
+                            had_continuation = player.shell.continuation is not None
+                            try:
+                                result = self.commandline.resume_foreground(
+                                    player.shell,
+                                    event.process,
+                                    CommandResult(
+                                        status=event.process.exit_status,
+                                        stdout=event.process.stdout.copy(),
+                                        stderr=event.process.stderr.copy(),
+                                    ),
+                                )
+                            except Exception:
+                                result = CommandResult(
+                                    status=1,
+                                    stderr=["Foreground continuation failed"],
+                                )
+                            if had_continuation and player.websocket:
+                                path_parts = []
+                                node = player.shell.fs.current
+                                while node is not None:
+                                    if node.name:
+                                        path_parts.append(node.name)
+                                    node = node.parent
+                                interaction = (
+                                    None
+                                    if result.interaction is None
+                                    else {
+                                        "mode": result.interaction.mode,
+                                        "prompt": result.interaction.prompt,
+                                    }
+                                )
+                                await self.send_to(
+                                    player.websocket,
+                                    {
+                                        "type": "command_output",
+                                        "stdout": result.stdout,
+                                        "stderr": result.stderr,
+                                        "cwd": "/" + "/".join(reversed(path_parts)),
+                                        "interaction": interaction,
+                                    },
+                                )
+                            if player.websocket and player.shell.foreground_pid is None:
                                 await self.send_to(
                                     player.websocket,
                                     {
@@ -108,6 +171,14 @@ class GameSession:
         return self.scheduler_task
 
     async def stop_scheduler(self) -> None:
+        self.closed = True
+        for player in self.players.values():
+            for pid in list(player.shell.background_jobs):
+                self.commandline.cancel_background_job(pid, player.shell)
+                for child in player.shell.background_children.pop(pid, []):
+                    self.process_manager.processes.pop(child.pid, None)
+                self.process_manager.processes.pop(pid, None)
+                player.shell.background_jobs.pop(pid, None)
         task = self.scheduler_task
         if task is None:
             return
@@ -133,6 +204,15 @@ class GameSession:
         else:
             # Reconnecting
             self.players[username].websocket = websocket
+            player = self.players[username]
+            while player.background_completions:
+                completion = player.background_completions[0]
+                try:
+                    await self.send_to(websocket, completion)
+                except Exception:
+                    player.websocket = None
+                    raise
+                player.background_completions.pop(0)
 
         await self.broadcast(
             {"type": "system", "message": f"{username} joined session"}
