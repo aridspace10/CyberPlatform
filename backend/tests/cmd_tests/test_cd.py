@@ -44,6 +44,13 @@ def test_cd_dot_paths_reject_invalid_traversal(run_dot_command, invalid_dot_path
     assert_failure(run_dot_command(f"cd {invalid_dot_path}"))
 
 
+def test_cd_requires_directory_search_permission(cl, shell_basic):
+    directory = shell_basic.fs.filehead.access("d1")
+    directory.inode.permissions["user"]["x"] = False
+    assert_failure(cl.enter_command("cd d1", shell_basic))
+    assert shell_basic.fs.current is shell_basic.fs.filehead
+
+
 def test_cd_dot_paths_reject_file(run_dot_command, dot_prefix):
     assert_failure(run_dot_command(f"cd {dot_prefix}data.txt"))
 

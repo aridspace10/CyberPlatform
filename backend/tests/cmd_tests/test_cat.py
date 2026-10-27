@@ -69,6 +69,17 @@ def test_cat_uses_owner_group_other_and_root_permissions(cl, shell_basic):
     shell_basic.identity = EffectiveIdentity("root", "root", frozenset({"root"}), True)
     assert cl.enter_command("cat f1.txt", shell_basic).status == 0
 
+
+def test_cat_permission_checks_cover_symlinks_and_directory_search(cl, shell_basic):
+    target = shell_basic.fs.filehead.access("f1.txt")
+    target.inode.permissions["user"]["r"] = False
+    assert cl.enter_command("ln -s f1.txt f1-link.txt", shell_basic).status == 0
+    assert_failure(cl.enter_command("cat f1-link.txt", shell_basic))
+
+    directory = shell_basic.fs.filehead.access("d1")
+    directory.inode.permissions["user"]["x"] = False
+    assert_failure(cl.enter_command("cat d1/f3.txt", shell_basic))
+
 def test_cat_stdin(cl, shell_basic):
     CmdResult = cl.enter_command("cat - < f1.txt", shell_basic)
     assert CmdResult.stderr == []

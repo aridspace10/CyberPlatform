@@ -33,6 +33,12 @@ sizes = f[0:5]
 atimes = f[5:]
 
 
+def test_ls_recursive_requires_directory_read_and_search_permission(cl, shell_basic):
+    directory = shell_basic.fs.filehead.access("d1")
+    directory.inode.permissions["user"]["r"] = False
+    assert cl.enter_command("ls -R d1", shell_basic).status != 0
+
+
 @pytest.fixture
 def fs_ls():
     fs = FileSystem()

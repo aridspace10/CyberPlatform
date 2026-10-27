@@ -1625,7 +1625,7 @@ class CommandLine:
                     stderr.append(f"grep: {name}: {content}")
                     had_error = True
                 else:
-                    candidates.append((name, InputBuffer.from_lines(content)))
+                    candidates.append((name, content))
 
         def collect_directory(node: FileNode, display_path: str) -> None:
             nonlocal had_error

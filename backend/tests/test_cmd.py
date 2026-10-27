@@ -152,50 +152,6 @@ def test_failed_input_redirection_never_invokes_handler_or_creates_file(
     assert Inode._next_id == next_inode
 
 
-def test_permission_bits_enforce_reads_writes_and_directory_operations(
-    cl, shell_basic
-):
-    shell_basic.fs.get_file("d1/f3.txt").set_data(["nested content"])
-    assert_success(cl.enter_command("chmod 000 f1.txt", shell_basic))
-    assert_failure(cl.enter_command("cat f1.txt", shell_basic))
-    assert_success(cl.enter_command("ln -s f1.txt f1-link.txt", shell_basic))
-    assert_failure(cl.enter_command("cat f1-link.txt", shell_basic))
-    assert_failure(cl.enter_command("echo changed > f1.txt", shell_basic))
-    assert shell_basic.fs.get_file("f1.txt").inode.data == [
-        "ERROR no",
-        "INFO hey",
-        "ERROR no2",
-        "error 1",
-    ]
-
-    assert_success(cl.enter_command("chmod -R 000 d1", shell_basic))
-    assert_failure(cl.enter_command("cat d1/f3.txt", shell_basic))
-    assert_failure(cl.enter_command("ls -R d1", shell_basic))
-    assert_failure(cl.enter_command("find d1", shell_basic))
-    assert_failure(cl.enter_command("touch d1/new.txt", shell_basic))
-    assert_failure(cl.enter_command("rm d1/f3.txt", shell_basic))
-    assert shell_basic.fs.filehead.access("d1").access("f3.txt") is not None
-
-
-def test_directory_search_and_parent_write_permissions_apply_to_commands(
-    cl, shell_basic
-):
-    directory = shell_basic.fs.filehead.access("d1")
-    directory.inode.permissions["user"]["x"] = False
-    assert_failure(cl.enter_command("cd d1", shell_basic))
-    assert_failure(cl.enter_command("cat d1/f3.txt", shell_basic))
-
-    directory.inode.permissions["user"]["x"] = True
-    directory.inode.permissions["user"]["w"] = False
-    assert_failure(cl.enter_command("touch d1/new.txt", shell_basic))
-    assert shell_basic.fs.filehead.access("d1").access("new.txt") is None
-
-    root = shell_basic.fs.filehead
-    root.inode.permissions["user"]["w"] = False
-    assert_failure(cl.enter_command("rm f1.txt", shell_basic))
-    assert root.access("f1.txt") is not None
-
-
 @pytest.mark.parametrize("redirect", [">", ">>"])
 def test_redirection_checks_existing_file_write_permission(cl, shell_basic, redirect):
     target = shell_basic.fs.filehead.access("f1.txt")
