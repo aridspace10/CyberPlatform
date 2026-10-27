@@ -160,6 +160,18 @@ def test_mv_nested_directory_move_recalculates_subtree_depth(cl, shell_empty):
     assert destination.depth == 4
     assert fs.filehead.depth == 5
 
+    # The filesystem exposes depth recalculation for other tree mutations too.
+    branch.depth = 0
+    deep.depth = 0
+    destination.depth = 0
+    fs.filehead.depth = 0
+    fs.recalculate_depths()
+
+    assert branch.depth == 2
+    assert deep.depth == 3
+    assert destination.depth == 4
+    assert fs.filehead.depth == 5
+
 
 @pytest.mark.parametrize(
     "command",
