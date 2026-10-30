@@ -10,6 +10,7 @@ from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
 from game.Scheduler import Scheduler
 from game.ShellState import ShellState
+from game.identity import EffectiveIdentity
 from services.session_logging import SessionLogger
 
 Username = str
@@ -23,6 +24,8 @@ class Player:
         self.shell = ShellState()
         self.shell.fs = FileSystem()
         self.background_completions: list[dict] = []
+        self.shell.identity = EffectiveIdentity.for_session(username, user_id)
+        self.shell.fs.identity = self.shell.identity
 
     def serialize(self) -> dict:
         return {

@@ -311,9 +311,9 @@ class FileNode:
                 row.extend(
                     [
                         self.get_permission_str(self),
-                        "1",
-                        "user",
-                        "user",
+                        str(self.inode.link_count),
+                        self.inode.owner,
+                        self.inode.group,
                         str(self.get_size()),
                         self.inode.mtime.strftime("%b"),
                         str(self.inode.mtime.day),
@@ -341,9 +341,9 @@ class FileNode:
                 tmp.extend(
                     [
                         self.get_permission_str(item),
-                        str(1),
-                        "user",
-                        "user",
+                        str(item.inode.link_count),
+                        item.inode.owner,
+                        item.inode.group,
                         str(item.get_size()),
                         str(self.inode.mtime.strftime("%b")),
                         str(self.inode.mtime.day),

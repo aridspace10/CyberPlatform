@@ -69,6 +69,20 @@ def test_rm_long_force_ignores_missing_files(cl, shell_empty):
     assert result.stderr == []
 
 
+def test_rm_requires_parent_write_permission(cl, shell_basic):
+    root = shell_basic.fs.filehead
+    root.inode.permissions["user"]["w"] = False
+    assert_failure(cl.enter_command("rm f1.txt", shell_basic))
+    assert root.access("f1.txt") is not None
+
+
+def test_rm_recursive_permission_denied_preserves_child(cl, shell_basic):
+    assert_success(cl.enter_command("chmod -R 000 d1", shell_basic))
+    directory = shell_basic.fs.filehead.access("d1")
+    assert_failure(cl.enter_command("rm d1/f3.txt", shell_basic))
+    assert directory.access("f3.txt") is not None
+
+
 def test_rm_dir(cl, shell_basic: ShellState):
     CmdResult = cl.enter_command("rm d1", shell_basic)
     assert len(shell_basic.fs.current.items) == 3
@@ -150,6 +164,18 @@ def test_rm_nested_delete_restores_filesystem_pointer(cl, shell_basic: ShellStat
     assert result.stderr == []
     assert shell_basic.fs.current is directory
     assert shell_basic.fs.get_file("f3.txt") is None
+
+
+def test_recursive_rm_requires_directory_traversal_before_mutating(cl, shell_basic):
+    directory = shell_basic.fs.filehead.access("d1")
+    directory.inode.permissions["user"]["x"] = False
+    before = [child.name for child in directory.items]
+
+    result = cl.enter_command("rm -r d1", shell_basic)
+
+    assert_failure(result)
+    assert [child.name for child in directory.items] == before
+    assert shell_basic.fs.filehead.access("d1") is directory
 
 
 def test_rm_help(cl, shell_empty):

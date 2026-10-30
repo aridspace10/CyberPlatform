@@ -1,5 +1,6 @@
 import pytest
 from game.ShellState import ShellState
+from game.identity import EffectiveIdentity
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_help
@@ -37,6 +38,47 @@ def test_cat_numbers_cumulatively_across_multiple_files(cl, shell_basic):
         *[f"{number} {number - 5}" for number in range(5, 30)],
     ]
 
+
+def test_cat_uses_owner_group_other_and_root_permissions(cl, shell_basic):
+    node = shell_basic.fs.filehead.access("f1.txt")
+    node.inode.owner = "owner"
+    node.inode.group = "readers"
+    node.inode.permissions = {
+        "user": {"r": False, "w": False, "x": False},
+        "group": {"r": True, "w": False, "x": False},
+        "public": {"r": False, "w": False, "x": False},
+    }
+
+    shell_basic.identity = EffectiveIdentity("reader", "readers", frozenset({"readers"}))
+    assert cl.enter_command("cat f1.txt", shell_basic).stdout == [
+        "ERROR no",
+        "INFO hey",
+        "ERROR no2",
+        "error 1",
+    ]
+
+    shell_basic.identity = EffectiveIdentity("visitor", "visitors", frozenset({"visitors"}))
+    denied = cl.enter_command("cat f1.txt", shell_basic)
+    assert denied.status != 0
+    assert denied.stderr and "Permission denied" in denied.stderr[0]
+
+    node.inode.permissions["public"]["r"] = True
+    assert cl.enter_command("cat f1.txt", shell_basic).status == 0
+    node.inode.permissions["public"]["r"] = False
+
+    shell_basic.identity = EffectiveIdentity("root", "root", frozenset({"root"}), True)
+    assert cl.enter_command("cat f1.txt", shell_basic).status == 0
+
+
+def test_cat_permission_checks_cover_symlinks_and_directory_search(cl, shell_basic):
+    target = shell_basic.fs.filehead.access("f1.txt")
+    target.inode.permissions["user"]["r"] = False
+    assert cl.enter_command("ln -s f1.txt f1-link.txt", shell_basic).status == 0
+    assert_failure(cl.enter_command("cat f1-link.txt", shell_basic))
+
+    directory = shell_basic.fs.filehead.access("d1")
+    directory.inode.permissions["user"]["x"] = False
+    assert_failure(cl.enter_command("cat d1/f3.txt", shell_basic))
 
 def test_cat_stdin(cl, shell_basic):
     CmdResult = cl.enter_command("cat - < f1.txt", shell_basic)

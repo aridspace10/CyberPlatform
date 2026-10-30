@@ -47,6 +47,27 @@ def test_legacy_save_restores_shared_links_with_documented_newline_default():
     assert a.inode.has_trailing_newline is False
 
 
+def test_owner_and_group_round_trip_and_legacy_defaults():
+    fs = FileSystem()
+    fs.add_file("owned.txt")
+    node = fs.filehead.access("owned.txt")
+    node.inode.owner = "alice"
+    node.inode.group = "staff"
+    saved = json.loads(json.dumps(fs.to_dict()))
+
+    restored = FileSystem()
+    restored.from_dict(saved)
+    owned = restored.filehead.access("owned.txt")
+    assert (owned.inode.owner, owned.inode.group) == ("alice", "staff")
+
+    legacy = deepcopy(saved)
+    legacy["nodes"]["items"][0]["inode"].pop("owner")
+    legacy["nodes"]["items"][0]["inode"].pop("group")
+    restored.from_dict(legacy)
+    old_owned = restored.filehead.access("owned.txt")
+    assert (old_owned.inode.owner, old_owned.inode.group) == ("user", "user")
+
+
 def test_restored_inode_ids_and_metadata_survive_new_process_allocator():
     fs = FileSystem()
     fs.add_file("a.txt")

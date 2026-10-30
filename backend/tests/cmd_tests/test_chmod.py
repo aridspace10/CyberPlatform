@@ -4,6 +4,7 @@ from datetime import datetime
 import pytest
 from game.filenode import FileNode
 from game.ShellState import ShellState
+from game.identity import EffectiveIdentity
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_tree, descendants, tree_state
 from tests.command_helpers import assert_help
@@ -105,8 +106,9 @@ def test_chmod_help_describes_supported_numeric_scope(cl, shell_empty):
     assert "--verbose" in help_text
     assert "--reference" not in help_text
     assert "Each MODE is of the form" not in help_text
-    assert "educational metadata only" in help_text
-    assert "no effective user/group or ownership policy" in help_text
+    assert "must own each FILE" in help_text
+    assert "simulated `root`" in help_text
+    assert "host files" in help_text
 
 
 def test_chmod_applies_one_numeric_mode_to_every_target(cl, shell_basic):
@@ -133,6 +135,21 @@ def test_chmod_applies_one_numeric_mode_to_every_target(cl, shell_basic):
     assert shell_basic.fs.current is original_current
     assert shell_basic.cwd == original_cwd
     assert shell_basic.fs.cwd == original_fs_cwd
+
+
+def test_chmod_requires_owner_or_privileged_identity(cl, shell_basic):
+    target = shell_basic.fs.filehead.access("f1.txt")
+    target.inode.owner = "alice"
+    shell_basic.identity = EffectiveIdentity("bob", "users", frozenset({"users"}))
+
+    denied = cl.enter_command("chmod 600 f1.txt", shell_basic)
+    assert_failure(denied)
+    assert target.get_permission_str(target) == "-rwxrwxrwx"
+
+    shell_basic.identity = EffectiveIdentity("root", "root", frozenset({"root"}), True)
+    result = cl.enter_command("chmod 600 f1.txt", shell_basic)
+    assert_success(result)
+    assert target.get_permission_str(target) == "-rw-------"
 
 
 @pytest.mark.parametrize("command", ["chmod", "chmod -R", "chmod 644", "chmod -R 644"])
@@ -246,3 +263,17 @@ def test_chmod_recursive_skips_symbolic_links(cl, shell_basic):
     assert link.inode.ctime == old_ctime
     assert link.inode.permissions == link_permissions
     assert external_file.inode.permissions == external_permissions
+
+
+def test_client_supplied_root_username_cannot_chmod_root_owned_file(cl, shell_basic):
+    shell_basic.identity = EffectiveIdentity.for_session("root", "0")
+    node = shell_basic.fs.filehead.access("f1.txt")
+    node.inode.owner = "root"
+    node.inode.permissions["user"] = {"r": True, "w": True, "x": True}
+
+    result = cl.enter_command("chmod 600 f1.txt", shell_basic)
+
+    assert result.status != 0
+    assert result.stderr == [
+        "chmod: changing permissions of 'f1.txt': Operation not permitted"
+    ]

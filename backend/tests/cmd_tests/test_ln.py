@@ -389,6 +389,22 @@ def test_symbolic_links_resolve_absolute_targets_and_intermediate_directories(
     assert shell_basic.fs.resolve("absolute").name == "f1.txt"
 
 
+def test_search_through_successful_symlink_preserves_current_directory(cl, shell_basic):
+    assert_success(cl.enter_command("ln -s /d1 jump", shell_basic))
+    shell_basic.fs.current = shell_basic.fs.filehead
+    shell_basic.fs.cwd = "/"
+    shell_basic.cwd = "/"
+    previous_current = shell_basic.fs.current
+    previous_fs_cwd = shell_basic.fs.cwd
+    previous_shell_cwd = shell_basic.cwd
+
+    assert shell_basic.fs.search("jump") == ""
+
+    assert shell_basic.fs.current is previous_current
+    assert shell_basic.fs.cwd == previous_fs_cwd
+    assert shell_basic.cwd == previous_shell_cwd
+
+
 def test_grep_reads_through_symbolic_link(cl, shell_basic):
     assert_success(cl.enter_command("ln -s f1.txt readable", shell_basic))
     expected = cl.enter_command("grep ERROR f1.txt", shell_basic)
@@ -429,3 +445,14 @@ def test_recursive_directory_removal_releases_descendant_inode_links(cl, shell_b
     assert source.inode.link_count == 2
     assert_success(cl.enter_command("rm -r d1", shell_basic))
     assert source.inode.link_count == 1
+@pytest.mark.parametrize("links", [[("loop", "loop")], [("a", "b"), ("b", "a")]])
+def test_symlink_cycles_return_an_error_instead_of_recursing(cl, shell_empty, links):
+    for link_name, target in links:
+        assert_success(
+            cl.enter_command(f"ln -s {target} {link_name}", shell_empty)
+        )
+
+    resolved = shell_empty.fs.resolve(links[0][0])
+
+    assert isinstance(resolved, str)
+    assert resolved == "Too many levels of symbolic links"

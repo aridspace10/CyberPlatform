@@ -152,31 +152,24 @@ def test_failed_input_redirection_never_invokes_handler_or_creates_file(
     assert Inode._next_id == next_inode
 
 
-def test_permission_bits_are_metadata_for_reads_writes_and_directory_operations(
-    cl, shell_basic
-):
-    shell_basic.fs.get_file("d1/f3.txt").set_data(["nested content"])
-    assert_success(cl.enter_command("chmod 000 f1.txt", shell_basic))
-    assert_success(
-        cl.enter_command("cat f1.txt", shell_basic),
-        ["ERROR no", "INFO hey", "ERROR no2", "error 1"],
-    )
-    assert_success(cl.enter_command("ln -s f1.txt f1-link.txt", shell_basic))
-    assert_success(
-        cl.enter_command("cat f1-link.txt", shell_basic),
-        ["ERROR no", "INFO hey", "ERROR no2", "error 1"],
-    )
-    assert_success(cl.enter_command("echo changed > f1.txt", shell_basic))
-    assert shell_basic.fs.get_file("f1.txt").get_data() == ["changed"]
+@pytest.mark.parametrize("redirect", [">", ">>"])
+def test_redirection_checks_existing_file_write_permission(cl, shell_basic, redirect):
+    target = shell_basic.fs.filehead.access("f1.txt")
+    original = list(target.inode.data)
+    target.inode.permissions["user"]["w"] = False
 
-    assert_success(cl.enter_command("chmod -R 000 d1", shell_basic))
-    assert_success(
-        cl.enter_command("cat d1/f3.txt", shell_basic), ["nested content"]
+    result = cl.enter_command(f"echo changed {redirect} f1.txt", shell_basic)
+
+    assert_failure(result)
+    assert result.stderr and "Permission denied" in result.stderr[0]
+    assert target.inode.data == original
+
+    assert_success(cl.enter_command("ln -s f1.txt f1-link.txt", shell_basic))
+    through_link = cl.enter_command(
+        f"echo changed {redirect} f1-link.txt", shell_basic
     )
-    assert_success(cl.enter_command("touch d1/new.txt", shell_basic))
-    assert shell_basic.fs.get_file("d1/new.txt") is not None
-    assert_success(cl.enter_command("rm d1/f3.txt", shell_basic))
-    assert shell_basic.fs.get_file("d1/f3.txt") is None
+    assert_failure(through_link)
+    assert target.inode.data == original
 
 
 @pytest.mark.integration

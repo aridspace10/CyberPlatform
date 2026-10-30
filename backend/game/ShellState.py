@@ -1,6 +1,7 @@
 from typing import Callable
 
 from game.filesystem import FileSystem
+from game.identity import EffectiveIdentity
 
 
 class ShellState:
@@ -16,3 +17,4 @@ class ShellState:
         self.background_pid: int | None = None
         self.background_jobs: dict[int, str] = {}
         self.background_children: dict[int, list] = {}
+        self.identity = EffectiveIdentity()

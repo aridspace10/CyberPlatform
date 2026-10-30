@@ -103,6 +103,46 @@ def test_sed_output_only_multiple_expressions_leave_source_unchanged(cl, shell_s
     assert source.inode.mtime == before_mtime
 
 
+def test_sed_rejects_unreadable_input_without_output(cl, shell_basic):
+    source = shell_basic.fs.filehead.access("f1.txt")
+    original_data = list(source.inode.data)
+    source.inode.permissions["user"]["r"] = False
+
+    result = cl.enter_command("sed 's/ERROR/notice/' f1.txt", shell_basic)
+
+    assert result.status == 1
+    assert result.stdout == []
+    assert "Permission denied" in result.stderr[0]
+    assert source.inode.data == original_data
+
+
+def test_sed_in_place_rejects_unwritable_file_without_mutation(cl, shell_basic):
+    source = shell_basic.fs.filehead.access("f1.txt")
+    original_data = list(source.inode.data)
+    source.inode.permissions["user"]["w"] = False
+
+    result = cl.enter_command("sed -i 's/ERROR/notice/' f1.txt", shell_basic)
+
+    assert result.status == 1
+    assert result.stderr and "Permission denied" in result.stderr[0]
+    assert source.inode.data == original_data
+    assert shell_basic.fs.filehead.access("f1.txt.bak") is None
+
+
+def test_sed_backup_requires_writable_parent_without_mutation(cl, shell_basic):
+    source = shell_basic.fs.filehead.access("f1.txt")
+    root = shell_basic.fs.filehead
+    original_data = list(source.inode.data)
+    root.inode.permissions["user"]["w"] = False
+
+    result = cl.enter_command("sed -i.bak 's/ERROR/notice/' f1.txt", shell_basic)
+
+    assert result.status == 1
+    assert result.stderr and "Permission denied" in result.stderr[0]
+    assert source.inode.data == original_data
+    assert root.access("f1.txt.bak") is None
+
+
 @pytest.mark.parametrize(
     ("fixture_name", "has_trailing_newline"),
     [("shell_trailing_newline", True), ("shell_no_final_newline", False)],

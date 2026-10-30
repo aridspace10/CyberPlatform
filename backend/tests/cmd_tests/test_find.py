@@ -11,6 +11,12 @@ def test_find_help(cl, shell_empty):
     assert_help(cl, shell_empty, "find")
 
 
+def test_find_requires_directory_read_and_search_permission(cl, shell_basic):
+    directory = shell_basic.fs.filehead.access("d1")
+    directory.inode.permissions["user"]["r"] = False
+    assert_failure(cl.enter_command("find d1", shell_basic))
+
+
 def test_find_dot_paths_visit_each_file_once(run_dot_command, dot_directory):
     operand, target = dot_directory
     expected = [

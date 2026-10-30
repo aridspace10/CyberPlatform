@@ -28,6 +28,13 @@ from tests.cmd_tests.creation_helpers import (
 from tests.cmd_tests.path_helpers import assert_tree
 
 
+def test_touch_requires_parent_write_permission(cl, shell_basic):
+    directory = shell_basic.fs.filehead.access("d1")
+    directory.inode.permissions["user"]["w"] = False
+    assert_failure(cl.enter_command("touch d1/new.txt", shell_basic))
+    assert directory.access("new.txt") is None
+
+
 @pytest.mark.parametrize("command,node_type", [("touch", NodeType.FILE)])
 @pytest.mark.parametrize(
     "operand,expected_path",
