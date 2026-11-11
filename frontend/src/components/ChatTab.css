@@ -1,0 +1,144 @@
+.sidebar-page > .chat-tab.chat-tab {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+    text-align: left;
+}
+
+.chat-header {
+    flex: 0 0 auto;
+    padding: 18px 16px 14px;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.chat-header h1 {
+    color: #e8eaf0;
+    font-size: 1rem;
+    line-height: 1.3;
+}
+
+.chat-header p {
+    margin-top: 4px;
+    color: #8b909b;
+    font-size: 0.72rem;
+}
+
+.chat-messages {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+}
+
+.chat-empty {
+    margin: auto 0;
+    color: #8b909b;
+    font-size: 0.78rem;
+    text-align: center;
+}
+
+.chat-message {
+    align-self: flex-start;
+    max-width: 92%;
+}
+
+.chat-message.own {
+    align-self: flex-end;
+}
+
+.chat-sender {
+    display: block;
+    margin: 0 4px 4px;
+    color: #00e676;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+}
+
+.chat-message.own .chat-sender {
+    text-align: right;
+}
+
+.chat-message p {
+    padding: 9px 11px;
+    border: 1px solid #30343b;
+    border-radius: 8px 8px 8px 2px;
+    background: #1a1d23;
+    color: #dce1e5;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.chat-message.own p {
+    border-color: #2a6041;
+    border-radius: 8px 8px 2px 8px;
+    background: #173124;
+}
+
+.chat-compose {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 7px;
+    padding: 12px;
+    border-top: 1px solid #2a2a2a;
+    background: #0d0d0d;
+}
+
+.chat-compose input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid #353a42;
+    border-radius: 5px;
+    background: #16191f;
+    color: #e8eaf0;
+    font: inherit;
+    font-size: 0.76rem;
+}
+
+.chat-compose input:focus {
+    border-color: #00e676;
+    outline: none;
+}
+
+.chat-compose button {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    border: 1px solid #00b862;
+    border-radius: 5px;
+    background: #123522;
+    color: #00e676;
+    font: inherit;
+    font-size: 0.72rem;
+}
+
+.chat-compose button:disabled {
+    border-color: #333;
+    background: #1a1a1a;
+    color: #676c72;
+    cursor: default;
+}
+
+.chat-error {
+    padding: 0 12px 12px;
+    background: #0d0d0d;
+    color: #ff7777;
+    font-size: 0.72rem;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}

@@ -30,8 +30,8 @@ export default function Game() {
         setCommandLog(prev => [...prev, text]);
     }
 
-    function addChatLine(text) {
-        setChatLog(prev => [...prev, text]);
+    function addChatLine(message) {
+        setChatLog(prev => [...prev, message]);
     }
 
     useEffect(() => {
@@ -55,7 +55,7 @@ export default function Game() {
             const data = JSON.parse(event.data);
 
             if (data.type === "chat") {
-                addChatLine(`${data.user}: ${data.message}`);
+                addChatLine({ user: data.user, message: data.message });
             }
 
             if (data.type === "lobby_update") {
@@ -100,15 +100,22 @@ export default function Game() {
           <div className="game">
             <div className="sidebar-page">
                 <div className="sidebar-nav">
-                    <button onClick={() => handleTabSwitch("General")}> General </button>
-                    <button onClick={() => handleTabSwitch("Settings")}> Settings </button>
-                    <button onClick={() => handleTabSwitch("Environment")}> Environment </button>
-                    <button onClick={() => handleTabSwitch("Chat")}> Chat </button>
+                    {["General", "Settings", "Environment", "Chat"].map(tab => (
+                        <button
+                            key={tab}
+                            type="button"
+                            className={activeTab === tab ? "active" : ""}
+                            aria-pressed={activeTab === tab}
+                            onClick={() => handleTabSwitch(tab)}
+                        >
+                            {tab}
+                        </button>
+                    ))}
                 </div>
                 {activeTab === "General" && <GeneralTab />}
                 {activeTab === "Settings" && <SettingsTab />}
                 {activeTab === "Environment" && <EnvironmentTab />}
-                {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} />}
+                {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} username={user?.username} />}
             </div>
 
             <main className="game-stage">
@@ -126,7 +133,7 @@ export default function Game() {
                 {state === "finished" && <div className="game-finished"><h1>Game complete</h1></div>}
                 {!state && <h1>Loading...</h1>}
             </main>
-            <GameDataPanel gameData={gameData} />
+            {gameData && <GameDataPanel gameData={gameData} />}
           </div>
         </SessionContext.Provider>
     )
