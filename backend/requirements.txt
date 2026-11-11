@@ -19,7 +19,7 @@ pytest-asyncio
 python-jose
 passlib
 bcrypt==4.3.0
-black==26.5.1
+black==26.10.1
 ruff==0.13.0
 pytest
 mypy
