@@ -11,6 +11,7 @@ import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
 import ChatTab from "../components/ChatTab"
 import { WEBSOCKET_URL } from "../api/config";
+import { answerSessionRequest, getSessionAccess, getSessionRequests, requestSessionJoin } from "../api/sessions";
 import "./Gamescreen.css"
 
 export default function Game() {
@@ -24,6 +25,11 @@ export default function Game() {
     const [gameData, setGameData] = useState(null);
     const [activeTab, setActiveTab] = useState("General");
     const [cwd, setCwd] = useState("/");
+    const [access, setAccess] = useState(null);
+    const [accessError, setAccessError] = useState("");
+    const [joinAttempt, setJoinAttempt] = useState(0);
+    const [joinRequests, setJoinRequests] = useState([]);
+    const [inviteNotice, setInviteNotice] = useState("");
 
     function addCommandLine(text) {
         setCommandLog(prev => [...prev, text]);
@@ -86,6 +92,10 @@ export default function Game() {
 
         socket.onclose = (event) => {
             if (event.code === 4401) logout();
+            if (event.code === 4403) {
+                getSessionAccess(sessionId).then(setAccess).catch(error => setAccessError(error.message));
+            }
+            if (event.code === 4404) setAccessError("Session not found");
         };
 
         wsRef.current = socket;
@@ -94,7 +104,46 @@ export default function Game() {
             socket.close();
             wsRef.current = null;
         };
-    }, [user, sessionId, logout]);
+    }, [user, sessionId, logout, joinAttempt]);
+
+    useEffect(() => {
+        if (state !== "waiting" || String(gameData?.creatorID) !== String(user?.id)) return;
+        const refresh = () => getSessionRequests(sessionId)
+            .then(data => setJoinRequests(data.requests))
+            .catch(error => setAccessError(error.message));
+        refresh();
+        const timer = window.setInterval(refresh, 4000);
+        return () => window.clearInterval(timer);
+    }, [state, gameData?.creatorID, user?.id, sessionId]);
+
+    const handleJoinRequest = async () => {
+        try {
+            await requestSessionJoin(sessionId);
+            setAccess(previous => ({ ...previous, status: "pending" }));
+            setAccessError("");
+        } catch (error) {
+            setAccessError(error.message);
+        }
+    };
+
+    const handleRequestDecision = async (requesterId, decision) => {
+        try {
+            await answerSessionRequest(sessionId, requesterId, decision);
+            setJoinRequests(current => current.filter(request => request.user_id !== requesterId));
+            setAccessError("");
+        } catch (error) {
+            setAccessError(error.message);
+        }
+    };
+
+    const handleCopyInvite = async () => {
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            setInviteNotice("Invite link copied");
+        } catch {
+            setInviteNotice("Could not copy the link. Copy this page URL instead.");
+        }
+    };
 
     const handleTabSwitch = (tab) => {
         setActiveTab(tab);
@@ -123,8 +172,32 @@ export default function Game() {
                 {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} username={user?.username} />}
             </div>
 
-            <main className="game-stage">
+            <main className={`game-stage${state === "waiting" || !state ? " game-stage-lobby" : ""}`}>
+                {access && !state && <div className="session-access-panel">
+                    <h1>{access.name}</h1>
+                    {access.status === "requestable" && <>
+                        <p>This private session requires host approval.</p>
+                        <button onClick={handleJoinRequest}>Request to join</button>
+                    </>}
+                    {access.status === "pending" && <>
+                        <p>Your request is waiting for host approval.</p>
+                        <button onClick={() => setJoinAttempt(attempt => attempt + 1)}>Try joining again</button>
+                    </>}
+                    {access.status === "denied" && <p>You cannot join this session.</p>}
+                </div>}
+                {accessError && <p role="alert">{accessError}</p>}
+                {inviteNotice && <p role="status">{inviteNotice}</p>}
                 {state === "waiting" && <WaitingScreen players={players} canStart={String(gameData?.creatorID) === String(user?.id)} onGameStart={() => wsRef.current?.send(JSON.stringify({ type: "start_game" }))} />}
+                {state === "waiting" && String(gameData?.creatorID) === String(user?.id) &&
+                    <button className="copy-invite" onClick={handleCopyInvite}>Copy invite link</button>}
+                {state === "waiting" && String(gameData?.creatorID) === String(user?.id) && joinRequests.length > 0 && <section className="session-requests">
+                    <h2>Join requests</h2>
+                    {joinRequests.map(request => <div key={request.user_id}>
+                        <span>{request.username}</span>
+                        <button onClick={() => handleRequestDecision(request.user_id, "accept")}>Accept</button>
+                        <button onClick={() => handleRequestDecision(request.user_id, "decline")}>Decline</button>
+                    </div>)}
+                </section>}
                 {state === "running" && (
                     <Gamescreen
                         wsRef={wsRef}
@@ -136,7 +209,7 @@ export default function Game() {
                 )}
                 {state === "starting" && <Versus players={players} />}
                 {state === "finished" && <div className="game-finished"><h1>Game complete</h1></div>}
-                {!state && <h1>Loading...</h1>}
+                {!state && !access && !accessError && <h1>Loading...</h1>}
             </main>
             {gameData && <GameDataPanel gameData={gameData} />}
           </div>

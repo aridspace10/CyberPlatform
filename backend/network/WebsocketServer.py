@@ -10,7 +10,7 @@ from game.ProcessManager import ProcessState
 from jose import JWTError
 from network.SessionManger import Player, session_manager
 from services.session_service import get_session, get_session_shell, is_sandbox_session
-from services.user_service import get_user_by_id
+from services.user_service import get_user_by_id, is_friend
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -31,9 +31,7 @@ def restore_game_state(db: Session, session, session_id: int) -> bool:
     session.game_manager.set_config(config)
     if session.state == "running" and session.game_manager.game_type == "MiniGames":
         shells = (
-            db.query(SessionShell)
-            .filter(SessionShell.SessionID == session_id)
-            .all()
+            db.query(SessionShell).filter(SessionShell.SessionID == session_id).all()
         )
         participants = [str(shell.UserID) for shell in shells]
         if not participants:
@@ -146,9 +144,7 @@ async def websocket_endpoint(
     except Exception:
         await websocket.close(code=1008)
         return
-    if not isinstance(join_data, dict) or not isinstance(
-        join_data.get("token"), str
-    ):
+    if not isinstance(join_data, dict) or not isinstance(join_data.get("token"), str):
         await websocket.close(code=4401)
         return
     try:
@@ -165,14 +161,64 @@ async def websocket_endpoint(
         await websocket.close(code=4401)
         return
 
+    try:
+        database_id = int(session_id)
+    except ValueError:
+        database_id = None
+    database_session = get_session(db, database_id) if database_id is not None else None
+    if database_id is not None and database_session is None:
+        await websocket.close(code=4404)
+        return
+    if database_session is not None:
+        user = get_user_by_id(db, int(user_id))
+        if user is None or not user.username:
+            await websocket.close(code=4401)
+            return
+        username = user.username
+        membership = get_session_shell(db, session_id, user_id)
+        running_session = session_manager.get_session(session_id)
+        current_state = (
+            running_session.state
+            if running_session != "404"
+            else database_session.state
+        )
+        member_count = db.query(SessionShell).filter_by(SessionID=database_id).count()
+        scenario = db.query(ScenarioToSession).filter_by(sessionID=database_id).first()
+        config = scenario.config if scenario else {}
+        if isinstance(config, str):
+            config = json.loads(config)
+        play_type = config.get("playType", "SinglePlayer")
+        if int(user_id) != database_session.creatorID and (
+            play_type == "SinglePlayer"
+            or (
+                membership is None
+                and (
+                    current_state != "waiting"
+                    or member_count >= 2
+                    or database_session.visibility == "private"
+                    or (
+                        database_session.visibility == "friends_only"
+                        and not is_friend(db, int(user_id), database_session.creatorID)
+                    )
+                )
+            )
+        ):
+            await websocket.close(code=4403)
+            return
+        if (
+            database_session.visibility == "friends_only"
+            and int(user_id) != database_session.creatorID
+            and not is_friend(db, int(user_id), database_session.creatorID)
+        ):
+            await websocket.close(code=4403)
+            return
+
     session = session_manager.get_session(session_id)
     if session == "404":
-        try:
-            database_id = int(session_id)
-        except ValueError:
+        if database_id is None:
             await websocket.close(code=1008)
             return
-        ses_db = get_session(db, database_id)
+        ses_db = database_session
         if ses_db is None:
             await websocket.close()
             return
@@ -189,6 +235,15 @@ async def websocket_endpoint(
             await session_manager.remove_session(session_id)
             await websocket.close(code=1008)
             return
+    if database_session is not None and membership is None:
+        db.add(
+            SessionShell(
+                SessionID=database_id,
+                UserID=int(user_id),
+                shell=session.game_manager.get_shell(),
+            )
+        )
+        db.commit()
     request_id = str(uuid4())
     try:
         session.ensure_scheduler()
@@ -202,9 +257,6 @@ async def websocket_endpoint(
                 player.shell.vars = shell["vars"]
                 player.shell.fs.from_dict(shell["fs"])
                 session.players[username] = player
-            else:
-                pass
-                # IMPLEMENT JOIN REQUEST FUTURE JACKSON
         await session.connect(websocket, username, user_id)
         session.logger.record_session_event(
             event="user_connected", user_id=user_id, username=username
@@ -317,6 +369,9 @@ async def websocket_endpoint(
                     )
                 else:
                     await session.start_round()
+                    if database_session is not None:
+                        database_session.state = session.state
+                        db.commit()
 
             elif msg_type == "cancel_background_job":
                 player = session.players.get(username)

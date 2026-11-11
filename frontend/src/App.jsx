@@ -9,6 +9,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import Login from "./pages/Login/LoginPage";
 import Signup from "./pages/Login/SignupPage";
 import SessionCreation from "./pages/Session/SessionCreation";
+import Profile from "./pages/Profile/Profile";
 
 export default function App() {
     return (
@@ -17,7 +18,7 @@ export default function App() {
                 <Routes>
                     {/* User pathways */}
                     <Route path="/" element={<Homepage />} />
-                    <Route path="/profile" element={<ProtectedRoute></ProtectedRoute>} />
+                    <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/game/:sessionId" element={
