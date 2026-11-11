@@ -182,7 +182,7 @@ html, body, #root {
 
 .terminal .prompt-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.6rem;
   color: #00e676;
   font-size: 0.9rem;
@@ -193,4 +193,38 @@ html, body, #root {
   flex: 0 0 auto;
   color: #00e676;
   user-select: none;
+}
+
+.terminal .history-controls {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.terminal .history-controls button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #31523d;
+  border-radius: 4px;
+  background: #142019;
+  color: #00e676;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.terminal .history-controls button:hover:not(:disabled),
+.terminal .history-controls button:focus-visible {
+  border-color: #00e676;
+  background: #1d3425;
+  outline: none;
+}
+
+.terminal .history-controls button:disabled {
+  border-color: #2a2a2a;
+  background: transparent;
+  color: #5f6570;
+  cursor: default;
 }
