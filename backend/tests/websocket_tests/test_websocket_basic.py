@@ -12,6 +12,143 @@ def test_command_output_contains_echo(session):
     assert "hello" in output_msg["stdout"]
 
 
+def test_grep_question_progress_is_sent_to_player(session):
+    game = session.game_session
+    game.game_manager.set_config({
+        "name": "Grep game", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"grep": {"selected": True}}, "options": {"rounds": 1},
+    })
+    shell = game.game_manager.start_round(["1"])
+    player = game.players["jackson"]
+    player.shell.commands = shell["cmds"]
+    player.shell.fs.from_dict(shell["fs"])
+    game.state = "running"
+
+    words = game.game_manager.questions[0]["prompt"].split()
+    marker, path = words[-3], words[-1]
+    session.send_command(f"grep {marker} {path}")
+    output = session.receive_until(
+        lambda message: message.get("type") == "command_output"
+    )
+    assert marker in output["stdout"][0]
+    update = session.receive_until(
+        lambda message: message.get("type") == "lobby_update"
+    )
+    assert update["gameData"]["progress"] == {"completed": 1, "total": 10}
+    assert update["gameData"]["questions"][0]["status"] == "completed"
+
+
+def test_versus_round_starts_for_both_players_and_expires(session, client):
+    game = session.game_session
+    game.game_manager.set_config({
+        "name": "Versus grep", "gameType": "MiniGames", "playType": "Versus",
+        "creatorID": 1,
+        "commands": {"grep": {"selected": True}},
+        "options": {"rounds": 1, "timeLimitSeconds": 60},
+    })
+    with client.websocket_connect(f"/ws/{game.session_id}") as opponent:
+        opponent.send_json({"username": "opponent", "userID": "2"})
+        opponent.receive_json()
+        opponent.receive_json()
+        session.ws.send_json({"type": "start_game"})
+        started = session.receive_until(
+            lambda message: message.get("type") == "lobby_update"
+            and message.get("state") == "running"
+        )
+        assert len(started["gameData"]["questions"]) == 10
+        assert started["gameData"]["deadline"] is not None
+        assert game.players["jackson"].shell.fs.to_dict()["nodes"]["items"]
+        assert game.players["opponent"].shell.fs.to_dict()["nodes"]["items"]
+
+        game.game_manager.deadline = 0
+        client.portal.call(game.finish_round_if_ready)
+        ended = session.receive_until(
+            lambda message: message.get("type") == "lobby_update"
+            and message.get("state") == "finished"
+        )
+        assert ended["gameData"]["finished"] is True
+
+
+def test_ten_grep_answers_advance_to_fresh_round(session):
+    game = session.game_session
+    game.game_manager.set_config({
+        "name": "Grep rounds", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"grep": {"selected": True}}, "options": {"rounds": 2},
+    })
+    shell = game.game_manager.start_round(["1"])
+    player = game.players["jackson"]
+    player.shell.commands = shell["cmds"]
+    player.shell.fs.from_dict(shell["fs"])
+    game.state = "running"
+    first_prompts = [question["prompt"] for question in game.game_manager.questions]
+
+    for index, prompt in enumerate(first_prompts, start=1):
+        marker, path = prompt.split()[-3], prompt.split()[-1]
+        session.send_command(f"grep {marker} {path}")
+        session.receive_until(lambda message: message.get("type") == "command_output")
+        update = session.receive_until(
+            lambda message, expected=index: message.get("type") == "lobby_update"
+            and message["gameData"]["progress"]["completed"] == expected
+        )
+        assert update["gameData"]["round"] == 1
+
+    next_round = session.receive_until(
+        lambda message: message.get("type") == "lobby_update"
+        and message["gameData"]["round"] == 2
+    )
+    assert next_round["gameData"]["progress"] == {"completed": 0, "total": 10}
+    assert next_round["gameData"]["leaderboard"][0]["completed"] == 10
+    next_prompts = [
+        question["prompt"] for question in next_round["gameData"]["questions"]
+    ]
+    assert next_prompts != first_prompts
+
+
+def test_mixed_grep_and_sed_round_finishes_from_terminal_commands(session):
+    game = session.game_session
+    game.game_manager.set_config({
+        "name": "Mixed round", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {
+            "grep": {"selected": True, "options": []},
+            "sed": {"selected": True, "options": []},
+        },
+        "options": {"rounds": 1, "questionCount": 2},
+    })
+    shell = game.game_manager.start_round(["1"])
+    player = game.players["jackson"]
+    player.shell.commands = shell["cmds"]
+    player.shell.fs.from_dict(shell["fs"])
+    game.state = "running"
+    assert {question["command"] for question in game.game_manager.questions} == {
+        "grep", "sed",
+    }
+
+    for expected, question in enumerate(game.game_manager.questions, start=1):
+        answer = game.game_manager._answers[question["id"]]
+        if question["command"] == "grep":
+            words = question["prompt"].split()
+            command = f"grep {words[-3]} {words[-1]}"
+        else:
+            source = answer["before"][1].split()[0]
+            replacement = answer["after"][1].split()[0]
+            command = f"sed 's/{source}/{replacement}/' {answer['path']}"
+        session.send_command(command)
+        session.receive_until(
+            lambda message: message.get("type") == "command_output"
+        )
+        update = session.receive_until(
+            lambda message, count=expected: message.get("type") == "lobby_update"
+            and message["gameData"]["progress"]["completed"] == count
+        )
+        assert update["gameData"]["progress"]["total"] == 2
+
+    finished = session.receive_until(
+        lambda message: message.get("type") == "lobby_update"
+        and message["state"] == "finished"
+    )
+    assert finished["gameData"]["leaderboard"][0]["completed"] == 2
+
+
 def test_background_job_keeps_prompt_available_and_streams_completion(session):
     session.send_command("echo background & echo foreground")
     response = session.receive_until(

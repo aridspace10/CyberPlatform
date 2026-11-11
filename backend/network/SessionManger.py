@@ -6,11 +6,11 @@ from game.commandline import CommandLine, CommandResult
 from game.Events import ProcessTerminatedEvent
 from game.filesystem import FileSystem
 from game.GameManager import GameManager
+from game.identity import EffectiveIdentity
 from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
 from game.Scheduler import Scheduler
 from game.ShellState import ShellState
-from game.identity import EffectiveIdentity
 from services.session_logging import SessionLogger
 
 Username = str
@@ -32,6 +32,7 @@ class Player:
             "vars": self.shell.vars,
             "cmds": self.shell.commands,
             "fs": self.shell.fs.to_dict(),
+            "allowPipes": self.shell.allow_pipes,
         }
 
 
@@ -73,19 +74,77 @@ class GameSession:
             return None
         return self.players.get(username)
 
-    def lobby_state(self) -> dict:
+    def lobby_state(self, player_id: str | None = None) -> dict:
+        data = self.game_manager.get_game_data(self.name, player_id)
+        names = {
+            str(player.user_id): player.username
+            for player in self.players.values()
+        }
+        for entry in data["leaderboard"]:
+            entry["name"] = names.get(entry["playerID"], entry["playerID"])
         return {
             "type": "lobby_update",
             "players": [p.username for p in self.players.values()],
             "state": self.state,
             "session": self.session_id,
             "name": self.name,
-            "gameData": self.game_manager.get_game_data(self.name),
+            "gameData": data,
+            "cwd": next(
+                (
+                    player.shell.cwd
+                    for player in self.players.values()
+                    if str(player.user_id) == player_id
+                ),
+                "/",
+            ),
         }
+
+    async def start_round(self) -> None:
+        shell_data = self.game_manager.start_round(
+            [str(player.user_id) for player in self.players.values()]
+        )
+        for player in self.players.values():
+            player.shell = ShellState()
+            player.shell.identity = EffectiveIdentity.for_session(
+                player.username, player.user_id
+            )
+            player.shell.commands = list(shell_data["cmds"])
+            player.shell.allow_pipes = shell_data["allowPipes"]
+            player.shell.vars = shell_data["vars"].copy()
+            player.shell.fs.from_dict(shell_data["fs"])
+            player.shell.fs.identity = player.shell.identity
+        self.state = "running"
+        await self.broadcast_game_state()
+
+    async def finish_round_if_ready(self) -> None:
+        if self.state != "running" or not self.game_manager.questions:
+            return
+        player_ids = [str(player.user_id) for player in self.players.values()]
+        if (
+            not self.game_manager.is_expired()
+            and not self.game_manager.all_finished(player_ids)
+        ):
+            return
+        if self.game_manager.round_number < self.game_manager.num_rounds:
+            await self.start_round()
+        else:
+            self.game_manager.finished = True
+            self.state = "finished"
+            await self.broadcast_game_state()
+
+    async def broadcast_game_state(self) -> None:
+        for websocket, username in list(self.connections.items()):
+            player = self.players.get(username)
+            if player is not None:
+                try:
+                    await self.send_to(websocket, self.lobby_state(str(player.user_id)))
+                except Exception:
+                    self.connections.pop(websocket, None)
 
     async def scheduler_loop(self):
         while True:
             self.scheduler.tick()
+            await self.finish_round_if_ready()
 
             while self.process_manager.events:
                 event = self.process_manager.events.pop(0)
@@ -196,14 +255,22 @@ class GameSession:
 
     async def set_state(self, new_state: str):
         self.state = new_state
-        await self.broadcast(self.lobby_state())
+        await self.broadcast_game_state()
 
     async def connect(self, websocket: WebSocket, username: str, user_id: str):
         self.connections[websocket] = username
 
         if username not in self.players:
             # First time joining
-            self.players[username] = Player(websocket, username, user_id)
+            player = Player(websocket, username, user_id)
+            if self.state == "running" and self.game_manager.questions:
+                shell_data = self.game_manager.get_shell()
+                player.shell.commands = list(shell_data["cmds"])
+                player.shell.allow_pipes = shell_data["allowPipes"]
+                player.shell.vars = shell_data["vars"].copy()
+                player.shell.fs.from_dict(shell_data["fs"])
+                player.shell.fs.identity = player.shell.identity
+            self.players[username] = player
         else:
             # Reconnecting
             self.players[username].websocket = websocket
@@ -221,7 +288,7 @@ class GameSession:
             {"type": "system", "message": f"{username} joined session"}
         )
 
-        await self.broadcast(self.lobby_state())
+        await self.broadcast_game_state()
 
     async def disconnect(self, websocket: WebSocket):
         username = self.connections.pop(websocket, None)

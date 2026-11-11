@@ -33,7 +33,7 @@ from game.Parser import (
 from game.Process import ProcessState
 from game.ProcessManager import ProcessManager
 from game.Program import BackgroundJobProgram, HeredocProgram, RmProgram, SleepProgram
-from game.ShellState import ShellState
+from game.ShellState import GrepMatch, ShellState
 
 from .command_contract import COMMAND_CONTRACTS, format_command_help
 from .helpers import (
@@ -150,6 +150,8 @@ class CommandLine:
         return node
 
     def enter_command(self, raw: str, shell: ShellState) -> CommandResult:
+        shell.grep_matches.clear()
+        shell.sed_changes.clear()
         if not raw.strip():
             return CommandResult(status=shell.last_status)
 
@@ -157,6 +159,10 @@ class CommandLine:
         sys = SystemContext(shell.fs, self.process_manager, self.network, shell)
         try:
             tokens = lex(raw)
+            if not shell.allow_pipes and any(token.type == "PIPE" for token in tokens):
+                result = CommandResult(2, stderr=["Pipes are disabled for this game"])
+                shell.last_status = result.status
+                return result
             parser = CommandParser(tokens)
             ast = parser.parse()
         except SyntaxError as error:
@@ -1606,7 +1612,7 @@ class CommandLine:
             return CommandResult(2, stderr=[f"grep: invalid regular expression: {error}"])
 
         stderr: list[str] = []
-        candidates: list[tuple[str, InputBuffer]] = []
+        candidates: list[tuple[str, InputBuffer, int | None]] = []
         had_error = False
 
         def file_is_selected(name: str) -> bool:
@@ -1625,7 +1631,7 @@ class CommandLine:
                     stderr.append(f"grep: {name}: {content}")
                     had_error = True
                 else:
-                    candidates.append((name, content))
+                    candidates.append((name, content, node.inode.id))
 
         def collect_directory(node: FileNode, display_path: str) -> None:
             nonlocal had_error
@@ -1670,7 +1676,7 @@ class CommandLine:
         visited_directories: set[int] = set()
         for file in files:
             if file == "-":
-                candidates.append(("(standard input)", ctx.stdin))
+                candidates.append(("(standard input)", ctx.stdin, None))
                 continue
             node = ctx.system.fs.resolve(file)
             if isinstance(node, str):
@@ -1696,7 +1702,15 @@ class CommandLine:
         )
         stdout: list[str] = []
         any_selected = False
-        for name, content in candidates:
+        active_options = frozenset(
+            name
+            for name, active in (
+                ("i", ignore_case), ("l", list_files), ("x", whole_line),
+                ("w", whole_word), ("n", line_numbers),
+            )
+            if active
+        )
+        for name, content, inode_id in candidates:
             file_selected = False
             selected_count = 0
             file_output: list[str] = []
@@ -1706,6 +1720,16 @@ class CommandLine:
                 selected = matched != invert
                 if not selected:
                     continue
+                if not invert and not (count_lines or only_matching) and inode_id is not None:
+                    emitted = name if list_files else line
+                    if not list_files:
+                        if line_numbers:
+                            emitted = f"{line_index}:{emitted}"
+                        if show_filenames:
+                            emitted = f"{name}:{emitted}"
+                    ctx.system.shell.grep_matches.add(
+                        GrepMatch(inode_id, pattern, line, active_options, emitted)
+                    )
                 file_selected = True
                 selected_count += 1
                 if count_lines or list_files:

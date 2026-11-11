@@ -127,6 +127,7 @@ async def websocket_endpoint(
                 player = Player(websocket, username, user_id)
                 shell = shell_db.shell
                 player.shell.commands = shell["cmds"]
+                player.shell.allow_pipes = shell.get("allowPipes", True)
                 player.shell.vars = shell["vars"]
                 player.shell.fs.from_dict(shell["fs"])
                 session.players[username] = player
@@ -213,6 +214,30 @@ async def websocket_endpoint(
                         "message": data.get("message", ""),
                     }
                 )
+
+            elif msg_type == "start_game":
+                if session.state != "waiting":
+                    await session.send_to(
+                        websocket, {"type": "system", "message": "Game already started"}
+                    )
+                elif str(user_id) != str(session.game_manager.creator_id):
+                    await session.send_to(
+                        websocket,
+                        {
+                            "type": "system",
+                            "message": "Only the host can start the game",
+                        },
+                    )
+                elif len(session.players) < 2:
+                    await session.send_to(
+                        websocket,
+                        {
+                            "type": "system",
+                            "message": "Two players are needed to start Versus",
+                        },
+                    )
+                else:
+                    await session.start_round()
 
             elif msg_type == "cancel_background_job":
                 player = session.players.get(username)
@@ -317,6 +342,21 @@ async def websocket_endpoint(
                         interaction=response["interaction"],
                     )
                 await session.send_to(websocket, response)
+                if session.state == "running" and status == 0:
+                    grep_progress = session.game_manager.record_grep(
+                        str(player.user_id),
+                        player.shell.grep_matches,
+                        response["stdout"],
+                    )
+                    sed_progress = session.game_manager.record_sed(
+                        str(player.user_id),
+                        player.shell.sed_changes,
+                        response["stdout"],
+                        player.shell,
+                    )
+                    if grep_progress or sed_progress:
+                        await session.broadcast_game_state()
+                        await session.finish_round_if_ready()
 
     except WebSocketDisconnect:
         session.logger.record_session_event(

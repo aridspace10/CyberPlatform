@@ -5,6 +5,7 @@ from db.modals import GameSession as DatabaseGameSession
 from db.modals import Scenario, ScenarioToSession, SessionShell
 from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Response
+from game.GameManager import QUESTION_MODES
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
 from services.session_logging import SessionLogger
@@ -39,6 +40,8 @@ class GameOptions(BaseModel):
 
     allowPipes: bool = False
     rounds: int = Field(default=5, ge=1, le=20)
+    questionCount: int = Field(default=10, ge=1, le=50)
+    timeLimitSeconds: int = Field(default=300, ge=30, le=3600)
 
 
 class SessionConfig(BaseModel):
@@ -93,6 +96,33 @@ async def session_create(body: SessionCreate, db: Session = Depends(get_db)):
     scenario = get_scenario_byname(db, config.gameType)
     if scenario is None:
         raise HTTPException(status_code=404, detail="Game type not found")
+    selected_commands = {
+        name for name, selection in config.commands.items() if selection.selected
+    }
+    if config.gameType == "MiniGames" and not selected_commands:
+        raise HTTPException(status_code=422, detail="Select grep or sed for MiniGames")
+    if config.gameType == "MiniGames" and selected_commands - {"grep", "sed"}:
+        raise HTTPException(
+            status_code=422,
+            detail="Only grep and sed questions are available",
+        )
+    if (
+        config.gameType == "MiniGames"
+        and config.options.questionCount < len(selected_commands)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Questions per round must cover each selected command",
+        )
+    for command in selected_commands & set(QUESTION_MODES):
+        unknown_options = set(config.commands[command].options) - set(
+            QUESTION_MODES[command]
+        )
+        if unknown_options:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unsupported {command} option: {sorted(unknown_options)[0]}",
+            )
 
     initial_state = "running" if config.playType == "SinglePlayer" else "waiting"
     config_data = config.model_dump()
@@ -112,6 +142,8 @@ async def session_create(body: SessionCreate, db: Session = Depends(get_db)):
         )
         runtime_session.state = initial_state
         runtime_session.game_manager.set_config(config_data)
+        if config.playType == "SinglePlayer":
+            runtime_session.game_manager.start_round([str(config.creatorID)])
 
         db.add(
             ScenarioToSession(
@@ -237,7 +269,11 @@ async def get_scenarios(db: Session = Depends(get_db)):
 
 
 @router.get("/session/{session_id}")
-def get_session_data(session_id: int, db: Session = Depends(get_db)):
+def get_session_data(
+    session_id: int,
+    user_id: str | None = None,
+    db: Session = Depends(get_db),
+):
     session = session_manager.get_session(str(session_id))
     if session == "404":
         raise HTTPException(status_code=404, detail="Session not found")
@@ -246,7 +282,7 @@ def get_session_data(session_id: int, db: Session = Depends(get_db)):
         "details": "Found",
         "name": session.name,
         "state": session.state,
-        "gameData": session.game_manager.get_game_data(session.name),
+        "gameData": session.game_manager.get_game_data(session.name, user_id),
     }
 
 

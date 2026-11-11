@@ -51,7 +51,12 @@ def creation_payload(play_type: str) -> dict:
                 },
                 "sed": {"selected": False, "options": []},
             },
-            "options": {"allowPipes": True, "rounds": 8},
+            "options": {
+                "allowPipes": True,
+                "rounds": 8,
+                "questionCount": 6,
+                "timeLimitSeconds": 300,
+            },
         }
     }
 
@@ -73,13 +78,11 @@ def test_create_session_hands_complete_config_to_game_manager():
         assert runtime.game_manager.commands == ["grep"]
         assert runtime.game_manager.allow_pipes is True
         assert runtime.game_manager.num_rounds == 8
-        assert runtime.game_manager.get_game_data(runtime.name) == {
-            "sessionName": "Versus session",
-            "gameType": "MiniGames",
-            "playType": "Versus",
-            "questions": [],
-            "progress": {"completed": 0, "total": 8},
-        }
+        assert runtime.game_manager.question_count == 6
+        game_data = runtime.game_manager.get_game_data(runtime.name)
+        assert game_data["questions"] == []
+        assert game_data["round"] == 0
+        assert game_data["progress"] == {"completed": 0, "total": 6}
 
         db = testing_session()
         scenario = db.query(ScenarioToSession).one()
@@ -88,7 +91,9 @@ def test_create_session_hands_complete_config_to_game_manager():
         assert shell.shell["cmds"] == ["grep"]
         db.close()
 
-        client.portal.call(session_manager.remove_session, str(result["session_id"]))
+        client.portal.call(
+            session_manager.remove_session, str(response.json()["session_id"])
+        )
 
 
 def test_single_player_session_starts_running():
@@ -114,7 +119,70 @@ def test_single_player_session_starts_running():
         )
         assert session_response.json()["gameData"]["progress"] == {
             "completed": 0,
-            "total": 8,
+            "total": 6,
         }
+        assert len(session_response.json()["gameData"]["questions"]) == 6
 
         client.portal.call(session_manager.remove_session, str(result["session_id"]))
+
+
+def test_selected_sed_configuration_generates_sed_questions():
+    client, _testing_session = make_client()
+    payload = creation_payload("SinglePlayer")
+    payload["config"]["commands"] = {
+        "grep": {"selected": False, "options": []},
+        "sed": {"selected": True, "options": ["Save a backup", "Case Insensitive"]},
+    }
+    payload["config"]["options"]["questionCount"] = 3
+
+    with client:
+        response = client.post("/api/session_create", json=payload)
+        assert response.status_code == 201
+        runtime = session_manager.get_session(str(response.json()["session_id"]))
+        assert runtime != "404"
+        assert len(runtime.game_manager.questions) == 3
+        assert {
+            question["command"] for question in runtime.game_manager.questions
+        } == {"sed"}
+        assert {question["mode"] for question in runtime.game_manager.questions} == {
+            "basic", "backup", "ignore_case"
+        }
+        assert runtime.game_manager.get_shell()["cmds"] == ["sed"]
+
+        client.portal.call(
+            session_manager.remove_session, str(response.json()["session_id"])
+        )
+
+
+def test_selected_commands_share_configured_question_count():
+    client, _testing_session = make_client()
+    payload = creation_payload("SinglePlayer")
+    payload["config"]["commands"]["sed"] = {
+        "selected": True, "options": ["Save a backup"],
+    }
+    payload["config"]["options"]["questionCount"] = 5
+
+    with client:
+        response = client.post("/api/session_create", json=payload)
+        assert response.status_code == 201
+        runtime = session_manager.get_session(str(response.json()["session_id"]))
+        assert runtime != "404"
+        questions = runtime.game_manager.questions
+        assert len(questions) == 5
+        assert sum(question["command"] == "grep" for question in questions) == 3
+        assert sum(question["command"] == "sed" for question in questions) == 2
+        assert runtime.game_manager.get_shell()["cmds"] == ["grep", "sed"]
+        client.portal.call(
+            session_manager.remove_session, str(response.json()["session_id"])
+        )
+
+
+def test_question_count_must_cover_selected_commands():
+    client, _testing_session = make_client()
+    payload = creation_payload("SinglePlayer")
+    payload["config"]["commands"]["sed"]["selected"] = True
+    payload["config"]["options"]["questionCount"] = 1
+    with client:
+        response = client.post("/api/session_create", json=payload)
+        assert response.status_code == 422
+        assert "each selected command" in response.json()["detail"]
