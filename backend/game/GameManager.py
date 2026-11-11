@@ -11,6 +11,7 @@ from .ShellState import GrepMatch, SedChange, ShellState
 DEFAULT_QUESTION_COUNT = 10
 LOG_WORDS = ("access", "audit", "build", "deploy", "network", "system")
 LOG_LEVELS = ("INFO", "WARN", "ERROR")
+TRACE_ALPHABET = "2345679ACDEF"
 QUESTION_MODES = {
     "grep": {
         "Case Insensitive": "ignore_case",
@@ -156,7 +157,7 @@ class GameManager:
     def _add_grep_question(self, index: int, mode: str) -> None:
         label = random.choice(LOG_WORDS)
         path = f"/logs/{label}-{index:02d}-{secrets.token_hex(2)}.log"
-        marker = f"TRACE_{secrets.token_hex(4).upper()}"
+        marker = "TRACE_" + "".join(secrets.choice(TRACE_ALPHABET) for _ in range(8))
         stored_marker = marker.lower() if mode == "ignore_case" else marker
         line = f"{random.choice(LOG_LEVELS)} {stored_marker} {label} event"
         contents = [f"INFO {label} started", line, f"INFO {label} complete"]

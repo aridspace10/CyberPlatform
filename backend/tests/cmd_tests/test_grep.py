@@ -49,6 +49,30 @@ def test_grep_questions_complete_from_real_terminal_matches(cl):
     assert manager.get_game_data()["leaderboard"][0]["completed"] == 10
 
 
+def test_generated_grep_markers_avoid_ambiguous_characters(cl):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Readable grep markers",
+        "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"grep": {"selected": True, "options": []}},
+        "options": {"rounds": 1, "questionCount": 10},
+    })
+    manager.start_round(["1"])
+
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    for question in manager.questions:
+        marker = re.search(r"TRACE_([A-F0-9]{8})", question["prompt"])
+        assert marker is not None
+        assert not set(marker.group(1)) & set("018B")
+
+        path = question["prompt"].split()[-1]
+        result = cl.enter_command(f"grep {marker.group()} {path}", player)
+        assert result.status == 0
+        assert marker.group() in result.stdout[0]
+
+
 def test_selected_grep_options_generate_matching_questions(cl):
     manager = GameManager()
     manager.set_config({
@@ -226,7 +250,9 @@ def test_grep_help_describes_regex_and_status_contract(cl, shell_empty):
 
     assert result.status == 0
     assert any("Python regular expression" in line for line in result.stdout)
-    assert any("Status 0 means at least one line matched" in line for line in result.stdout)
+    assert any(
+        "Status 0 means at least one line matched" in line for line in result.stdout
+    )
     assert any("--regexp=PATTERN" in line for line in result.stdout)
 
 
@@ -299,7 +325,9 @@ def test_grep_count_is_per_file_and_retains_missing_file_error(cl, shell_empty):
     shell_empty.fs.add_file("second.txt")
     shell_empty.fs.current.access("second.txt").set_data(["beta"])
 
-    result = cl.enter_command("grep -c alpha first.txt missing.txt second.txt", shell_empty)
+    result = cl.enter_command(
+        "grep -c alpha first.txt missing.txt second.txt", shell_empty
+    )
 
     assert result.status == 2
     assert result.stdout == ["first.txt:2", "second.txt:0"]
@@ -361,7 +389,9 @@ def test_grep_recursion_applies_include_exclude_and_directory_filters(
 
     excluded = cl.enter_command("grep -r --exclude=keep.zzz alpha search", shell_empty)
     assert excluded.status == 0
-    assert excluded.stdout == ["search/skip.txt:alpha", "search/ignored/inside.zzz:alpha"]
+    assert excluded.stdout == [
+        "search/skip.txt:alpha", "search/ignored/inside.zzz:alpha"
+    ]
     assert excluded.stderr == []
 
 
@@ -427,7 +457,9 @@ def test_grep_recursive_search_handles_deep_directory_trees(cl, shell_empty):
     [("grep ERROR f1.txt", 0, ["ERROR no", "ERROR no2"]),
      ("grep NOMATCH f1.txt", 1, [])],
 )
-def test_grep_match_and_no_match_statuses(cl, shell_basic, command, expected_status, expected_stdout):
+def test_grep_match_and_no_match_statuses(
+    cl, shell_basic, command, expected_status, expected_stdout
+):
     result = cl.enter_command(command, shell_basic)
 
     assert result.status == expected_status
@@ -465,7 +497,10 @@ def test_grep_dot_paths_recursive_search(run_dot_command, dot_directory):
     result = run_dot_command(f"grep -r : {operand}")
     assert result.status == 0
     assert result.stderr == []
-    actual = [next(item for item in expected if output.endswith(item)) for output in result.stdout]
+    actual = [
+        next(item for item in expected if output.endswith(item))
+        for output in result.stdout
+    ]
     assert sorted(actual) == sorted(expected)
 
 

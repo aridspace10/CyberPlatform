@@ -89,6 +89,7 @@ def execute_terminal_input(session, player: Player, raw: str):
             "type": "command_output",
             "stdout": stdout,
             "stderr": stderr,
+            "status": status,
             "cwd": get_current_path(player),
             "interaction": interaction,
         },

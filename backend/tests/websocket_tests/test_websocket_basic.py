@@ -10,6 +10,21 @@ def test_command_output_contains_echo(session):
     # Skip any intermediate messages, find the output one
     output_msg = session.receive_until(lambda m: m.get("type") == "command_output")
     assert "hello" in output_msg["stdout"]
+    assert output_msg["status"] == 0
+
+
+def test_grep_no_match_reports_exit_status_without_output(session):
+    player = session.game_session.players["jackson"]
+    player.shell.fs.add_file("/sample.txt")
+    player.shell.fs.resolve("/sample.txt").set_data(["present"])
+
+    session.send_command("grep absent /sample.txt")
+    output = session.receive_until(
+        lambda message: message.get("type") == "command_output"
+    )
+    assert output["status"] == 1
+    assert output["stdout"] == []
+    assert output["stderr"] == []
 
 
 def test_grep_question_progress_is_sent_to_player(session):

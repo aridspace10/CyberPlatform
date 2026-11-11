@@ -74,6 +74,10 @@ export default function Game() {
                 if (data.cwd) setCwd(data.cwd);
                 data.stdout.forEach(line => addCommandLine(line));
                 data.stderr.forEach(line => addCommandLine(line));
+                if (data.status !== undefined && data.status !== 0 &&
+                    data.stdout.length === 0 && data.stderr.length === 0) {
+                    addCommandLine(`[exit status ${data.status}: no output]`);
+                }
             }
 
             if (data.type === "background_job_complete") {
