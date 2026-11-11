@@ -13,8 +13,8 @@ export async function enterTutorial(user_id) {
     return data
 }
 
-export async function getFullSessionData(session_id) {
-    const res = await fetch(`${API}/session/${session_id}`, {
+export async function getFullSessionData(session_id, user_id) {
+    const res = await fetch(`${API}/session/${session_id}?user_id=${encodeURIComponent(user_id)}`, {
         method: "GET",
     });
 
@@ -34,7 +34,13 @@ export async function createSession(config) {
 
     const data = await res.json();
     if (!res.ok) {
-        throw new Error(data.detail || "Could not create the session");
+        const detail = data.detail;
+        const message = typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+                ? detail.map(error => error.msg || "Invalid session configuration").join("; ")
+                : "Could not create the session";
+        throw new Error(message);
     }
     return data;
 }

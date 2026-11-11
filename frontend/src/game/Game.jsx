@@ -24,7 +24,7 @@ export default function Game() {
     const [state, setState] = useState(null);
     const [gameData, setGameData] = useState(null);
     const [activeTab, setActiveTab] = useState("General");
-    const [cwd, setCwd] = useState("/root");
+    const [cwd, setCwd] = useState("/");
 
     function addCommandLine(text) {
         setCommandLog(prev => [...prev, text]);
@@ -62,6 +62,7 @@ export default function Game() {
                 setPlayers(data.players);
                 setState(data.state);
                 if (data.gameData) setGameData(data.gameData);
+                if (data.cwd) setCwd(data.cwd);
                 return;
             }
 
@@ -111,7 +112,7 @@ export default function Game() {
             </div>
 
             <main className="game-stage">
-                {state === "waiting" && <WaitingScreen players={players} />}
+                {state === "waiting" && <WaitingScreen players={players} canStart={String(gameData?.creatorID) === String(user?.id)} onGameStart={() => wsRef.current?.send(JSON.stringify({ type: "start_game" }))} />}
                 {state === "running" && (
                     <Gamescreen
                         wsRef={wsRef}
@@ -122,6 +123,7 @@ export default function Game() {
                     />
                 )}
                 {state === "starting" && <Versus players={players} />}
+                {state === "finished" && <div className="game-finished"><h1>Game complete</h1></div>}
                 {!state && <h1>Loading...</h1>}
             </main>
             <GameDataPanel gameData={gameData} />

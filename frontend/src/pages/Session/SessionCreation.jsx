@@ -12,15 +12,18 @@ export default function SessionCreation() {
     const [playType, setPlayType] = useState("SinglePlayer");
     const [gameType, setGameType] = useState("MiniGames");
     const [allowPipes, setAllowPipes] = useState(false);
-    const [commandStates, setCommandStates] = useState({});
-    const [rounds, setRounds] = useState(5);
+    const [commandStates, setCommandStates] = useState({ grep: { selected: true, options: [] } });
+    const [rounds, setRounds] = useState(1);
+    const [questionCount, setQuestionCount] = useState(10);
+    const [timeLimitMinutes, setTimeLimitMinutes] = useState(5);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
-    const { user } = useAuth()
+    const { user, logout } = useAuth()
     const navigate = useNavigate();
 
     const typeOptions = ["SinglePlayer", "Versus"];
     const gameOptions = ["MiniGames"]
+    const selectedCommandCount = Object.values(commandStates).filter(state => state.selected).length;
     const commands = {
         grep: ["Case Insensitive", "Find By Filename", "Match By Line", "Match By Word", "Show Line Number"],
         sed:  ["Save a backup", "Case Insensitive"],
@@ -28,12 +31,12 @@ export default function SessionCreation() {
 
     const getCommandState = (cmd) => commandStates[cmd] || { selected: false, options: [] };
 
-    const handleCommandToggle = (cmd, options) => {
+    const handleCommandToggle = (cmd) => {
         const current = getCommandState(cmd);
         if (current.selected) {
             setCommandStates(prev => ({ ...prev, [cmd]: { selected: false, options: [] } }));
         } else {
-            setCommandStates(prev => ({ ...prev, [cmd]: { selected: true, options: [...options] } }));
+            setCommandStates(prev => ({ ...prev, [cmd]: { selected: true, options: [] } }));
         }
     };
 
@@ -62,8 +65,20 @@ export default function SessionCreation() {
     };
 
     const handleCreate = async () => {
+        if (!Number.isInteger(user?.id)) {
+            logout();
+            return;
+        }
         if (!name.trim()) {
             setError("Enter a session name");
+            return;
+        }
+        if (!selectedCommandCount) {
+            setError("Select at least one command");
+            return;
+        }
+        if (questionCount < selectedCommandCount) {
+            setError("Add at least one question per selected command");
             return;
         }
 
@@ -76,6 +91,8 @@ export default function SessionCreation() {
             "options": {
                 "allowPipes": allowPipes,
                 "rounds": rounds,
+                "questionCount": questionCount,
+                "timeLimitSeconds": timeLimitMinutes * 60,
             }
         }
 
@@ -151,6 +168,20 @@ export default function SessionCreation() {
                             min={1}
                             max={20}
                         />
+                        <NumberSelector
+                            label="Questions per round"
+                            value={questionCount}
+                            onChange={setQuestionCount}
+                            min={Math.max(1, selectedCommandCount)}
+                            max={50}
+                        />
+                        {playType === "Versus" && <NumberSelector
+                            label="Minutes per round"
+                            value={timeLimitMinutes}
+                            onChange={setTimeLimitMinutes}
+                            min={1}
+                            max={60}
+                        />}
                         <div className="inline-field">
                             <span className="field-label">Allow Pipes</span>
                             <label className="switch-row">

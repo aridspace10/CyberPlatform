@@ -1,6 +1,6 @@
 import { motion as Motion } from "motion/react"
 import './WaitingScreen.css'
-export default function WaitingScreen({players, onGameStart}) {
+export default function WaitingScreen({players, onGameStart, canStart}) {
     return (
         <div>
             <div className="players">
@@ -20,7 +20,8 @@ export default function WaitingScreen({players, onGameStart}) {
                 ))}
             </div>
             <div>
-                <Motion.button onClick={onGameStart} className="start-btn"> Start the game </Motion.button>
+                {canStart && <Motion.button onClick={onGameStart} className="start-btn" disabled={players.length < 2}> Start the game </Motion.button>}
+                {players.length < 2 && <p>Waiting for another player to join.</p>}
             </div>
         </div>
     )
