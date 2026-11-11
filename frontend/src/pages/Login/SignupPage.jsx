@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../../auth/useAuth";
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
 export default function Signup() {
@@ -18,12 +18,14 @@ export default function Signup() {
     setError("");
     setLoading(true);
     try {
-        const data = await signup(username, email, password, cpassword);
-        if (typeof data == "object") {
-            navigate("/")
+        const result = await signup(username, email, password, cpassword);
+        if (typeof result === "string") {
+          setError(result);
+          return;
         }
-    } catch {
-      setError("ACCESS DENIED — INVALID CREDENTIALS");
+        navigate("/login", { state: { accountCreated: true } });
+    } catch (err) {
+      setError(err.message || "Could not create account. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -91,12 +93,12 @@ export default function Signup() {
             <div className="login-input-wrap">
               <span className="input-prefix">📧</span>
               <input
-                type="text"
+                type="email"
                 placeholder="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={handleKeyDown}
-                autoComplete="username"
+                autoComplete="email"
                 spellCheck={false}
               />
               <div className="input-line" />
@@ -114,10 +116,14 @@ export default function Signup() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={handleKeyDown}
-                autoComplete="current-password"
+                autoComplete="new-password"
+                aria-describedby="signup-password-requirements"
               />
               <div className="input-line" />
             </div>
+            <p id="signup-password-requirements" className="login-hint">
+              8–100 characters, uppercase and lowercase letters, a number, a symbol, and no spaces.
+            </p>
           </div>
 
           {/* Confirm Password */}
@@ -131,7 +137,7 @@ export default function Signup() {
                 value={cpassword}
                 onChange={e => setCPassword(e.target.value)}
                 onKeyDown={handleKeyDown}
-                autoComplete="current-password"
+                autoComplete="new-password"
               />
               <div className="input-line" />
             </div>
@@ -147,7 +153,7 @@ export default function Signup() {
           </button>
 
           {/* Error */}
-          <div className="login-error">{error}</div>
+          <div className="login-error" role="alert">{error}</div>
         </div>
 
         {/* Footer */}

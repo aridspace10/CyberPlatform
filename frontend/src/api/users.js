@@ -14,7 +14,11 @@ export async function createUser(username, email, password) {
     body: JSON.stringify({ username, email, password })
   });
 
-  return await res.json();
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(typeof data.detail === "string" ? data.detail : "Could not create account. Please try again.");
+  }
+  return data;
 }
 
 export async function updateUser(id, username, email) {
