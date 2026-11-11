@@ -88,8 +88,7 @@ class GameSession:
         data = self.game_manager.get_game_data(self.name, player_id)
         data["isSandbox"] = self.is_sandbox
         names = {
-            str(player.user_id): player.username
-            for player in self.players.values()
+            str(player.user_id): player.username for player in self.players.values()
         }
         for entry in data["leaderboard"]:
             entry["name"] = names.get(entry["playerID"], entry["playerID"])
@@ -131,9 +130,8 @@ class GameSession:
         if self.state != "running" or not self.game_manager.questions:
             return
         player_ids = [str(player.user_id) for player in self.connected_players()]
-        if (
-            not self.game_manager.is_expired()
-            and not self.game_manager.all_finished(player_ids)
+        if not self.game_manager.is_expired() and not self.game_manager.all_finished(
+            player_ids
         ):
             return
         if self.game_manager.round_number < self.game_manager.num_rounds:
@@ -269,6 +267,8 @@ class GameSession:
         await self.broadcast_game_state()
 
     async def connect(self, websocket: WebSocket, username: str, user_id: str):
+        if username in self.players and self.players[username].user_id != user_id:
+            raise ValueError("Username belongs to another session player")
         self.connections[websocket] = username
 
         if username not in self.players:

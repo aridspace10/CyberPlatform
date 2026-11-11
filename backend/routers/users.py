@@ -5,9 +5,10 @@ from db.authentication import (
     hash_password,
     verify_password,
 )
-from db.modals import Friendship, User
+from db.modals import Friendship, GameSession, SessionShell, User
 from db.session import SessionLocal
 from fastapi import APIRouter, Depends, HTTPException
+from network.SessionManger import session_manager
 from pydantic import BaseModel
 from services.user_service import friendship_between
 from sqlalchemy import or_
@@ -186,7 +187,7 @@ def delete_friend_request(
 
 
 @router.delete("/me/friends/{friend_id}")
-def remove_friend(
+async def remove_friend(
     friend_id: int,
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -194,8 +195,38 @@ def remove_friend(
     friendship = friendship_between(db, user_id, friend_id)
     if friendship is None or friendship.status != "accepted":
         raise HTTPException(status_code=404, detail="Friend not found")
+    affected_sessions = (
+        db.query(GameSession)
+        .filter(
+            GameSession.visibility == "friends_only",
+            GameSession.creatorID.in_((user_id, friend_id)),
+        )
+        .all()
+    )
     db.delete(friendship)
+    for session in affected_sessions:
+        removed_id = friend_id if session.creatorID == user_id else user_id
+        shell = db.get(SessionShell, (session.id, removed_id))
+        if shell is not None:
+            db.delete(shell)
     db.commit()
+    for session in affected_sessions:
+        removed_id = friend_id if session.creatorID == user_id else user_id
+        runtime = session_manager.get_session(str(session.id))
+        if runtime == "404":
+            continue
+        for websocket, username in list(runtime.connections.items()):
+            player = runtime.players.get(username)
+            if player is not None and int(player.user_id) == removed_id:
+                try:
+                    await websocket.close(code=4403)
+                except Exception:
+                    pass
+                await runtime.disconnect(websocket)
+        for username, player in list(runtime.players.items()):
+            if int(player.user_id) == removed_id:
+                runtime.players.pop(username)
+        await runtime.broadcast_game_state()
     return {"message": "Friend removed"}
 
 
@@ -237,8 +268,22 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 # UPDATE USER
 @router.put("/{user_id}")
-def update_user(user_id: int, username: str, email: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
+def update_user(
+    user_id: int,
+    username: str,
+    email: str,
+    current_user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user_id != user_id:
+        raise HTTPException(
+            status_code=403, detail="You can only update your own account"
+        )
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if db.query(User).filter(User.username == username, User.id != user_id).first():
+        raise HTTPException(status_code=409, detail="Username already in use")
 
     user.username = username
     user.email = email
@@ -251,8 +296,18 @@ def update_user(user_id: int, username: str, email: str, db: Session = Depends(g
 
 # DELETE USER
 @router.delete("/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
+def delete_user(
+    user_id: int,
+    current_user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user_id != user_id:
+        raise HTTPException(
+            status_code=403, detail="You can only delete your own account"
+        )
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
 
     db.delete(user)
     db.commit()
