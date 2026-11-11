@@ -264,6 +264,7 @@ class GameManager:
                     answer["required_option"] is None
                     or answer["required_option"] in match.options
                 )
+                and (("l" in match.options) == (answer["required_option"] == "l"))
                 and (stdout is None or match.output in stdout)
                 for match in matches
             ):

@@ -144,7 +144,7 @@ async def session_create(body: SessionCreate, db: Session = Depends(get_db)):
         )
         runtime_session.state = initial_state
         runtime_session.game_manager.set_config(config_data)
-        if config.playType == "SinglePlayer":
+        if config.playType == "SinglePlayer" and config.gameType == "MiniGames":
             runtime_session.game_manager.start_round([str(config.creatorID)])
 
         db.add(

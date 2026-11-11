@@ -5,7 +5,6 @@ import Versus from "./Versus";
 import GameDataPanel from "./GameDataPanel";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
-import { getFullSessionData } from "../api/sessions";
 import { SessionContext } from "../components/SessionContext";
 import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
@@ -16,7 +15,7 @@ import "./Gamescreen.css"
 
 export default function Game() {
     const { sessionId } = useParams();
-    const { user } = useAuth()
+    const { user, logout } = useAuth()
     const [players, setPlayers] = useState([]);
     const wsRef = useRef(null);
     const [commandLog, setCommandLog] = useState([]);
@@ -39,23 +38,21 @@ export default function Game() {
 
         const socket = new WebSocket(`${WEBSOCKET_URL}/ws/${sessionId}`);
 
-        socket.onopen = async () => {
+        socket.onopen = () => {
             socket.send(JSON.stringify({
                 type: "join",
-                username: user.username,
-                userID: user.id
+                token: localStorage.getItem("token"),
             }));
-
-            const sessionData = await getFullSessionData(sessionId, user.id);
-            setState(sessionData["state"]);
-            setGameData(sessionData.gameData);
         };
 
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
 
-            if (data.type === "chat") {
-                addChatLine({ user: data.user, message: data.message });
+            if (data.type === "chat" && typeof data.message === "string" && data.message.trim()) {
+                addChatLine({
+                    user: typeof data.user === "string" ? data.user : "Player",
+                    message: data.message,
+                });
             }
 
             if (data.type === "lobby_update") {
@@ -87,13 +84,17 @@ export default function Game() {
             }
         };
 
+        socket.onclose = (event) => {
+            if (event.code === 4401) logout();
+        };
+
         wsRef.current = socket;
 
         return () => {
             socket.close();
             wsRef.current = null;
         };
-    }, [user, sessionId]);
+    }, [user, sessionId, logout]);
 
     const handleTabSwitch = (tab) => {
         setActiveTab(tab);

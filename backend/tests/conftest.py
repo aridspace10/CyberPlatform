@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi.testclient import TestClient
+from db.authentication import create_access_token
 from game.commandline import CommandLine
 from game.filenode import FileNode, Inode, NodeType
 from game.filesystem import FileSystem
@@ -371,7 +372,11 @@ def session(client):
 
     try:
         with client.websocket_connect(f"/ws/{session_id}") as ws:
-            ws.send_json({"username": "jackson", "userID": "1"})
+            ws.send_json({
+                "username": "jackson",
+                "userID": "1",
+                "token": create_access_token({"sub": 1, "username": "jackson"}),
+            })
             ws.receive_json()
             ws.receive_json()
             yield WSSession(ws, game_session)

@@ -40,6 +40,7 @@ export default function Terminal() {
     socket.onopen = () => {
       socket.send(JSON.stringify({
         type: "join",
+        token: localStorage.getItem("token"),
         username: username
       }));
     };

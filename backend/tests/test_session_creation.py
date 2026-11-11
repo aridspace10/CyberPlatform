@@ -1,4 +1,5 @@
 from api.sessions import router
+from db.authentication import create_access_token
 from db.modals import Base, Scenario, ScenarioToSession, SessionShell, User
 from db.session import get_db
 from fastapi import FastAPI
@@ -129,6 +130,91 @@ def test_single_player_session_starts_running():
         client.portal.call(session_manager.remove_session, str(result["session_id"]))
 
 
+def test_running_minigame_reopens_with_a_fresh_playable_round():
+    client, testing_session = make_client()
+    with client:
+        response = client.post(
+            "/api/session_create", json=creation_payload("SinglePlayer")
+        )
+        assert response.status_code == 201
+        session_id = str(response.json()["session_id"])
+        original = session_manager.get_session(session_id)
+        old_prompts = [question["prompt"] for question in original.game_manager.questions]
+        client.portal.call(session_manager.remove_session, session_id)
+
+        with client.websocket_connect(f"/ws/{session_id}") as websocket:
+            websocket.send_json({
+                "userID": "999",
+                "username": "forged",
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()
+            lobby = websocket.receive_json()
+            assert lobby["state"] == "running"
+            assert lobby["players"] == ["creator"]
+            assert lobby["gameData"]["creatorID"] == 42
+            assert len(lobby["gameData"]["questions"]) == 6
+            assert [q["prompt"] for q in lobby["gameData"]["questions"]] != old_prompts
+            assert session_manager.get_session(session_id).players["creator"].user_id == "42"
+
+            prompt = next(
+                q["prompt"] for q in lobby["gameData"]["questions"]
+                if q["mode"] == "basic"
+            )
+            marker, path = prompt.split()[-3], prompt.split()[-1]
+            websocket.send_json({"type": "command", "input": f"grep {marker} {path}"})
+            output = websocket.receive_json()
+            assert output["type"] == "command_output"
+            assert output["status"] == 0
+            assert marker in output["stdout"][0]
+
+        db = testing_session()
+        saved = db.query(SessionShell).one()
+        assert saved.shell["fs"] == session_manager.get_session(session_id).game_manager.get_shell()["fs"]
+        db.close()
+        client.portal.call(session_manager.remove_session, session_id)
+
+
+def test_waiting_versus_reopens_with_saved_host_config():
+    client, _testing_session = make_client()
+    with client:
+        response = client.post("/api/session_create", json=creation_payload("Versus"))
+        assert response.status_code == 201
+        session_id = str(response.json()["session_id"])
+        client.portal.call(session_manager.remove_session, session_id)
+
+        with client.websocket_connect(f"/ws/{session_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()
+            lobby = websocket.receive_json()
+            assert lobby["state"] == "waiting"
+            assert lobby["gameData"]["creatorID"] == 42
+            assert lobby["gameData"]["progress"] == {"completed": 0, "total": 6}
+            websocket.send_json({"type": "start_game"})
+            warning = websocket.receive_json()
+            assert warning["type"] == "system"
+            assert "Two players" in warning["message"]
+
+        client.portal.call(session_manager.remove_session, session_id)
+
+
+def test_single_player_tutorial_creation_does_not_generate_minigame_round():
+    client, _testing_session = make_client()
+    payload = creation_payload("SinglePlayer")
+    payload["config"]["gameType"] = "Tutorial"
+    payload["config"]["commands"] = {}
+    with client:
+        response = client.post("/api/session_create", json=payload)
+        assert response.status_code == 201
+        session_id = str(response.json()["session_id"])
+        runtime = session_manager.get_session(session_id)
+        assert runtime.state == "running"
+        assert runtime.game_manager.questions == []
+        client.portal.call(session_manager.remove_session, session_id)
+
+
 def test_selected_sed_configuration_generates_sed_questions():
     client, _testing_session = make_client()
     payload = creation_payload("SinglePlayer")
@@ -211,7 +297,11 @@ def test_sandbox_is_marked_and_excluded_from_active_sessions():
 
         client.portal.call(session_manager.remove_session, sandbox_id)
         with client.websocket_connect(f"/ws/{sandbox_id}") as websocket:
-            websocket.send_json({"username": "creator", "userID": "42"})
+            websocket.send_json({
+                "username": "creator",
+                "userID": "42",
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
             websocket.receive_json()
             assert session_manager.get_session(sandbox_id).is_sandbox is True
             assert sandbox_id not in {

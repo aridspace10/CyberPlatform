@@ -35,12 +35,13 @@ export default function ChatTab({ wsRef, chatLog, username }) {
                     <p className="chat-empty">No messages yet. Start the conversation.</p>
                 )}
                 {chatLog.map((entry, index) => {
-                    const sender = entry.user || "Player";
+                    const sender = typeof entry?.user === "string" ? entry.user : "Player";
+                    const message = typeof entry?.message === "string" ? entry.message : "";
                     const ownMessage = sender === username;
                     return (
                         <div className={`chat-message${ownMessage ? " own" : ""}`} key={index}>
                             <span className="chat-sender">{ownMessage ? "You" : sender}</span>
-                            <p>{entry.message}</p>
+                            <p>{message}</p>
                         </div>
                     );
                 })}

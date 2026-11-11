@@ -1,3 +1,5 @@
+import os
+import secrets
 from datetime import datetime, timedelta
 
 from fastapi import Depends, HTTPException
@@ -19,7 +21,7 @@ class TokenResponse(BaseModel):
 
 
 ### JWT handling ###
-SECRET_KEY = "ccf447dfd8df5287991ef5ceb9a2f26c452bbf25eeb63d25c4e951783e5e2cf4"
+SECRET_KEY = os.environ.get("CYBERPLATFORM_JWT_SECRET") or secrets.token_urlsafe(32)
 ALGORITHM = "HS256"
 
 

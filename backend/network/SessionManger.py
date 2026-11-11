@@ -75,6 +75,15 @@ class GameSession:
             return None
         return self.players.get(username)
 
+    def connected_players(self) -> list[Player]:
+        """Return each currently connected participant once."""
+        players: dict[str, Player] = {}
+        for websocket, username in self.connections.items():
+            player = self.players.get(username)
+            if player is not None and player.websocket is websocket:
+                players[str(player.user_id)] = player
+        return list(players.values())
+
     def lobby_state(self, player_id: str | None = None) -> dict:
         data = self.game_manager.get_game_data(self.name, player_id)
         data["isSandbox"] = self.is_sandbox
@@ -86,7 +95,7 @@ class GameSession:
             entry["name"] = names.get(entry["playerID"], entry["playerID"])
         return {
             "type": "lobby_update",
-            "players": [p.username for p in self.players.values()],
+            "players": [p.username for p in self.connected_players()],
             "state": self.state,
             "session": self.session_id,
             "name": self.name,
@@ -121,7 +130,7 @@ class GameSession:
     async def finish_round_if_ready(self) -> None:
         if self.state != "running" or not self.game_manager.questions:
             return
-        player_ids = [str(player.user_id) for player in self.players.values()]
+        player_ids = [str(player.user_id) for player in self.connected_players()]
         if (
             not self.game_manager.is_expired()
             and not self.game_manager.all_finished(player_ids)
@@ -302,6 +311,7 @@ class GameSession:
             player.websocket = None
 
         await self.broadcast({"type": "system", "message": f"{username} disconnected"})
+        await self.broadcast_game_state()
 
     async def broadcast(self, message: dict):
         dead = []

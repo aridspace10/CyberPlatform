@@ -73,6 +73,39 @@ def test_generated_grep_markers_avoid_ambiguous_characters(cl):
         assert marker.group() in result.stdout[0]
 
 
+@pytest.mark.parametrize(
+    ("selected_options", "wrong_flag", "correct_flag"),
+    [([], "-l", ""), (["Show Line Number"], "-ln", "-n")],
+)
+def test_filename_only_grep_does_not_complete_line_question(
+    cl, selected_options, wrong_flag, correct_flag
+):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Grep output type",
+        "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"grep": {"selected": True, "options": selected_options}},
+        "options": {"rounds": 1, "questionCount": 1},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    answer = manager._answers[question["id"]]
+    marker = answer["pattern"]
+    path = question["prompt"].split()[-1]
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    wrong = cl.enter_command(f"grep {wrong_flag} {marker} {path}", player)
+    assert wrong.status == 0
+    assert wrong.stdout == [path]
+    assert not manager.record_grep("1", player.grep_matches, wrong.stdout)
+
+    correct = cl.enter_command(f"grep {correct_flag} {marker} {path}", player)
+    assert correct.status == 0
+    assert manager.record_grep("1", player.grep_matches, correct.stdout)
+
+
 def test_selected_grep_options_generate_matching_questions(cl):
     manager = GameManager()
     manager.set_config({
