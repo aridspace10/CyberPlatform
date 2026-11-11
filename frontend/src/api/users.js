@@ -40,5 +40,9 @@ export async function loginUser(username, password) {
         body: JSON.stringify({ username, password })
     });
 
-    return await res.json();
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.detail || "Could not sign in");
+    }
+    return data;
 }
