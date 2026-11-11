@@ -14,6 +14,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from network.SessionManger import session_manager
 from network.WebsocketServer import router as websocket_router
+from routers.users import get_db as get_users_db
+from routers.users import router as users_router
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -47,7 +49,9 @@ def make_client():
     app = FastAPI()
     app.include_router(router)
     app.include_router(websocket_router)
+    app.include_router(users_router)
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_users_db] = override_get_db
     client = TestClient(app)
     client.headers["Authorization"] = "Bearer " + create_access_token(
         {"sub": 42, "username": "creator"}
@@ -401,6 +405,33 @@ def test_private_session_requires_request_and_host_approval():
             client.get(f"/api/session/{session_id}", headers=guest_headers).status_code
             == 403
         )
+        assert client.get("/api/shells", headers=guest_headers).json() == {"shells": []}
+        assert (
+            client.get(
+                f"/api/db/session/{session_id}", headers=guest_headers
+            ).status_code
+            == 403
+        )
+        assert (
+            client.get(
+                f"/api/session/{session_id}/diagnostics", headers=guest_headers
+            ).status_code
+            == 403
+        )
+        assert (
+            client.post(
+                f"/api/sessions/{session_id}/save", headers=guest_headers
+            ).status_code
+            == 403
+        )
+        assert (
+            client.post(
+                f"/api/sessions/{session_id}/state",
+                json={"state": "running"},
+                headers=guest_headers,
+            ).status_code
+            == 403
+        )
         with client.websocket_connect(f"/ws/{session_id}") as ws:
             ws.send_json({"token": guest_headers["Authorization"].split(" ", 1)[1]})
             try:
@@ -432,6 +463,10 @@ def test_private_session_requires_request_and_host_approval():
             client.get(f"/api/session/{session_id}", headers=guest_headers).status_code
             == 200
         )
+        guest_debug = client.get(
+            f"/api/db/session/{session_id}", headers=guest_headers
+        ).json()
+        assert [player["userID"] for player in guest_debug["players"]] == [43]
         with client.websocket_connect(f"/ws/{session_id}") as ws:
             ws.send_json({"token": guest_headers["Authorization"].split(" ", 1)[1]})
             ws.receive_json()
@@ -463,6 +498,121 @@ def test_public_versus_allows_authenticated_guest_and_hides_solo_session():
         db.close()
         client.portal.call(session_manager.remove_session, str(public_id))
         client.portal.call(session_manager.remove_session, str(solo_id))
+
+
+def test_reused_username_cannot_inherit_another_players_runtime_shell():
+    client, testing_session = make_client()
+    with client:
+        response = client.post("/api/session_create", json=creation_payload("Versus"))
+        session_id = response.json()["session_id"]
+        with client.websocket_connect(f"/ws/{session_id}") as host:
+            host.send_json(
+                {
+                    "token": authorization(42, "creator")["Authorization"].split(
+                        " ", 1
+                    )[1]
+                }
+            )
+            host.receive_json()
+            host.receive_json()
+
+        db = testing_session()
+        db.get(User, 42).username = "renamed-creator"
+        db.get(User, 43).username = "creator"
+        db.commit()
+        db.close()
+
+        with client.websocket_connect(f"/ws/{session_id}") as guest:
+            guest.send_json(
+                {
+                    "token": authorization(43, "creator")["Authorization"].split(
+                        " ", 1
+                    )[1]
+                }
+            )
+            try:
+                guest.receive_json()
+            except WebSocketDisconnect as error:
+                assert error.code == 4403
+            else:
+                raise AssertionError("Guest inherited the host's runtime player")
+        runtime = session_manager.get_session(str(session_id))
+        assert runtime.players["creator"].user_id == "42"
+
+        with client.websocket_connect(f"/ws/{session_id}") as host:
+            host.send_json(
+                {
+                    "token": authorization(42, "renamed-creator")[
+                        "Authorization"
+                    ].split(" ", 1)[1]
+                }
+            )
+            host.receive_json()
+            assert host.receive_json()["type"] == "lobby_update"
+            assert len(runtime.players) == 1
+        client.portal.call(session_manager.remove_session, str(session_id))
+
+
+def test_friends_only_revocation_closes_socket_and_blocks_saved_state():
+    client, testing_session = make_client()
+    payload = creation_payload("Versus")
+    payload["config"]["visibility"] = "friends_only"
+    with client:
+        session_id = client.post("/api/session_create", json=payload).json()[
+            "session_id"
+        ]
+        db = testing_session()
+        db.add(Friendship(requester_id=42, recipient_id=43, status="accepted"))
+        db.commit()
+        db.close()
+        guest_headers = authorization(43, "guest")
+        with client.websocket_connect(f"/ws/{session_id}") as guest:
+            guest.send_json({"token": guest_headers["Authorization"].split(" ", 1)[1]})
+            guest.receive_json()
+            guest.receive_json()
+            assert client.delete("/users/me/friends/43").status_code == 200
+            try:
+                guest.receive_json()
+            except WebSocketDisconnect as error:
+                assert error.code == 4403
+            else:
+                raise AssertionError("Former friend kept a live connection")
+
+        db = testing_session()
+        assert db.get(SessionShell, (session_id, 43)) is None
+        db.close()
+        assert "guest" not in session_manager.get_session(str(session_id)).players
+
+        assert (
+            client.get(f"/api/session/{session_id}", headers=guest_headers).status_code
+            == 403
+        )
+        assert (
+            client.get(
+                f"/api/db/session/{session_id}", headers=guest_headers
+            ).status_code
+            == 403
+        )
+        assert (
+            client.get(
+                f"/api/session/{session_id}/diagnostics", headers=guest_headers
+            ).status_code
+            == 403
+        )
+        assert (
+            client.post(
+                f"/api/sessions/{session_id}/save", headers=guest_headers
+            ).status_code
+            == 403
+        )
+        assert client.get("/api/shells", headers=guest_headers).json() == {"shells": []}
+        assert str(session_id) not in {
+            item["id"]
+            for item in client.get("/api/sessions", headers=guest_headers).json()[
+                "sessions"
+            ]
+        }
+        client.portal.call(session_manager.remove_session, str(session_id))
 
 
 def test_friends_only_requires_accepted_friendship_and_single_player_stays_solo():

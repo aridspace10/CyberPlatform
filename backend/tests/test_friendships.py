@@ -71,9 +71,12 @@ def test_friend_request_lifecycle_and_public_responses():
         with factory() as db:
             assert not is_friend(db, 1, 2)
 
-        assert client.post(
-            f"/users/me/friend-requests/{request_id}/accept", headers=auth(3)
-        ).status_code == 403
+        assert (
+            client.post(
+                f"/users/me/friend-requests/{request_id}/accept", headers=auth(3)
+            ).status_code
+            == 403
+        )
         accepted = client.post(
             f"/users/me/friend-requests/{request_id}/accept", headers=auth(2)
         )
@@ -98,29 +101,71 @@ def test_friend_request_lifecycle_and_public_responses():
 def test_friend_request_conflicts_and_recipient_can_decline():
     client, _ = make_client()
     with client:
-        assert client.post(
-            "/users/me/friend-requests", json={"user_id": 1}, headers=auth(1)
-        ).status_code == 400
-        assert client.post(
-            "/users/me/friend-requests", json={"user_id": 999}, headers=auth(1)
-        ).status_code == 404
+        assert (
+            client.post(
+                "/users/me/friend-requests", json={"user_id": 1}, headers=auth(1)
+            ).status_code
+            == 400
+        )
+        assert (
+            client.post(
+                "/users/me/friend-requests", json={"user_id": 999}, headers=auth(1)
+            ).status_code
+            == 404
+        )
         first = client.post(
             "/users/me/friend-requests", json={"user_id": 2}, headers=auth(1)
         )
         request_id = first.json()["id"]
-        assert client.post(
-            "/users/me/friend-requests", json={"user_id": 2}, headers=auth(1)
-        ).status_code == 409
-        assert client.post(
-            "/users/me/friend-requests", json={"user_id": 1}, headers=auth(2)
-        ).status_code == 409
-        assert client.delete(
-            f"/users/me/friend-requests/{request_id}", headers=auth(3)
-        ).status_code == 403
-        assert client.delete(
-            f"/users/me/friend-requests/{request_id}", headers=auth(2)
-        ).status_code == 200
+        assert (
+            client.post(
+                "/users/me/friend-requests", json={"user_id": 2}, headers=auth(1)
+            ).status_code
+            == 409
+        )
+        assert (
+            client.post(
+                "/users/me/friend-requests", json={"user_id": 1}, headers=auth(2)
+            ).status_code
+            == 409
+        )
+        assert (
+            client.delete(
+                f"/users/me/friend-requests/{request_id}", headers=auth(3)
+            ).status_code
+            == 403
+        )
+        assert (
+            client.delete(
+                f"/users/me/friend-requests/{request_id}", headers=auth(2)
+            ).status_code
+            == 200
+        )
         assert client.get("/users/me/friend-requests", headers=auth(1)).json() == {
             "incoming": [],
             "outgoing": [],
         }
+
+
+def test_account_mutations_require_the_account_owner():
+    client, factory = make_client()
+    with client:
+        update = "/users/2?username=stolen&email=stolen@example.com"
+        assert client.put(update).status_code == 401
+        assert client.put(update, headers=auth(1)).status_code == 403
+        assert client.delete("/users/2").status_code == 401
+        assert client.delete("/users/2", headers=auth(1)).status_code == 403
+        assert (
+            client.put(
+                "/users/2?username=Alice&email=bob@example.com", headers=auth(2)
+            ).status_code
+            == 409
+        )
+        assert (
+            client.put(
+                "/users/2?username=Robert&email=bob@example.com", headers=auth(2)
+            ).status_code
+            == 200
+        )
+        with factory() as db:
+            assert db.get(User, 2).username == "Robert"

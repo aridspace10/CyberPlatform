@@ -24,7 +24,10 @@ export async function createUser(username, email, password) {
 export async function updateUser(id, username, email) {
   const res = await fetch(`${API}/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
     body: JSON.stringify({ username, email })
   });
 
@@ -33,7 +36,8 @@ export async function updateUser(id, username, email) {
 
 export async function deleteUser(id) {
   await fetch(`${API}/${id}`, {
-    method: "DELETE"
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
   });
 }
 

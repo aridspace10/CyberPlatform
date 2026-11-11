@@ -235,6 +235,15 @@ async def websocket_endpoint(
             await session_manager.remove_session(session_id)
             await websocket.close(code=1008)
             return
+    existing_player = next(
+        (player for player in session.players.values() if player.user_id == user_id),
+        None,
+    )
+    if existing_player is not None:
+        username = existing_player.username
+    elif username in session.players:
+        await websocket.close(code=4403)
+        return
     if database_session is not None and membership is None:
         db.add(
             SessionShell(
@@ -303,6 +312,16 @@ async def websocket_endpoint(
                     },
                 )
                 continue
+
+            if (
+                database_session is not None
+                and database_session.visibility == "friends_only"
+                and int(user_id) != database_session.creatorID
+                and not is_friend(db, int(user_id), database_session.creatorID)
+            ):
+                await websocket.close(code=4403)
+                await session.disconnect(websocket)
+                return
 
             if not isinstance(data, dict):
                 session.logger.record_activity(

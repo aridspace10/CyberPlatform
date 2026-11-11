@@ -28,6 +28,28 @@ from sqlalchemy.orm import Session
 router = APIRouter(prefix="/api")
 
 
+def friend_scope_allows(db: Session, session: DatabaseGameSession, user_id: int):
+    return (
+        session.visibility != "friends_only"
+        or user_id == session.creatorID
+        or is_friend(db, user_id, session.creatorID)
+    )
+
+
+def require_session_member(db: Session, session_id: int, user_id: int):
+    """Return the session only while this user may access its saved state."""
+    session = get_session(db, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if db.get(SessionShell, (session_id, user_id)) is None or not friend_scope_allows(
+        db, session, user_id
+    ):
+        raise HTTPException(
+            status_code=403, detail="You are not a member of this session"
+        )
+    return session
+
+
 class StateUpdate(BaseModel):
     state: str
 
@@ -112,8 +134,8 @@ def list_sessions(
             continue
         if saved.visibility == "private" and not member:
             continue
-        if saved.visibility == "friends_only" and not (
-            member or (user_id is not None and is_friend(db, user_id, saved.creatorID))
+        if saved.visibility == "friends_only" and (
+            user_id is None or not friend_scope_allows(db, saved, user_id)
         ):
             continue
         sessions.append(
@@ -440,7 +462,15 @@ async def get_sandbox(
 async def get_shells(
     user_id: int = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    return {"shells": db.query(SessionShell).filter_by(UserID=user_id).all()}
+    shells = db.query(SessionShell).filter_by(UserID=user_id).all()
+    return {
+        "shells": [
+            shell
+            for shell in shells
+            if (session := get_session(db, shell.SessionID)) is not None
+            and friend_scope_allows(db, session, user_id)
+        ]
+    }
 
 
 @router.post("/sessions/{session_id}/state")
@@ -470,17 +500,17 @@ async def save_session_state(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if db.get(SessionShell, (int(session_id), user_id)) is None:
-        raise HTTPException(
-            status_code=403, detail="You are not a member of this session"
-        )
+    require_session_member(db, int(session_id), user_id)
     ses = session_manager.get_session(session_id)
     if ses == "404":
-        return {"message": "sessionID does not exist"}
-    for _username, player in ses.players.items():
-        update_session_shell(
-            db, int(session_id), int(player.user_id), player.serialize()
-        )
+        raise HTTPException(status_code=404, detail="Session not found")
+    player = next(
+        (player for player in ses.players.values() if int(player.user_id) == user_id),
+        None,
+    )
+    if player is not None:
+        update_session_shell(db, int(session_id), user_id, player.serialize())
+    return {"status": "saved"}
 
 
 @router.get("/scenarios")
@@ -494,10 +524,7 @@ def get_session_data(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if db.get(SessionShell, (session_id, user_id)) is None:
-        raise HTTPException(
-            status_code=403, detail="You are not a member of this session"
-        )
+    require_session_member(db, session_id, user_id)
     session = session_manager.get_session(str(session_id))
     if session == "404":
         raise HTTPException(status_code=404, detail="Session not found")
@@ -518,22 +545,7 @@ def download_session_diagnostics(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    database_session = get_session(db, session_id)
-    if database_session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    membership = (
-        db.query(SessionShell)
-        .filter(
-            SessionShell.SessionID == session_id,
-            SessionShell.UserID == user_id,
-        )
-        .first()
-    )
-    if membership is None:
-        raise HTTPException(
-            status_code=403, detail="You are not a member of this session"
-        )
+    require_session_member(db, session_id, user_id)
 
     runtime_session = session_manager.get_session(str(session_id))
     logger = (
@@ -560,13 +572,7 @@ def debug_session(
     db: Session = Depends(get_db),
 ):
     # 1. Get session
-    session = get_session(db, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if db.get(SessionShell, (session_id, user_id)) is None:
-        raise HTTPException(
-            status_code=403, detail="You are not a member of this session"
-        )
+    session = require_session_member(db, session_id, user_id)
 
     # 2. Get scenario mapping
     scenario_link = (
@@ -582,7 +588,7 @@ def debug_session(
         )
 
     # 3. Get all shells (players in session)
-    shells = db.query(SessionShell).filter(SessionShell.SessionID == session_id).all()
+    own_shell = db.get(SessionShell, (session_id, user_id))
 
     # 4. Build response
     return {
@@ -597,5 +603,5 @@ def debug_session(
             "config": scenario_link.config if scenario_link else None,
             "base": scenario.config if scenario else None,
         },
-        "players": [{"userID": s.UserID, "shell": s.shell} for s in shells],
+        "players": [{"userID": own_shell.UserID, "shell": own_shell.shell}],
     }
