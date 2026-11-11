@@ -1,10 +1,182 @@
+import re
+
 import pytest
 from game.filenode import FileNode
+from game.GameManager import GameManager
 from game.inode import Inode, NodeType
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error, descendants
 from tests.command_helpers import assert_help
+
+
+def test_grep_questions_complete_from_real_terminal_matches(cl):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Grep round", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"grep": {"selected": True, "options": []}},
+        "options": {"rounds": 2},
+    })
+    manager.start_round(["1", "2"])
+    assert len(manager.questions) == 10
+
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    question = manager.questions[0]
+    marker, path = question["prompt"].split()[-3], question["prompt"].split()[-1]
+
+    cl.enter_command(f"echo {marker}", player)
+    assert not manager.record_grep("1", player.grep_matches)
+    result = cl.enter_command(f"grep {marker} {path}", player)
+    assert result.status == 0
+    assert marker in result.stdout[0]
+    assert manager.record_grep("1", player.grep_matches)
+    assert not manager.record_grep("1", player.grep_matches)
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
+    assert manager.get_game_data(player_id="2")["progress"]["completed"] == 0
+
+    for question in manager.questions[1:]:
+        marker, path = question["prompt"].split()[-3], question["prompt"].split()[-1]
+        result = cl.enter_command(f"grep {marker} {path}", player)
+        assert result.status == 0
+        assert manager.record_grep("1", player.grep_matches)
+
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 10
+    first_prompts = [question["prompt"] for question in manager.questions]
+    manager.start_round(["1", "2"])
+    assert [question["prompt"] for question in manager.questions] != first_prompts
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 0
+    assert manager.get_game_data()["leaderboard"][0]["completed"] == 10
+
+
+def test_generated_grep_markers_avoid_ambiguous_characters(cl):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Readable grep markers",
+        "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"grep": {"selected": True, "options": []}},
+        "options": {"rounds": 1, "questionCount": 10},
+    })
+    manager.start_round(["1"])
+
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    for question in manager.questions:
+        marker = re.search(r"TRACE_([A-F0-9]{8})", question["prompt"])
+        assert marker is not None
+        assert not set(marker.group(1)) & set("018B")
+
+        path = question["prompt"].split()[-1]
+        result = cl.enter_command(f"grep {marker.group()} {path}", player)
+        assert result.status == 0
+        assert marker.group() in result.stdout[0]
+
+
+@pytest.mark.parametrize(
+    ("selected_options", "wrong_flag", "correct_flag"),
+    [([], "-l", ""), (["Show Line Number"], "-ln", "-n")],
+)
+def test_filename_only_grep_does_not_complete_line_question(
+    cl, selected_options, wrong_flag, correct_flag
+):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Grep output type",
+        "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"grep": {"selected": True, "options": selected_options}},
+        "options": {"rounds": 1, "questionCount": 1},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    answer = manager._answers[question["id"]]
+    marker = answer["pattern"]
+    path = question["prompt"].split()[-1]
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    wrong = cl.enter_command(f"grep {wrong_flag} {marker} {path}", player)
+    assert wrong.status == 0
+    assert wrong.stdout == [path]
+    assert not manager.record_grep("1", player.grep_matches, wrong.stdout)
+
+    correct = cl.enter_command(f"grep {correct_flag} {marker} {path}", player)
+    assert correct.status == 0
+    assert manager.record_grep("1", player.grep_matches, correct.stdout)
+
+
+def test_selected_grep_options_generate_matching_questions(cl):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Grep options", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"grep": {"selected": True, "options": [
+            "Case Insensitive", "Find By Filename", "Match By Line",
+            "Match By Word", "Show Line Number",
+        ]}},
+        "options": {"rounds": 1, "questionCount": 5},
+    })
+    manager.start_round(["1"])
+    assert {question["mode"] for question in manager.questions} == {
+        "ignore_case", "files_with_matches", "line_regexp",
+        "word_regexp", "line_number",
+    }
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    for question in manager.questions:
+        prompt = question["prompt"]
+        mode = question["mode"]
+        marker = re.search(r"TRACE_[A-F0-9]+", prompt).group()
+        path = "/logs" if mode == "files_with_matches" else prompt.split()[-1]
+        pattern = (
+            re.search(r'"([^"]+)"', prompt).group(1)
+            if mode == "line_regexp" else marker
+        )
+        plain_command = (
+            f"grep -r {pattern} {path}"
+            if mode == "files_with_matches" else f'grep "{pattern}" {path}'
+        )
+        plain = cl.enter_command(plain_command, player)
+        assert not manager.record_grep("1", player.grep_matches, plain.stdout)
+
+        flag = {
+            "ignore_case": "-i", "files_with_matches": "-rl",
+            "line_regexp": "-x", "word_regexp": "-w", "line_number": "-n",
+        }[mode]
+        result = cl.enter_command(f'grep {flag} "{pattern}" {path}', player)
+        assert result.status == 0
+        assert manager.record_grep("1", player.grep_matches, result.stdout)
+
+    assert manager.get_game_data(player_id="1")["progress"] == {
+        "completed": 5, "total": 5,
+    }
+
+
+def test_game_pipe_setting_controls_terminal_pipeline(cl):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Pipe setting", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"grep": {"selected": True, "options": []}},
+        "options": {"rounds": 1, "questionCount": 1, "allowPipes": False},
+    })
+    manager.start_round(["1"])
+    player = ShellState()
+    shell_data = manager.get_shell()
+    player.fs.from_dict(shell_data["fs"])
+    player.allow_pipes = shell_data["allowPipes"]
+    words = manager.questions[0]["prompt"].split()
+    marker, path = words[-3], words[-1]
+    command = f"grep {marker} {path} | grep {marker}"
+    blocked = cl.enter_command(command, player)
+    assert blocked.status != 0
+    assert blocked.stderr == ["Pipes are disabled for this game"]
+    assert not player.grep_matches
+
+    player.allow_pipes = True
+    allowed = cl.enter_command(command, player)
+    assert allowed.status == 0
+    assert manager.record_grep("1", player.grep_matches, allowed.stdout)
 
 
 @pytest.mark.parametrize(
@@ -111,7 +283,9 @@ def test_grep_help_describes_regex_and_status_contract(cl, shell_empty):
 
     assert result.status == 0
     assert any("Python regular expression" in line for line in result.stdout)
-    assert any("Status 0 means at least one line matched" in line for line in result.stdout)
+    assert any(
+        "Status 0 means at least one line matched" in line for line in result.stdout
+    )
     assert any("--regexp=PATTERN" in line for line in result.stdout)
 
 
@@ -184,7 +358,9 @@ def test_grep_count_is_per_file_and_retains_missing_file_error(cl, shell_empty):
     shell_empty.fs.add_file("second.txt")
     shell_empty.fs.current.access("second.txt").set_data(["beta"])
 
-    result = cl.enter_command("grep -c alpha first.txt missing.txt second.txt", shell_empty)
+    result = cl.enter_command(
+        "grep -c alpha first.txt missing.txt second.txt", shell_empty
+    )
 
     assert result.status == 2
     assert result.stdout == ["first.txt:2", "second.txt:0"]
@@ -246,7 +422,9 @@ def test_grep_recursion_applies_include_exclude_and_directory_filters(
 
     excluded = cl.enter_command("grep -r --exclude=keep.zzz alpha search", shell_empty)
     assert excluded.status == 0
-    assert excluded.stdout == ["search/skip.txt:alpha", "search/ignored/inside.zzz:alpha"]
+    assert excluded.stdout == [
+        "search/skip.txt:alpha", "search/ignored/inside.zzz:alpha"
+    ]
     assert excluded.stderr == []
 
 
@@ -312,7 +490,9 @@ def test_grep_recursive_search_handles_deep_directory_trees(cl, shell_empty):
     [("grep ERROR f1.txt", 0, ["ERROR no", "ERROR no2"]),
      ("grep NOMATCH f1.txt", 1, [])],
 )
-def test_grep_match_and_no_match_statuses(cl, shell_basic, command, expected_status, expected_stdout):
+def test_grep_match_and_no_match_statuses(
+    cl, shell_basic, command, expected_status, expected_stdout
+):
     result = cl.enter_command(command, shell_basic)
 
     assert result.status == expected_status
@@ -350,7 +530,10 @@ def test_grep_dot_paths_recursive_search(run_dot_command, dot_directory):
     result = run_dot_command(f"grep -r : {operand}")
     assert result.status == 0
     assert result.stderr == []
-    actual = [next(item for item in expected if output.endswith(item)) for output in result.stdout]
+    actual = [
+        next(item for item in expected if output.endswith(item))
+        for output in result.stdout
+    ]
     assert sorted(actual) == sorted(expected)
 
 

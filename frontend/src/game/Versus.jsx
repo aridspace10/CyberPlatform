@@ -1,4 +1,4 @@
-import { motion as Motion, AnimatePresence } from "framer-motion";
+import { motion as Motion, AnimatePresence } from "motion/react";
 import "./Versus.css"
 
 export default function Versus({ players }) {

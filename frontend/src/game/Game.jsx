@@ -5,7 +5,6 @@ import Versus from "./Versus";
 import GameDataPanel from "./GameDataPanel";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
-import { getFullSessionData } from "../api/sessions";
 import { SessionContext } from "../components/SessionContext";
 import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
@@ -16,7 +15,7 @@ import "./Gamescreen.css"
 
 export default function Game() {
     const { sessionId } = useParams();
-    const { user } = useAuth()
+    const { user, logout } = useAuth()
     const [players, setPlayers] = useState([]);
     const wsRef = useRef(null);
     const [commandLog, setCommandLog] = useState([]);
@@ -24,14 +23,14 @@ export default function Game() {
     const [state, setState] = useState(null);
     const [gameData, setGameData] = useState(null);
     const [activeTab, setActiveTab] = useState("General");
-    const [cwd, setCwd] = useState("/root");
+    const [cwd, setCwd] = useState("/");
 
     function addCommandLine(text) {
         setCommandLog(prev => [...prev, text]);
     }
 
-    function addChatLine(text) {
-        setChatLog(prev => [...prev, text]);
+    function addChatLine(message) {
+        setChatLog(prev => [...prev, message]);
     }
 
     useEffect(() => {
@@ -39,29 +38,28 @@ export default function Game() {
 
         const socket = new WebSocket(`${WEBSOCKET_URL}/ws/${sessionId}`);
 
-        socket.onopen = async () => {
+        socket.onopen = () => {
             socket.send(JSON.stringify({
                 type: "join",
-                username: user.username,
-                userID: user.id
+                token: localStorage.getItem("token"),
             }));
-
-            const sessionData = await getFullSessionData(sessionId, user.id);
-            setState(sessionData["state"]);
-            setGameData(sessionData.gameData);
         };
 
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
 
-            if (data.type === "chat") {
-                addChatLine(`${data.user}: ${data.message}`);
+            if (data.type === "chat" && typeof data.message === "string" && data.message.trim()) {
+                addChatLine({
+                    user: typeof data.user === "string" ? data.user : "Player",
+                    message: data.message,
+                });
             }
 
             if (data.type === "lobby_update") {
                 setPlayers(data.players);
                 setState(data.state);
                 if (data.gameData) setGameData(data.gameData);
+                if (data.cwd) setCwd(data.cwd);
                 return;
             }
 
@@ -73,6 +71,10 @@ export default function Game() {
                 if (data.cwd) setCwd(data.cwd);
                 data.stdout.forEach(line => addCommandLine(line));
                 data.stderr.forEach(line => addCommandLine(line));
+                if (data.status !== undefined && data.status !== 0 &&
+                    data.stdout.length === 0 && data.stderr.length === 0) {
+                    addCommandLine(`[exit status ${data.status}: no output]`);
+                }
             }
 
             if (data.type === "background_job_complete") {
@@ -82,13 +84,17 @@ export default function Game() {
             }
         };
 
+        socket.onclose = (event) => {
+            if (event.code === 4401) logout();
+        };
+
         wsRef.current = socket;
 
         return () => {
             socket.close();
             wsRef.current = null;
         };
-    }, [user, sessionId]);
+    }, [user, sessionId, logout]);
 
     const handleTabSwitch = (tab) => {
         setActiveTab(tab);
@@ -99,19 +105,26 @@ export default function Game() {
           <div className="game">
             <div className="sidebar-page">
                 <div className="sidebar-nav">
-                    <button onClick={() => handleTabSwitch("General")}> General </button>
-                    <button onClick={() => handleTabSwitch("Settings")}> Settings </button>
-                    <button onClick={() => handleTabSwitch("Environment")}> Environment </button>
-                    <button onClick={() => handleTabSwitch("Chat")}> Chat </button>
+                    {["General", "Settings", "Environment", "Chat"].map(tab => (
+                        <button
+                            key={tab}
+                            type="button"
+                            className={activeTab === tab ? "active" : ""}
+                            aria-pressed={activeTab === tab}
+                            onClick={() => handleTabSwitch(tab)}
+                        >
+                            {tab}
+                        </button>
+                    ))}
                 </div>
                 {activeTab === "General" && <GeneralTab />}
                 {activeTab === "Settings" && <SettingsTab />}
                 {activeTab === "Environment" && <EnvironmentTab />}
-                {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} />}
+                {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} username={user?.username} />}
             </div>
 
             <main className="game-stage">
-                {state === "waiting" && <WaitingScreen players={players} />}
+                {state === "waiting" && <WaitingScreen players={players} canStart={String(gameData?.creatorID) === String(user?.id)} onGameStart={() => wsRef.current?.send(JSON.stringify({ type: "start_game" }))} />}
                 {state === "running" && (
                     <Gamescreen
                         wsRef={wsRef}
@@ -122,9 +135,10 @@ export default function Game() {
                     />
                 )}
                 {state === "starting" && <Versus players={players} />}
+                {state === "finished" && <div className="game-finished"><h1>Game complete</h1></div>}
                 {!state && <h1>Loading...</h1>}
             </main>
-            <GameDataPanel gameData={gameData} />
+            {gameData && <GameDataPanel gameData={gameData} />}
           </div>
         </SessionContext.Provider>
     )

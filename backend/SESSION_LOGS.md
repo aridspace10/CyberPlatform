@@ -41,3 +41,9 @@ For a hosted frontend, set `VITE_BACKEND_URL` at build time to the backend's
 public HTTP(S) origin. Set `CYBERPLATFORM_CORS_ORIGINS` on the backend to a
 comma-separated list of the frontend origins that may call it. The defaults keep
 local development on `http://localhost:5173` and `http://localhost:8000`.
+
+Set `CYBERPLATFORM_JWT_SECRET` to the same long, random value on every backend
+worker. When unset, the backend generates a different secret each time it
+starts. This is convenient for local development, but it signs users out after
+every restart and cannot support multiple workers. Keep the configured secret
+outside the repository and rotate it if it is disclosed.

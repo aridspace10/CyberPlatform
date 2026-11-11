@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createUser, loginUser } from "../api/users";
 import { AuthContext } from "./auth-context";
 import { BACKEND_URL } from "../api/config";
@@ -16,17 +16,28 @@ schema
   .not().spaces()
   .not().oneOf(['Password1', 'Password!']);
 
+async function getCurrentUser(token) {
+  const response = await fetch(`${BACKEND_URL}/users/me`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) throw new Error("Your sign-in has expired");
+
+  const user = await response.json();
+  if (!Number.isInteger(user?.id)) throw new Error("Invalid user response");
+  return user;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(
     () => Boolean(localStorage.getItem("token"))
   );
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem("token");
     setUser(null);
     setLoading(false);
-  };
+  }, []);
 
   // Load user on app start
   useEffect(() => {
@@ -34,20 +45,13 @@ export function AuthProvider({ children }) {
 
     if (!token) return;
 
-    fetch(`${BACKEND_URL}/users/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-      .then(res => res.json())
-      .then(data => {
-        setUser(data);
+    getCurrentUser(token)
+      .then(currentUser => {
+        setUser(currentUser);
         setLoading(false);
       })
-      .catch(() => {
-        logout();
-      });
-  }, []);
+      .catch(logout);
+  }, [logout]);
 
   const signup = async (username, email, password, cpassword) => {
     if (!validator.isEmail(email)) {
@@ -75,15 +79,12 @@ export function AuthProvider({ children }) {
 
     localStorage.setItem("token", data.access_token);
 
-    // fetch user after login
-    const meRes = await fetch(`${BACKEND_URL}/users/me`, {
-      headers: {
-        Authorization: `Bearer ${data.access_token}`
-      }
-    });
-
-    const userData = await meRes.json();
-    setUser(userData);
+    try {
+      setUser(await getCurrentUser(data.access_token));
+    } catch (error) {
+      logout();
+      throw error;
+    }
   };
 
   return (

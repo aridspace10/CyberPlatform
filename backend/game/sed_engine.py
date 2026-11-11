@@ -6,10 +6,10 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
-from game.Context import CommandContext
-from game.InputBuffer import InputBuffer
-from game.inode import Inode, NodeType
 from game.commandline import CommandResult
+from game.Context import CommandContext
+from game.inode import Inode, NodeType
+from game.ShellState import SedChange
 
 
 @dataclass(frozen=True)
@@ -187,12 +187,13 @@ def _command_selected(
 
 def _apply_commands(
     lines: tuple[str, ...], commands: list[SedCommand], suppress_print: bool
-) -> tuple[list[str], list[str], int | None]:
+) -> tuple[list[str], list[str], int | None, bool]:
     output: list[str] = []
     edited_lines: list[str] = []
     ranges: dict[int, bool] = {}
     line_count = len(lines)
     last_source_index = None
+    used_ignore_case = False
     for line_number, original in enumerate(lines, 1):
         line = original
         deleted = False
@@ -237,13 +238,15 @@ def _apply_commands(
                     changed = count > 0
                 if changed and command.print_substitution:
                     printed.append(line)
+                if changed and command.ignore_case:
+                    used_ignore_case = True
         output.extend(printed)
         if not deleted:
             edited_lines.append(line)
             last_source_index = line_number - 1
             if not suppress_print:
                 output.append(line)
-    return output, edited_lines, last_source_index
+    return output, edited_lines, last_source_index, used_ignore_case
 
 
 def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandResult:
@@ -350,7 +353,7 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
                 status = 1
                 continue
 
-        output, new, last_source_index = _apply_commands(
+        output, new, last_source_index, used_ignore_case = _apply_commands(
             content.lines, commands, suppress_print
         )
         if in_place:
@@ -386,4 +389,16 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
             )
         else:
             stdout.extend(output)
+        if source is not None and tuple(new) != content.lines:
+            ctx.system.shell.sed_changes.append(
+                SedChange(
+                    inode_id=source.inode.id,
+                    before=content.lines,
+                    after=tuple(new),
+                    output=tuple(output),
+                    in_place=in_place,
+                    backup_suffix=backup_suffix,
+                    ignore_case=used_ignore_case,
+                )
+            )
     return CommandResult(status, stdout, stderr)

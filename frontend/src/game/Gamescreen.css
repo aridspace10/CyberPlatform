@@ -116,30 +116,35 @@ html, body, #root {
 
 /* Tab Nav */
 .sidebar-nav {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   flex: 0 0 auto;
   border-bottom: 1px solid #2a2a2a;
   background-color: #0d0d0d;
 }
 
 .sidebar-nav button {
-  flex: 1 1 0;
+  min-width: 0;
   background: none;
   border: none;
   border-right: 1px solid #2a2a2a;
+  border-bottom: 1px solid #2a2a2a;
   color: #777;
   font-family: inherit;
   font-size: 0.75rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  padding: 10px 4px;
+  padding: 10px 6px;
   cursor: pointer;
   transition: color 0.15s, background-color 0.15s;
 }
 
-.sidebar-nav button:last-child {
+.sidebar-nav button:nth-child(even) {
   border-right: none;
+}
+
+.sidebar-nav button:nth-last-child(-n + 2) {
+  border-bottom: none;
 }
 
 .sidebar-nav button:hover {
@@ -150,7 +155,7 @@ html, body, #root {
 .sidebar-nav button.active {
   color: #00e676;
   background-color: #111;
-  border-bottom: 2px solid #00e676;
+  box-shadow: inset 0 -2px #00e676;
 }
 
 /* Tab Content Area */
@@ -177,7 +182,7 @@ html, body, #root {
 
 .terminal .prompt-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.6rem;
   color: #00e676;
   font-size: 0.9rem;
@@ -188,4 +193,38 @@ html, body, #root {
   flex: 0 0 auto;
   color: #00e676;
   user-select: none;
+}
+
+.terminal .history-controls {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.terminal .history-controls button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #31523d;
+  border-radius: 4px;
+  background: #142019;
+  color: #00e676;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.terminal .history-controls button:hover:not(:disabled),
+.terminal .history-controls button:focus-visible {
+  border-color: #00e676;
+  background: #1d3425;
+  outline: none;
+}
+
+.terminal .history-controls button:disabled {
+  border-color: #2a2a2a;
+  background: transparent;
+  color: #5f6570;
+  cursor: default;
 }

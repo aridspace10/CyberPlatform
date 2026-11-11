@@ -1,14 +1,50 @@
+import json
 from uuid import uuid4
 
+from db.authentication import decode_token
+from db.modals import ScenarioToSession, SessionShell
 from db.session import get_db
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from game.commandline import CommandResult, Interaction
 from game.ProcessManager import ProcessState
+from jose import JWTError
 from network.SessionManger import Player, session_manager
-from services.session_service import get_session, get_session_shell
+from services.session_service import get_session, get_session_shell, is_sandbox_session
+from services.user_service import get_user_by_id
 from sqlalchemy.orm import Session
 
 router = APIRouter()
+
+
+def restore_game_state(db: Session, session, session_id: int) -> bool:
+    """Restore config; replace an interrupted MiniGames round with a playable one."""
+    scenario = (
+        db.query(ScenarioToSession)
+        .filter(ScenarioToSession.sessionID == session_id)
+        .first()
+    )
+    if scenario is None or not scenario.config:
+        return False
+    config = scenario.config
+    if isinstance(config, str):
+        config = json.loads(config)
+    session.game_manager.set_config(config)
+    if session.state == "running" and session.game_manager.game_type == "MiniGames":
+        shells = (
+            db.query(SessionShell)
+            .filter(SessionShell.SessionID == session_id)
+            .all()
+        )
+        participants = [str(shell.UserID) for shell in shells]
+        if not participants:
+            return False
+        shell_data = session.game_manager.start_round(participants)
+        for shell in shells:
+            shell.shell = shell_data
+        db.commit()
+    elif session.state == "finished":
+        session.game_manager.finished = True
+    return True
 
 
 def get_current_path(player: Player) -> str:
@@ -89,6 +125,7 @@ def execute_terminal_input(session, player: Player, raw: str):
             "type": "command_output",
             "stdout": stdout,
             "stderr": stderr,
+            "status": status,
             "cwd": get_current_path(player),
             "interaction": interaction,
         },
@@ -102,31 +139,66 @@ async def websocket_endpoint(
     websocket: WebSocket, session_id: str, db: Session = Depends(get_db)
 ):
     await websocket.accept()
+    try:
+        join_data = await websocket.receive_json()
+    except WebSocketDisconnect:
+        return
+    except Exception:
+        await websocket.close(code=1008)
+        return
+    if not isinstance(join_data, dict) or not isinstance(
+        join_data.get("token"), str
+    ):
+        await websocket.close(code=4401)
+        return
+    try:
+        identity = decode_token(join_data["token"])
+        user_id = str(int(identity["sub"]))
+    except (JWTError, KeyError, TypeError, ValueError):
+        await websocket.close(code=4401)
+        return
+    username = identity.get("username")
+    if not isinstance(username, str) or not username.strip():
+        user = get_user_by_id(db, int(user_id))
+        username = user.username if user else None
+    if not isinstance(username, str) or not username.strip():
+        await websocket.close(code=4401)
+        return
+
     session = session_manager.get_session(session_id)
     if session == "404":
-        ses_db = get_session(db, int(session_id))
+        try:
+            database_id = int(session_id)
+        except ValueError:
+            await websocket.close(code=1008)
+            return
+        ses_db = get_session(db, database_id)
         if ses_db is None:
             await websocket.close()
             return
         session = session_manager.add_session(
             session_id, ses_db.name if ses_db.name else ""
         )
-    username = "anonymous"
-    user_id = "0"
+        session.state = ses_db.state or "waiting"
+        session.is_sandbox = is_sandbox_session(db, ses_db.id)
+        try:
+            restored = restore_game_state(db, session, ses_db.id)
+        except (ValueError, TypeError, KeyError):
+            restored = False
+        if not restored:
+            await session_manager.remove_session(session_id)
+            await websocket.close(code=1008)
+            return
     request_id = str(uuid4())
     try:
         session.ensure_scheduler()
-        # Expect join packet first
-        join_data = await websocket.receive_json()
-        username = join_data.get("username", "anonymous")
-        user_id = join_data.get("userID", "0")
-
         if username not in session.players:
             shell_db = get_session_shell(db, session_id, user_id)
             if shell_db and shell_db.shell:
                 player = Player(websocket, username, user_id)
                 shell = shell_db.shell
                 player.shell.commands = shell["cmds"]
+                player.shell.allow_pipes = shell.get("allowPipes", True)
                 player.shell.vars = shell["vars"]
                 player.shell.fs.from_dict(shell["fs"])
                 session.players[username] = player
@@ -214,6 +286,38 @@ async def websocket_endpoint(
                     }
                 )
 
+            elif msg_type == "start_game":
+                if session.state != "waiting":
+                    await session.send_to(
+                        websocket, {"type": "system", "message": "Game already started"}
+                    )
+                elif str(user_id) != str(session.game_manager.creator_id):
+                    await session.send_to(
+                        websocket,
+                        {
+                            "type": "system",
+                            "message": "Only the host can start the game",
+                        },
+                    )
+                elif len(session.connected_players()) < 2:
+                    await session.send_to(
+                        websocket,
+                        {
+                            "type": "system",
+                            "message": "Two players are needed to start Versus",
+                        },
+                    )
+                elif session.game_manager.game_type != "MiniGames":
+                    await session.send_to(
+                        websocket,
+                        {
+                            "type": "system",
+                            "message": "Rounds are only available for MiniGames",
+                        },
+                    )
+                else:
+                    await session.start_round()
+
             elif msg_type == "cancel_background_job":
                 player = session.players.get(username)
                 pid = data.get("job_id")
@@ -295,6 +399,7 @@ async def websocket_endpoint(
                             proc.status = ProcessState.TERMINATED
                         player.shell.foreground_pid = None
                     player.shell.continuation = None
+                    status = 1
                     response = {
                         "type": "command_output",
                         "stdout": [],
@@ -302,6 +407,7 @@ async def websocket_endpoint(
                             "Command failed unexpectedly. The error was "
                             "logged for this session."
                         ],
+                        "status": status,
                         "cwd": player.shell.cwd or "/",
                         "interaction": None,
                     }
@@ -317,6 +423,21 @@ async def websocket_endpoint(
                         interaction=response["interaction"],
                     )
                 await session.send_to(websocket, response)
+                if session.state == "running" and status == 0:
+                    grep_progress = session.game_manager.record_grep(
+                        str(player.user_id),
+                        player.shell.grep_matches,
+                        response["stdout"],
+                    )
+                    sed_progress = session.game_manager.record_sed(
+                        str(player.user_id),
+                        player.shell.sed_changes,
+                        response["stdout"],
+                        player.shell,
+                    )
+                    if grep_progress or sed_progress:
+                        await session.broadcast_game_state()
+                        await session.finish_round_if_ready()
 
     except WebSocketDisconnect:
         session.logger.record_session_event(

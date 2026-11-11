@@ -1,9 +1,51 @@
 import pytest
 from game.filenode import FileNode
+from game.GameManager import GameManager
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_help
+
+
+def test_selected_sed_options_complete_from_edits_and_backup(cl):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Sed options", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"sed": {"selected": True, "options": [
+            "Save a backup", "Case Insensitive",
+        ]}},
+        "options": {"rounds": 1, "questionCount": 3},
+    })
+    manager.start_round(["1"])
+    assert {question["mode"] for question in manager.questions} == {
+        "basic", "backup", "ignore_case",
+    }
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    for question in manager.questions:
+        answer = manager._answers[question["id"]]
+        source = answer["before"][1].split()[0].lower()
+        replacement = answer["after"][1].split()[0]
+        path = answer["path"]
+        if question["mode"] == "basic":
+            wrong = cl.enter_command(f"echo {answer['line']}", player)
+        else:
+            wrong = cl.enter_command(f"sed 's/{source}/{replacement}/' {path}", player)
+        assert not manager.record_sed("1", player.sed_changes, wrong.stdout, player)
+
+        if question["mode"] == "backup":
+            command = f"sed -i.bak 's/{source}/{replacement}/' {path}"
+        else:
+            flag = "I" if question["mode"] == "ignore_case" else ""
+            command = f"sed 's/{source}/{replacement}/{flag}' {path}"
+        result = cl.enter_command(command, player)
+        assert result.status == 0
+        assert manager.record_sed("1", player.sed_changes, result.stdout, player)
+
+    assert manager.get_game_data(player_id="1")["progress"] == {
+        "completed": 3, "total": 3,
+    }
 
 
 @pytest.mark.parametrize(

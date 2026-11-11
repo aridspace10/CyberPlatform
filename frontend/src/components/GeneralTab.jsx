@@ -35,18 +35,18 @@ export default function GeneralTab() {
     }
 
     return (
-        <div>
-            <div className="general-tab">
-                <h1> General </h1>
-                <button className="tab-button" onClick={handleSave}> Save </button>
+        <div className="general-tab">
+            <h1>General</h1>
+            <button className="tab-button" onClick={handleSave}>Save</button>
+            <div className="diagnostics-action">
                 <button className="tab-button" onClick={handleDownloadDiagnostics}>
                     Download diagnostics
                 </button>
                 <small>Contains only your activity and errors from this session.</small>
                 {diagnosticsError && <p role="alert">{diagnosticsError}</p>}
-                <button className="tab-button" onClick={handleReset}> Reset </button>
-                <button className="tab-button"onClick={handleExit}> Exit </button>
             </div>
+            <button className="tab-button" onClick={handleReset}>Reset</button>
+            <button className="tab-button" onClick={handleExit}>Exit</button>
         </div>
     )
 }

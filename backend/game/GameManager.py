@@ -1,59 +1,38 @@
+"""Shared question and round state for terminal minigames."""
+
 import copy
 import random
-from .ShellState import ShellState
-from .helpers import biased_random, biased_randint, get_all_files, weighted_sample
-from .filenode import FileNode, NodeType
-from .inode import Inode
+import secrets
+import time
 
-QUESTION_TYPES = ["SINGLE", "PIPE_SINGLE"]
-QUESTION_TYPES_PROBS = [1, 0]
+from .filenode import FileNode
+from .ShellState import GrepMatch, SedChange, ShellState
 
-class MiniGame:
-    def __init__(self):
-        self.player_attempts: dict[str, int] = {}
-
-    def setup(self, shell: ShellState) -> None:
-        raise NotImplementedError
-    
-    def check_answer(self, answer: str) -> bool:
-        raise NotImplementedError
-
-
-class GrepFindFiles(MiniGame):
-    def __init__(self):
-        super().__init__()
-        self.expected_files = []
-
-    def setup(self, shell: ShellState) -> None:
-        self.options = []
-        self.target_pattern = random.choice(["error", "secret", "TODO", "admin"])
-        self.starting_dir = "."
-
-        # Get all files (not dirs) from the FS and Get weights using inverse bias
-        all_files = get_all_files(shell.fs.filehead)
-        weights = [1 / (f.depth + 1) for f in all_files]
-        
-        # Get the number of matches we doing for this game and the files we inserting into
-        num_matches = biased_randint(1, max(1, len(all_files) // 3))
-        match_files = weighted_sample(all_files, weights, k=num_matches)
-        
-        # Insert all the expected output files
-        for f in match_files:
-            f.random_insert(self.target_pattern)
-            f.needed = True
-            self.expected_files.append(f.name)
-            
-        self.expected_command = f"grep -{"".join(sorted(self.options))} {self.target_pattern} {self.starting_dir}"
-    
-    def check_answer(self, answer: str) -> bool:
-        answered = set(answer.split("\n"))
-        expected = set(self.expected_files)
-        return True
-
-GREP_GAMES: list[type] = [GrepFindFiles]
-SINGLECMD_GAMES: dict[str, list[type]] = {
-    "grep": GREP_GAMES
+DEFAULT_QUESTION_COUNT = 10
+LOG_WORDS = ("access", "audit", "build", "deploy", "network", "system")
+LOG_LEVELS = ("INFO", "WARN", "ERROR")
+TRACE_ALPHABET = "2345679ACDEF"
+QUESTION_MODES = {
+    "grep": {
+        "Case Insensitive": "ignore_case",
+        "Find By Filename": "files_with_matches",
+        "Match By Line": "line_regexp",
+        "Match By Word": "word_regexp",
+        "Show Line Number": "line_number",
+    },
+    "sed": {
+        "Save a backup": "backup",
+        "Case Insensitive": "ignore_case",
+    },
 }
+GREP_FLAGS = {
+    "ignore_case": "i",
+    "files_with_matches": "l",
+    "line_regexp": "x",
+    "word_regexp": "w",
+    "line_number": "n",
+}
+
 
 class GameManager:
     def __init__(self):
@@ -68,129 +47,316 @@ class GameManager:
         self.options: dict = {}
         self.allow_pipes = False
         self.num_rounds = 0
+        self.question_count = DEFAULT_QUESTION_COUNT
+        self.time_limit_seconds = 300
         self.shell = ShellState()
-        self.minigames = []
         self.questions: list[dict] = []
-        self.completed_questions = 0
+        self._answers: dict[str, dict] = {}
+        self._completed: dict[str, set[str]] = {}
+        self._scores: dict[str, int] = {}
+        self.round_number = 0
+        self.deadline: float | None = None
+        self.finished = False
 
     def set_config(self, config: dict) -> None:
-        """Store the complete session-creation contract for game setup.
-
-        Actual round generation is intentionally a separate step.  Creating a
-        session should not start consuming the configuration before players
-        have reached the appropriate game screen.
-        """
         self.init_config = copy.deepcopy(config)
         self.gen_config = copy.deepcopy(config)
-
         self.session_name = config.get("name", "")
         self.play_type = config.get("playType", "SinglePlayer")
         self.game_type = config.get("gameType", config.get("name", ""))
         self.creator_id = config.get("creatorID")
         self.command_config = copy.deepcopy(config.get("commands", {}))
         self.commands = [
-            command
-            for command, state in self.command_config.items()
+            name
+            for name, state in self.command_config.items()
             if state.get("selected", False)
         ]
         self.options = copy.deepcopy(config.get("options", {}))
         self.allow_pipes = bool(self.options.get("allowPipes", False))
         self.num_rounds = int(self.options.get("rounds", 0))
-
+        self.question_count = int(
+            self.options.get("questionCount", DEFAULT_QUESTION_COUNT)
+        )
+        self.time_limit_seconds = int(self.options.get("timeLimitSeconds", 300))
         self.shell = ShellState()
         self.shell.commands = list(self.commands)
-        self.minigames = []
+        self.shell.allow_pipes = self.allow_pipes
         self.questions = []
-        self.completed_questions = 0
+        self._answers = {}
+        self._completed = {}
+        self._scores = {}
+        self.round_number = 0
+        self.deadline = None
+        self.finished = False
 
     def get_shell(self) -> dict:
-        """Return a serializable copy of the configured starting shell."""
         return {
             "vars": copy.deepcopy(self.shell.vars),
             "cmds": list(self.shell.commands),
             "fs": self.shell.fs.to_dict(),
+            "allowPipes": self.allow_pipes,
         }
 
-    def get_game_data(self, session_name: str | None = None) -> dict:
-        """Return the UI-facing session and minigame progress data."""
+    def start_round(self, player_ids: list[str]) -> dict:
+        """Generate the configured mix of tasks for every player."""
+        if self.game_type != "MiniGames" or not self.commands:
+            raise ValueError("Select a command to play MiniGames")
+        if any(command not in QUESTION_MODES for command in self.commands):
+            raise ValueError("Only grep and sed questions are available")
+        if self.finished or self.round_number >= self.num_rounds:
+            raise ValueError("No rounds remain")
+
+        self.round_number += 1
+        self.shell = ShellState()
+        self.shell.commands = list(self.commands)
+        self.shell.allow_pipes = self.allow_pipes
+        if "grep" in self.commands:
+            self.shell.fs.add_directory("logs")
+        if "sed" in self.commands:
+            self.shell.fs.add_directory("data")
+        self.questions = []
+        self._answers = {}
+        self._completed = {str(player_id): set() for player_id in player_ids}
+        for player_id in player_ids:
+            self._scores.setdefault(str(player_id), 0)
+
+        commands = [
+            self.commands[index % len(self.commands)]
+            for index in range(self.question_count)
+        ]
+        random.shuffle(commands)
+        mode_queues: dict[str, list[str]] = {}
+        for command in self.commands:
+            selected = [
+                QUESTION_MODES[command][option]
+                for option in self.command_config[command].get("options", [])
+                if option in QUESTION_MODES[command]
+            ]
+            modes = selected + (
+                ["basic"] if commands.count(command) > len(selected) else []
+            )
+            random.shuffle(modes)
+            mode_queues[command] = [
+                modes[index % len(modes)] for index in range(commands.count(command))
+            ]
+
+        for index, command in enumerate(commands, start=1):
+            mode = mode_queues[command].pop(0)
+            if command == "grep":
+                self._add_grep_question(index, mode)
+            else:
+                self._add_sed_question(index, mode)
+
+        self.deadline = (
+            time.time() + self.time_limit_seconds
+            if self.play_type == "Versus"
+            else None
+        )
+        return self.get_shell()
+
+    def _add_grep_question(self, index: int, mode: str) -> None:
+        label = random.choice(LOG_WORDS)
+        path = f"/logs/{label}-{index:02d}-{secrets.token_hex(2)}.log"
+        marker = "TRACE_" + "".join(secrets.choice(TRACE_ALPHABET) for _ in range(8))
+        stored_marker = marker.lower() if mode == "ignore_case" else marker
+        line = f"{random.choice(LOG_LEVELS)} {stored_marker} {label} event"
+        contents = [f"INFO {label} started", line, f"INFO {label} complete"]
+        if mode == "word_regexp":
+            contents.insert(1, f"INFO before{marker}after decoy")
+        self.shell.fs.add_file(path)
+        node = self.shell.fs.resolve(path)
+        assert isinstance(node, FileNode)
+        node.set_data(contents)
+
+        prompts = {
+            "basic": f"Use grep to print the line containing {marker} from {path}",
+            "ignore_case": f"Use grep -i to find {marker} regardless of case in {path}",
+            "files_with_matches": (
+                f"Use grep -rl to print the filename containing {marker} under /logs"
+            ),
+            "line_regexp": f'Use grep -x to print exactly "{line}" from {path}',
+            "word_regexp": f"Use grep -w to find {marker} as a whole word in {path}",
+            "line_number": (
+                f"Use grep -n to print {marker} with its line number from {path}"
+            ),
+        }
+        question_id = f"{self.round_number}-{index}"
+        self.questions.append(
+            {
+                "id": question_id,
+                "command": "grep",
+                "mode": mode,
+                "prompt": prompts[mode],
+            }
+        )
+        self._answers[question_id] = {
+            "command": "grep",
+            "inode_id": node.inode.id,
+            "pattern": line if mode == "line_regexp" else marker,
+            "line": line,
+            "required_option": GREP_FLAGS.get(mode),
+        }
+
+    def _add_sed_question(self, index: int, mode: str) -> None:
+        label = random.choice(LOG_WORDS)
+        path = f"/data/{label}-{index:02d}-{secrets.token_hex(2)}.txt"
+        source = f"old{secrets.token_hex(3)}"
+        replacement = f"new{secrets.token_hex(3)}"
+        stored_source = source.upper() if mode == "ignore_case" else source
+        before = (f"INFO {label} started", f"{stored_source} {label} event")
+        after = (before[0], f"{replacement} {label} event")
+        self.shell.fs.add_file(path)
+        node = self.shell.fs.resolve(path)
+        assert isinstance(node, FileNode)
+        node.set_data(list(before))
+
+        prompts = {
+            "basic": (
+                f"Use sed to replace {source} with {replacement} in {path} "
+                "and print the changed line"
+            ),
+            "ignore_case": (
+                f"Use sed's I flag to replace {source} with {replacement} "
+                f"regardless of case in {path} and print the changed line"
+            ),
+            "backup": (
+                f"Use sed -i.bak to replace {source} with {replacement} "
+                f"in {path} and keep a backup"
+            ),
+        }
+        question_id = f"{self.round_number}-{index}"
+        self.questions.append(
+            {"id": question_id, "command": "sed", "mode": mode, "prompt": prompts[mode]}
+        )
+        self._answers[question_id] = {
+            "command": "sed",
+            "inode_id": node.inode.id,
+            "path": path,
+            "before": before,
+            "after": after,
+            "line": after[1],
+            "required_option": mode,
+        }
+
+    def _credit(self, player_id: str, question_id: str) -> None:
+        self._completed.setdefault(str(player_id), set()).add(question_id)
+        self._scores[str(player_id)] = self._scores.get(str(player_id), 0) + 1
+
+    def record_grep(
+        self,
+        player_id: str,
+        matches: set[GrepMatch],
+        stdout: list[str] | None = None,
+    ) -> bool:
+        """Credit a grep task when the requested search result was printed."""
+        if not self.questions or self.finished or self.is_expired():
+            return False
+        completed = self._completed.setdefault(str(player_id), set())
+        changed = False
+        for question_id, answer in self._answers.items():
+            if answer["command"] != "grep" or question_id in completed:
+                continue
+            if any(
+                match.inode_id == answer["inode_id"]
+                and match.pattern == answer["pattern"]
+                and match.line == answer["line"]
+                and (
+                    answer["required_option"] is None
+                    or answer["required_option"] in match.options
+                )
+                and (("l" in match.options) == (answer["required_option"] == "l"))
+                and (stdout is None or match.output in stdout)
+                for match in matches
+            ):
+                self._credit(player_id, question_id)
+                changed = True
+        return changed
+
+    def record_sed(
+        self,
+        player_id: str,
+        changes: list[SedChange],
+        stdout: list[str],
+        shell: ShellState,
+    ) -> bool:
+        """Credit a sed task after the expected edit and backup are observed."""
+        if not self.questions or self.finished or self.is_expired():
+            return False
+        completed = self._completed.setdefault(str(player_id), set())
+        changed = False
+        for question_id, answer in self._answers.items():
+            if answer["command"] != "sed" or question_id in completed:
+                continue
+            for edit in changes:
+                if (
+                    edit.inode_id != answer["inode_id"]
+                    or edit.before != answer["before"]
+                    or edit.after != answer["after"]
+                ):
+                    continue
+                mode = answer["required_option"]
+                if mode == "backup":
+                    if not edit.in_place or not edit.backup_suffix:
+                        continue
+                    backup = shell.fs.resolve(answer["path"] + edit.backup_suffix)
+                    if not isinstance(backup, FileNode):
+                        continue
+                    if tuple(backup.get_data()) != answer["before"]:
+                        continue
+                elif (
+                    edit.in_place
+                    or answer["line"] not in edit.output
+                    or answer["line"] not in stdout
+                    or (mode == "ignore_case" and not edit.ignore_case)
+                ):
+                    continue
+                self._credit(player_id, question_id)
+                changed = True
+                break
+        return changed
+
+    def is_expired(self) -> bool:
+        return self.deadline is not None and time.time() >= self.deadline
+
+    def all_finished(self, player_ids: list[str]) -> bool:
+        return bool(player_ids) and all(
+            len(self._completed.get(str(player_id), set())) == len(self.questions)
+            for player_id in player_ids
+        )
+
+    def get_game_data(
+        self, session_name: str | None = None, player_id: str | None = None
+    ) -> dict:
+        completed = (
+            self._completed.get(str(player_id), set())
+            if player_id is not None
+            else set()
+        )
+        questions = [
+            {
+                **question,
+                "status": "completed" if question["id"] in completed else "active",
+            }
+            for question in self.questions
+        ]
         return {
             "sessionName": session_name or self.session_name,
             "gameType": self.game_type,
             "playType": self.play_type,
-            "questions": copy.deepcopy(self.questions),
+            "creatorID": self.creator_id,
+            "round": self.round_number,
+            "rounds": self.num_rounds,
+            "deadline": self.deadline,
+            "finished": self.finished,
+            "questions": questions,
             "progress": {
-                "completed": self.completed_questions,
-                "total": self.num_rounds,
+                "completed": len(completed),
+                "total": len(questions) or self.question_count,
             },
+            "leaderboard": [
+                {"playerID": pid, "completed": score}
+                for pid, score in sorted(
+                    self._scores.items(), key=lambda item: (-item[1], item[0])
+                )
+            ],
         }
-
-    def auto_generate_fs(self, files: int, dirs: int):
-        # Base Case
-        if files == 0 and dirs == 0:
-            return
-        
-        # Deciding what we doing this time
-        choice = random.choices(
-            ["file", "dir"],
-            weights=[files, dirs]
-        )[0]
-
-        if choice == "dir" and dirs > 0:
-            name = "THE NAME HERE WHEN DECIDE HOW DO THAT"
-            self.shell.fs.add_directory(name)
-            new_dir = self.shell.fs.resolve(name)
-            if not isinstance(new_dir, str):
-                self.shell.fs.current = new_dir
-                self.shell.fs.cwd = self.shell.fs.display_path(new_dir)
-                self.shell.cwd = self.shell.fs.cwd
-
-            # Take some files for nested stuff (will rework more solid logic later)
-            ftaken = biased_randint(0, files, std_factor=3)
-            dtaken = biased_randint(0, dirs - 1, std_factor=3)
-            
-            # Recurse into new dir with its slice of the budget
-            self.auto_generate_fs(ftaken, dtaken)
-            # Else case is not possible however type checking
-            self.shell.fs.current = self.shell.fs.current.parent if self.shell.fs.current.parent != None else self.shell.fs.current
-            self.shell.fs.cwd = self.shell.fs.display_path(self.shell.fs.current)
-            self.shell.cwd = self.shell.fs.cwd
-            
-            # Continue at current level with the remainder
-            self.auto_generate_fs(files - ftaken, dirs - 1 - dtaken)
-
-        elif choice == "file" and files > 0:
-            # Generate file and put in current directory
-            file_name = "THE NAME HERE WHEN DECIDE HOW DO THAT"
-            inode = Inode(NodeType.FILE)
-            fn = FileNode(self.shell.fs.current, file_name, inode)
-            self.shell.fs.add_file(file_name)
-            
-            self.auto_generate_fs(files - 1, dirs)
- 
-    def generate_config(self) -> None:
-        # Get some constants
-        self.type: str = self.init_config["type"]
-        self.num_rounds: int = self.init_config["rounds"]
-        self.commands: list[str] = self.init_config["allowed_commands"]
-        max_files: int = self.init_config["fs"]["files"]
-        max_dir: int = self.init_config["fs"]["dirs"]
-        self.shell = ShellState()
-        self.minigames = []
-        #Generate FS
-        num_files = biased_randint(1, max_files)
-        num_dirs = biased_randint(1, max_dir)
-        self.auto_generate_fs(num_files, num_dirs)
-
-        #Generate rounds
-        for i in range(self.num_rounds):
-            ty = random.choices(QUESTION_TYPES, QUESTION_TYPES_PROBS, k=1)[0]
-            match (ty):
-                case "SINGLE":
-                    # Basic one command
-                    game = random.choice(SINGLECMD_GAMES[random.choice(self.commands)])()
-                case "PIPE_SINGLE":
-                    # pipe (singular)
-                    pos = [(a, b) for a in self.commands for b in self.commands]
-                    match (pos):
-                        case (("ls", "grep")):
-                            pass  
