@@ -5,7 +5,10 @@ const API = API_URL;
 export async function enterTutorial(user_id) {
     const res = await fetch(`${API}/sandbox/${user_id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
         body: JSON.stringify({ user_id })
     });
 
@@ -13,9 +16,10 @@ export async function enterTutorial(user_id) {
     return data
 }
 
-export async function getFullSessionData(session_id, user_id) {
-    const res = await fetch(`${API}/session/${session_id}?user_id=${encodeURIComponent(user_id)}`, {
+export async function getFullSessionData(session_id) {
+    const res = await fetch(`${API}/session/${session_id}`, {
         method: "GET",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     });
 
     const data = await res.json();
@@ -28,7 +32,10 @@ export async function getFullSessionData(session_id, user_id) {
 export async function createSession(config) {
     const res = await fetch(`${API}/session_create`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
         body: JSON.stringify({ config })
     });
 
@@ -44,6 +51,22 @@ export async function createSession(config) {
     }
     return data;
 }
+
+async function sessionAction(path, method = "GET") {
+    const response = await fetch(`${API}${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Session request failed");
+    return data;
+}
+
+export const getSessionAccess = sessionId => sessionAction(`/session/${sessionId}/access`);
+export const requestSessionJoin = sessionId => sessionAction(`/session/${sessionId}/requests`, "POST");
+export const getSessionRequests = sessionId => sessionAction(`/session/${sessionId}/requests`);
+export const answerSessionRequest = (sessionId, userId, decision) =>
+    sessionAction(`/session/${sessionId}/requests/${userId}/${decision}`, "POST");
 
 export async function downloadSessionDiagnostics(sessionId) {
     const token = localStorage.getItem("token");
