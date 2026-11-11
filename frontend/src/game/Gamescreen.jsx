@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router";
-import Terminal from "./Terminal";
 import "./Gamescreen.css"
 export default function Gamescreen({wsRef, commandLog, addCommandLine, username, cwd}) {
     const [input, setInput] = useState("");
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+        inputRef.current?.focus();
+    }, []);
 
     function handleTerminalEnter(e) {
         if (e.key === "Enter") {
@@ -29,7 +32,7 @@ export default function Gamescreen({wsRef, commandLog, addCommandLine, username,
 
     return (
         <div className="gamescreen">
-            <div className="terminal">
+            <div className="terminal" onClick={() => inputRef.current?.focus()}>
                 <div className="output">
                     {commandLog.map((line, i) => (
                     <div key={i}>{line}</div>
@@ -39,6 +42,7 @@ export default function Gamescreen({wsRef, commandLog, addCommandLine, username,
                             {username || "user"}@cyber:{formatPath(cwd)}$
                         </span>
                         <input
+                            ref={inputRef}
                             className="prompt"
                             value={input}
                             onChange={e => setInput(e.target.value)}

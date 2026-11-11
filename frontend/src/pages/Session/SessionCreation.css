@@ -105,6 +105,14 @@
     background-position: right 12px center;
 }
 
+.session-create-error {
+    margin: 14px 0 0;
+    color: #ff7272;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    text-align: left;
+}
+
 /* ── Submit ── */
 .submit-btn {
     margin-top: 20px;

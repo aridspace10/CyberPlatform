@@ -149,7 +149,7 @@ export default function SessionCreation() {
                         ))}
                     </select>
 
-                    {error && <p role="alert">{error}</p>}
+                    {error && <p className="session-create-error" role="alert">{error}</p>}
                     <button className="submit-btn" onClick={handleCreate} disabled={submitting}>
                         {submitting ? "Creating..." : "Create Session"}
                     </button>
