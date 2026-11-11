@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "../../auth/useAuth";
-import { Link, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -109,7 +110,9 @@ export default function Login() {
           </button>
 
           {/* Error */}
-          <div className="login-error">{error}</div>
+          <div className={error ? "login-error" : "login-success"} role="status">
+            {error || (location.state?.accountCreated ? "Account created. Sign in to continue." : "")}
+          </div>
         </div>
 
         {/* Footer */}

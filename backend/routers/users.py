@@ -9,6 +9,7 @@ from db.modals import User
 from db.session import SessionLocal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 
@@ -51,16 +52,23 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 
 # CREATE USER
-@router.post("/")
+@router.post("/", status_code=201)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.username == user.username).first():
+        raise HTTPException(status_code=409, detail="Username is already taken")
+
     hpassword = hash_password(user.password)
     new_user = User(username=user.username, email=user.email, password=hpassword)
 
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Username is already taken") from exc
     db.refresh(new_user)
 
-    return new_user
+    return {"id": new_user.id, "username": new_user.username, "email": new_user.email}
 
 
 # GET USERS

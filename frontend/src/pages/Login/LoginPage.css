@@ -238,6 +238,13 @@ body::after {
   padding-left: 2px;
 }
 
+.login-hint {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+  margin-top: 7px;
+}
+
 .login-input-wrap {
   position: relative;
   display: flex;
@@ -379,6 +386,15 @@ body::after {
 .login-error {
   font-size: 10px;
   color: var(--red-alert);
+  letter-spacing: 0.15em;
+  margin-top: 12px;
+  text-align: center;
+  min-height: 14px;
+}
+
+.login-success {
+  color: var(--green-bright);
+  font-size: 10px;
   letter-spacing: 0.15em;
   margin-top: 12px;
   text-align: center;

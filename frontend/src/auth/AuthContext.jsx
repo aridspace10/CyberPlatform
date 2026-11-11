@@ -63,14 +63,13 @@ export function AuthProvider({ children }) {
     }
 
     if (!schema.validate(password)) {
-        return "Password Invalid"
+        return "Password must be 8–100 characters with uppercase and lowercase letters, a number, and a symbol (no spaces)"
     }
 
     if (password !== cpassword) {
         return "Password and Confirm Password are not the same"
     }
-    const data = await createUser(username, email, password);
-    return data
+    return await createUser(username, email, password);
   }
 
 
