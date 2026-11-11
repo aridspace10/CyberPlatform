@@ -42,6 +42,8 @@ export default function GameDataPanel({ gameData = EMPTY_GAME_DATA }) {
     const percentage = total > 0 ? Math.min(100, (completed / total) * 100) : 0;
     const remaining = data.deadline ? Math.max(0, Math.ceil(data.deadline - now / 1000)) : 0;
 
+    if (data.isSandbox || data.gameType === "Tutorial") return null;
+
     return (
         <aside className="game-data-panel" aria-label="Game data">
             <header className="game-data-header">

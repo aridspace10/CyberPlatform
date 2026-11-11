@@ -43,6 +43,7 @@ class GameSession:
         self.logger = SessionLogger(session_id)
         self.state = "waiting"
         self.name = "Test"
+        self.is_sandbox = False
         self.closed = False
 
         # Player and Connecitons
@@ -76,6 +77,7 @@ class GameSession:
 
     def lobby_state(self, player_id: str | None = None) -> dict:
         data = self.game_manager.get_game_data(self.name, player_id)
+        data["isSandbox"] = self.is_sandbox
         names = {
             str(player.user_id): player.username
             for player in self.players.values()

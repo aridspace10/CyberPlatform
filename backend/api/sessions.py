@@ -1,3 +1,4 @@
+import json
 from typing import Dict, Literal
 
 from db.authentication import get_current_user
@@ -81,6 +82,7 @@ def list_sessions():
         "sessions": [
             {"id": sid, "players": len(session.players), "state": session.state}
             for sid, session in session_manager.sessions.items()
+            if not session.is_sandbox
         ]
     }
 
@@ -219,11 +221,15 @@ async def get_sandbox(user_id: str, db: Session = Depends(get_db)):
         # Create a tutorial session
         sessionID = add_session(db, int(user_id), "Sandbox", "running")
         session = session_manager.add_session(str(sessionID), "Sandbox")
+        session.is_sandbox = True
+        session.state = "running"
         # Generate tutorial config
         scenario = get_scenario_byname(db, "Tutorial")
         if scenario is None:
             return {"error": "No tutorial config"}
-        config: dict = scenario.config or {}
+        config = scenario.config or {}
+        if isinstance(config, str):
+            config = json.loads(config)
         session.game_manger.set_config(config)
         # Add tutorial config to db
         add_session_scenario(db, sessionID, scenario.id, session.game_manger.gen_config)
@@ -235,6 +241,9 @@ async def get_sandbox(user_id: str, db: Session = Depends(get_db)):
         if session_manager.get_session(str(tut.id)) == "404":
             session = session_manager.add_session(str(tut.id), "Sandbox")
             session.state = "running"
+            session.is_sandbox = True
+        else:
+            session_manager.get_session(str(tut.id)).is_sandbox = True
         return {"session_id": tut.id}
 
 
@@ -278,11 +287,13 @@ def get_session_data(
     if session == "404":
         raise HTTPException(status_code=404, detail="Session not found")
 
+    game_data = session.game_manager.get_game_data(session.name, user_id)
+    game_data["isSandbox"] = session.is_sandbox
     return {
         "details": "Found",
         "name": session.name,
         "state": session.state,
-        "gameData": session.game_manager.get_game_data(session.name, user_id),
+        "gameData": game_data,
     }
 
 

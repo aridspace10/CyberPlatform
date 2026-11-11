@@ -1,18 +1,34 @@
+from datetime import datetime
 from typing import List
 
-from db.modals import GameSession, Scenario, ScenarioToSession, SessionShell
+from db.modals import (
+    GameSession,
+    JoinRequest,
+    Scenario,
+    ScenarioToSession,
+    SessionShell,
+)
 from sqlalchemy.orm import Session
-from typing import List 
-from db.modals import GameSession, ScenarioToSession, Scenario, SessionShell, JoinRequest
-from datetime import datetime
 
 
 ############# GETTERS #############
 def get_sandbox_session(db: Session, user_id: int):
     return (
         db.query(GameSession)
-        .filter(GameSession.name == "Sandbox", GameSession.creatorID == user_id)
+        .join(ScenarioToSession, ScenarioToSession.sessionID == GameSession.id)
+        .join(Scenario, Scenario.id == ScenarioToSession.scenarioID)
+        .filter(GameSession.creatorID == user_id, Scenario.name == "Tutorial")
         .first()
+    )
+
+
+def is_sandbox_session(db: Session, session_id: int) -> bool:
+    return (
+        db.query(ScenarioToSession)
+        .join(Scenario, Scenario.id == ScenarioToSession.scenarioID)
+        .filter(ScenarioToSession.sessionID == session_id, Scenario.name == "Tutorial")
+        .first()
+        is not None
     )
 
 

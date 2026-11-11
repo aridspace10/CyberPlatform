@@ -4,6 +4,7 @@ from db.session import get_db
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from network.SessionManger import session_manager
+from network.WebsocketServer import router as websocket_router
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -21,6 +22,7 @@ def make_client():
     db = testing_session()
     db.add(User(id=42, username="creator", email="creator@example.com", password="x"))
     db.add(Scenario(id=7, name="MiniGames", config={"name": "MiniGames"}))
+    db.add(Scenario(id=8, name="Tutorial", config='{"name": "Tutorial"}'))
     db.commit()
     db.close()
 
@@ -33,6 +35,7 @@ def make_client():
 
     app = FastAPI()
     app.include_router(router)
+    app.include_router(websocket_router)
     app.dependency_overrides[get_db] = override_get_db
     return TestClient(app), testing_session
 
@@ -186,3 +189,50 @@ def test_question_count_must_cover_selected_commands():
         response = client.post("/api/session_create", json=payload)
         assert response.status_code == 422
         assert "each selected command" in response.json()["detail"]
+
+
+def test_sandbox_is_marked_and_excluded_from_active_sessions():
+    client, _testing_session = make_client()
+
+    with client:
+        response = client.post("/api/sandbox/42")
+        assert response.status_code == 200
+        sandbox_id = str(response.json()["session_id"])
+        sandbox = session_manager.get_session(sandbox_id)
+        assert sandbox.is_sandbox is True
+        assert sandbox.game_manager.game_type == "Tutorial"
+
+        game_data = client.get(f"/api/session/{sandbox_id}").json()["gameData"]
+        assert game_data["isSandbox"] is True
+        assert sandbox.lobby_state("42")["gameData"]["isSandbox"] is True
+        assert sandbox_id not in {
+            item["id"] for item in client.get("/api/sessions").json()["sessions"]
+        }
+
+        client.portal.call(session_manager.remove_session, sandbox_id)
+        with client.websocket_connect(f"/ws/{sandbox_id}") as websocket:
+            websocket.send_json({"username": "creator", "userID": "42"})
+            websocket.receive_json()
+            assert session_manager.get_session(sandbox_id).is_sandbox is True
+            assert sandbox_id not in {
+                item["id"] for item in client.get("/api/sessions").json()["sessions"]
+            }
+
+        client.portal.call(session_manager.remove_session, sandbox_id)
+        payload = creation_payload("Versus")
+        payload["config"]["name"] = "Sandbox"
+        normal_id = str(
+            client.post("/api/session_create", json=payload).json()["session_id"]
+        )
+        assert normal_id in {
+            item["id"] for item in client.get("/api/sessions").json()["sessions"]
+        }
+        client.portal.call(session_manager.remove_session, normal_id)
+        reopened = client.post("/api/sandbox/42")
+        assert str(reopened.json()["session_id"]) == sandbox_id
+        assert session_manager.get_session(sandbox_id).is_sandbox is True
+        assert sandbox_id not in {
+            item["id"] for item in client.get("/api/sessions").json()["sessions"]
+        }
+
+        client.portal.call(session_manager.remove_session, sandbox_id)

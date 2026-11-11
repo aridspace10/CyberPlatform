@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from game.commandline import CommandResult, Interaction
 from game.ProcessManager import ProcessState
 from network.SessionManger import Player, session_manager
-from services.session_service import get_session, get_session_shell
+from services.session_service import get_session, get_session_shell, is_sandbox_session
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -111,6 +111,8 @@ async def websocket_endpoint(
         session = session_manager.add_session(
             session_id, ses_db.name if ses_db.name else ""
         )
+        session.state = ses_db.state or "waiting"
+        session.is_sandbox = is_sandbox_session(db, ses_db.id)
     username = "anonymous"
     user_id = "0"
     request_id = str(uuid4())
