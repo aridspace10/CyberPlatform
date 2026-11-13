@@ -10,6 +10,7 @@ import NumberSelector from "../../components/NumberSelector";
 export default function SessionCreation() {
     const [name, setName] = useState("");
     const [playType, setPlayType] = useState("SinglePlayer");
+    const [visibility, setVisibility] = useState("public");
     const [gameType, setGameType] = useState("MiniGames");
     const [allowPipes, setAllowPipes] = useState(false);
     const [commandStates, setCommandStates] = useState({ grep: { selected: true, options: [] } });
@@ -85,8 +86,8 @@ export default function SessionCreation() {
         const config = {
             "name": name.trim(),
             "playType": playType,
+            "visibility": visibility,
             "gameType": gameType,
-            "creatorID": user.id,
             "commands": commandStates,
             "options": {
                 "allowPipes": allowPipes,
@@ -136,6 +137,18 @@ export default function SessionCreation() {
                         {typeOptions.map(opt => (
                             <option key={opt} value={opt}>{opt}</option>
                         ))}
+                    </select>
+
+                    <label className="field-label" htmlFor="session-visibility">Session Type</label>
+                    <select
+                        id="session-visibility"
+                        className="select-input"
+                        value={visibility}
+                        onChange={e => setVisibility(e.target.value)}
+                    >
+                        <option value="public">Public</option>
+                        <option value="private">Private</option>
+                        <option value="friends_only">Friends Only</option>
                     </select>
 
                     <label className="field-label">Game Type</label>

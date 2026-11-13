@@ -13,9 +13,11 @@ export default function SessionList() {
   }
 
   useEffect(() => {
-    fetch(`${API_URL}/sessions`)
+    fetch(`${API_URL}/sessions`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    })
       .then(res => res.json())
-      .then(data => setSessions(data.sessions));
+      .then(data => setSessions(data.sessions || []));
   }, []);
 
   return (
@@ -26,6 +28,8 @@ export default function SessionList() {
       <thead>
         <tr>
           <th>Session ID</th>
+          <th>Name</th>
+          <th>Type</th>
           <th>Players</th>
           <th></th>
         </tr>
@@ -35,6 +39,8 @@ export default function SessionList() {
         {sessions.map((s) => (
           <tr key={s.id}>
             <td>{s.id}</td>
+            <td>{s.name}</td>
+            <td>{{ public: "Public", private: "Private", friends_only: "Friends Only" }[s.visibility]}</td>
             <td>{s.players}</td>
             <td><button onClick={() => handleEnter(s.id)}>Enter</button></td>
           </tr>
