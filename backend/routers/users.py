@@ -257,7 +257,9 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Username is already taken") from exc
+        raise HTTPException(
+            status_code=409, detail="Username is already taken"
+        ) from exc
     db.refresh(new_user)
 
     return {"id": new_user.id, "username": new_user.username, "email": new_user.email}
