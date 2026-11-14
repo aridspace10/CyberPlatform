@@ -12,7 +12,8 @@ export default function GeneralTab() {
 
     const handleSave = async () => {
         await fetch(`${API_URL}/sessions/${sessionId}/save`, {
-            method: "POST"
+            method: "POST",
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         })
         addCommandLine("[SYSTEM] Game Saved")
     }

@@ -1,13 +1,11 @@
 import SessionList from "./components/SessionsList"
 import "./Homepage.css"
 import { Link, useNavigate } from 'react-router-dom';
-import { useRef } from "react";
 import { enterTutorial } from "./api/sessions";
 import { useAuth } from "./auth/useAuth";
 
 export default function Homepage() {
     const navigate = useNavigate();
-    const nextId = useRef(123);
     const { user, logout } = useAuth();
     const handleSessionCreation = () => {
         navigate("/session-create")
@@ -25,6 +23,7 @@ export default function Homepage() {
         <div className="homepage">
             <h1> Hello </h1>
             <SessionList />
+            {user && <Link to="/profile">Profile &amp; Friends</Link>}
             <br></br>
             <button onClick={handleSessionCreation}> Create a new session </button>
             <button onClick={handleEnterSandbox}> Enter Sandbox </button>
