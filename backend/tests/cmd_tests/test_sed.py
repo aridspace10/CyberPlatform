@@ -7,6 +7,91 @@ from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_help
 
 
+def test_every_sed_setting_generates_a_solvable_example(cl):
+    from game.GameManager import QUESTION_MODES
+
+    options = list(QUESTION_MODES["sed"])
+    manager = GameManager()
+    manager.set_config({
+        "name": "All sed modes", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"sed": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": len(options)},
+    })
+    manager.start_round(["1"])
+    assert {question["mode"] for question in manager.questions} == set(
+        QUESTION_MODES["sed"].values()
+    )
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    for question in manager.questions:
+        assert question["example"]
+        result = cl.enter_command(question["example"], player)
+        assert result.status == 0, (question, result.stderr)
+        assert manager.record_sed(
+            "1", player.sed_changes, result.stdout, player
+        ), question
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == len(options)
+
+
+@pytest.mark.parametrize("option", [
+    "Replace All", "Replace Occurrence", "Print Changes", "Quiet Output",
+    "Expression Option", "Script File", "Edit In Place", "Line Address",
+    "Pattern Address", "Last Line Address", "Address Range", "Negated Address",
+    "Delete Lines", "Print Lines", "Multiple Expressions", "Alternate Delimiter",
+    "Regex Substitution",
+])
+def test_new_sed_modes_reject_plain_substitution(cl, option):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Sed feature guard", "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"sed": {"selected": True, "options": [option]}},
+        "options": {"rounds": 1, "questionCount": 1},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    answer = manager._answers[question["id"]]
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    wrong = cl.enter_command(
+        f"sed 's/no-such-token/replacement/' {answer['path']}", player
+    )
+    assert not manager.record_sed("1", player.sed_changes, wrong.stdout, player)
+    correct = cl.enter_command(question["example"], player)
+    assert correct.status == 0
+    assert manager.record_sed("1", player.sed_changes, correct.stdout, player)
+
+
+@pytest.mark.parametrize("option", [
+    "Expression Option", "Script File", "Edit In Place",
+    "Alternate Delimiter", "Regex Substitution",
+])
+def test_sed_syntax_modes_require_requested_feature_even_with_same_result(cl, option):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Sed syntax guard", "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"sed": {"selected": True, "options": [option]}},
+        "options": {"rounds": 1, "questionCount": 1},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    answer = manager._answers[question["id"]]
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    source = answer["before"][-1].split()[0]
+    replacement = answer["after"][-1].split()[0]
+    wrong = cl.enter_command(
+        f"sed 's/{source}/{replacement}/' {answer['path']}", player
+    )
+    assert wrong.status == 0
+    assert player.sed_changes[0].after == answer["after"]
+    assert not manager.record_sed("1", player.sed_changes, wrong.stdout, player)
+    correct = cl.enter_command(question["example"], player)
+    assert correct.status == 0
+    assert manager.record_sed("1", player.sed_changes, correct.stdout, player)
+
+
 def test_selected_sed_options_complete_from_edits_and_backup(cl):
     manager = GameManager()
     manager.set_config({
