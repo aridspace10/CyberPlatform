@@ -11,6 +11,46 @@ from tests.cmd_tests.creation_helpers import assert_success
 from tests.cmd_tests.path_helpers import tree_state
 from tests.command_helpers import assert_help
 
+
+@pytest.mark.parametrize(
+    ("options", "mode"),
+    [([], "basic"), (["Show Hidden"], "hidden"), (["Long Listing"], "long")],
+)
+def test_ls_minigame_question_uses_the_requested_directory(cl, options, mode):
+    from game.GameManager import GameManager
+
+    manager = GameManager()
+    manager.set_config({
+        "name": "ls game", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"ls": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    answer = manager._answers[question["id"]]
+    assert question["mode"] == mode
+    assert question["example"] != answer["solution"]
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    directory = answer["solution"].split()[-1]
+    original = player.fs.resolve(directory)
+    decoy_dir = "/inventory/other"
+    player.fs.add_directory(decoy_dir)
+    for child in original.items:
+        player.fs.add_file(f"{decoy_dir}/{child.name}")
+    flag = " ".join(answer["solution"].split()[1:-1])
+    wrong = cl.enter_command(f"ls {flag} {decoy_dir}", player)
+    assert wrong.status == 0
+    assert wrong.stdout == answer["expected_stdout"]
+    assert not manager.record_command_runs("1", player.command_runs, wrong.stdout)
+
+    correct = cl.enter_command(answer["solution"], player)
+    assert correct.status == 0
+    assert correct.stdout == answer["expected_stdout"]
+    assert manager.record_command_runs("1", player.command_runs, correct.stdout)
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
+
 LS_FILES = [
     "xms.bin",
     "silly.c",

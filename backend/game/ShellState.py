@@ -26,6 +26,14 @@ class SedChange:
     features: frozenset[str] = frozenset()
 
 
+@dataclass(frozen=True)
+class CommandRun:
+    command: str
+    args: tuple[str, ...]
+    inode_ids: tuple[int, ...]
+    output: tuple[str, ...]
+
+
 class ShellState:
     def __init__(self):
         self.cwd = "/"
@@ -41,5 +49,6 @@ class ShellState:
         self.background_children: dict[int, list] = {}
         self.grep_matches: set[GrepMatch] = set()
         self.sed_changes: list[SedChange] = []
+        self.command_runs: list[CommandRun] = []
         self.allow_pipes = True
         self.identity = EffectiveIdentity()

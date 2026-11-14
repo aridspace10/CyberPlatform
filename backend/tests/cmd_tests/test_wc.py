@@ -6,6 +6,54 @@ from tests.command_helpers import assert_command_error_without_mutation, assert_
 from tests.filesystem_helpers import restored_filesystem
 
 
+@pytest.mark.parametrize(
+    ("options", "mode"),
+    [([], "basic"), (["Count Lines"], "lines"),
+     (["Count Words"], "words"), (["Count Bytes"], "bytes"),
+     (["Count Characters"], "chars")],
+)
+def test_wc_minigame_counts_the_intended_file(cl, options, mode):
+    from game.GameManager import GameManager
+
+    manager = GameManager()
+    manager.set_config({
+        "name": "wc game", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"wc": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    answer = manager._answers[question["id"]]
+    assert question["mode"] == mode
+    assert question["example"] != answer["solution"]
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    wrong = cl.enter_command(f"echo '{answer['expected_stdout'][0]}'", player)
+    assert wrong.status == 0
+    assert wrong.stdout == answer["expected_stdout"]
+    assert not manager.record_command_runs("1", player.command_runs, wrong.stdout)
+
+    source_path = answer["solution"].split()[-1]
+    decoy_path = "/metrics/duplicate.txt"
+    player.fs.add_file(decoy_path)
+    player.fs.resolve(decoy_path).set_data(
+        list(player.fs.resolve(source_path).get_data())
+    )
+    flag = " ".join(answer["solution"].split()[1:-1])
+    wrong_file = cl.enter_command(f"wc {flag} {decoy_path}", player)
+    assert wrong_file.status == 0
+    assert wrong_file.stdout == answer["expected_stdout"]
+    assert not manager.record_command_runs(
+        "1", player.command_runs, wrong_file.stdout
+    )
+
+    correct = cl.enter_command(answer["solution"], player)
+    assert correct.status == 0
+    assert correct.stdout == answer["expected_stdout"]
+    assert manager.record_command_runs("1", player.command_runs, correct.stdout)
+
+
 def test_wc_help(cl, shell_empty):
     assert_help(cl, shell_empty, "wc")
 

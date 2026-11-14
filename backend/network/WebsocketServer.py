@@ -509,7 +509,12 @@ async def websocket_endpoint(
                         response["stdout"],
                         player.shell,
                     )
-                    if grep_progress or sed_progress:
+                    command_progress = session.game_manager.record_command_runs(
+                        str(player.user_id),
+                        player.shell.command_runs,
+                        response["stdout"],
+                    )
+                    if grep_progress or sed_progress or command_progress:
                         await session.broadcast_game_state()
                         await session.finish_round_if_ready()
 

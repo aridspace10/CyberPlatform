@@ -1,9 +1,54 @@
 import pytest
-from game.ShellState import ShellState
+from game.GameManager import GameManager
 from game.identity import EffectiveIdentity
+from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_help
+
+
+@pytest.mark.parametrize(
+    ("options", "mode"),
+    [([], "basic"), (["Number Lines"], "numbered"),
+     (["Combine Files"], "multiple")],
+)
+def test_cat_minigame_requires_the_intended_file_and_output(cl, options, mode):
+    manager = GameManager()
+    manager.set_config({
+        "name": "cat game", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"cat": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    answer = manager._answers[question["id"]]
+    assert question["mode"] == mode
+    assert question["example"] != answer["solution"]
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    source_paths = [
+        part for part in answer["solution"].split()[1:]
+        if not part.startswith("-")
+    ]
+    decoy_paths = []
+    for number, source_path in enumerate(source_paths, 1):
+        decoy_path = f"/documents/duplicate-{number}.txt"
+        player.fs.add_file(decoy_path)
+        player.fs.resolve(decoy_path).set_data(
+            list(player.fs.resolve(source_path).get_data())
+        )
+        decoy_paths.append(decoy_path)
+    flag = "-n " if mode == "numbered" else ""
+    wrong = cl.enter_command(f"cat {flag}{' '.join(decoy_paths)}", player)
+    assert wrong.status == 0
+    assert wrong.stdout == answer["expected_stdout"]
+    assert not manager.record_command_runs("1", player.command_runs, wrong.stdout)
+
+    correct = cl.enter_command(answer["solution"], player)
+    assert correct.status == 0
+    assert correct.stdout == answer["expected_stdout"]
+    assert manager.record_command_runs("1", player.command_runs, correct.stdout)
 
 
 @pytest.mark.parametrize("lines", [[], ["cat", "", "wolf"]])
@@ -49,7 +94,9 @@ def test_cat_uses_owner_group_other_and_root_permissions(cl, shell_basic):
         "public": {"r": False, "w": False, "x": False},
     }
 
-    shell_basic.identity = EffectiveIdentity("reader", "readers", frozenset({"readers"}))
+    shell_basic.identity = EffectiveIdentity(
+        "reader", "readers", frozenset({"readers"})
+    )
     assert cl.enter_command("cat f1.txt", shell_basic).stdout == [
         "ERROR no",
         "INFO hey",
@@ -57,7 +104,9 @@ def test_cat_uses_owner_group_other_and_root_permissions(cl, shell_basic):
         "error 1",
     ]
 
-    shell_basic.identity = EffectiveIdentity("visitor", "visitors", frozenset({"visitors"}))
+    shell_basic.identity = EffectiveIdentity(
+        "visitor", "visitors", frozenset({"visitors"})
+    )
     denied = cl.enter_command("cat f1.txt", shell_basic)
     assert denied.status != 0
     assert denied.stderr and "Permission denied" in denied.stderr[0]

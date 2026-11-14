@@ -169,11 +169,11 @@ async def session_create(
         name for name, selection in config.commands.items() if selection.selected
     }
     if config.gameType == "MiniGames" and not selected_commands:
-        raise HTTPException(status_code=422, detail="Select grep or sed for MiniGames")
-    if config.gameType == "MiniGames" and selected_commands - {"grep", "sed"}:
+        raise HTTPException(status_code=422, detail="Select a command for MiniGames")
+    if config.gameType == "MiniGames" and selected_commands - set(QUESTION_MODES):
         raise HTTPException(
             status_code=422,
-            detail="Only grep and sed questions are available",
+            detail="A selected command has no MiniGames questions",
         )
     if config.gameType == "MiniGames" and config.options.questionCount < len(
         selected_commands

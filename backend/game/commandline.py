@@ -33,7 +33,7 @@ from game.Parser import (
 from game.Process import ProcessState
 from game.ProcessManager import ProcessManager
 from game.Program import BackgroundJobProgram, HeredocProgram, RmProgram, SleepProgram
-from game.ShellState import GrepMatch, ShellState
+from game.ShellState import CommandRun, GrepMatch, ShellState
 
 from .command_contract import COMMAND_CONTRACTS, format_command_help
 from .helpers import (
@@ -152,6 +152,7 @@ class CommandLine:
     def enter_command(self, raw: str, shell: ShellState) -> CommandResult:
         shell.grep_matches.clear()
         shell.sed_changes.clear()
+        shell.command_runs.clear()
         if not raw.strip():
             return CommandResult(status=shell.last_status)
 
@@ -656,7 +657,24 @@ class CommandLine:
         if command not in {"echo", "cat"} and "--help" in ctx.args:
             return CommandResult(0, stdout=self.useage(command))
 
-        return handler(ctx)
+        observed_args = tuple(ctx.args)
+        if command in {"ls", "cat", "wc"}:
+            paths = [
+                arg for arg in observed_args
+                if arg != "--" and not arg.startswith("-")
+            ]
+            nodes = [sys.fs.resolve(path) for path in paths]
+            inode_ids = tuple(
+                node.inode.id for node in nodes if isinstance(node, FileNode)
+            )
+            if command == "ls" and not paths:
+                inode_ids = (sys.fs.current.inode.id,)
+        result = handler(ctx)
+        if command in {"ls", "cat", "wc"} and result.status == 0:
+            sys.shell.command_runs.append(
+                CommandRun(command, observed_args, inode_ids, tuple(result.stdout))
+            )
+        return result
 
     def useage(self, type: str) -> list[str]:
         if type not in COMMAND_CONTRACTS:
