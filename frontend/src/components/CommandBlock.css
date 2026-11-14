@@ -111,6 +111,30 @@
     padding: 8px 0;
 }
 
+.command-options-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 2px 16px 8px 46px;
+}
+
+.command-options-toggle {
+    border: 0;
+    padding: 4px 0;
+    background: transparent;
+    color: #c8f04a;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.command-options-toggle:hover {
+    text-decoration: underline;
+}
+
+.command-options-toggle:focus-visible {
+    outline: 2px solid #c8f04a;
+    outline-offset: 3px;
+}
+
 .option-row {
     display: flex;
     align-items: center;

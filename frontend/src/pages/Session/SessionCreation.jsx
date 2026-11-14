@@ -68,6 +68,20 @@ export default function SessionCreation() {
         });
     };
 
+    const handleToggleAllCommandOptions = (cmd, options) => {
+        setCommandStates(prev => {
+            const current = prev[cmd] || { selected: false, options: [] };
+            const allSelected = current.selected && options.every(opt => current.options.includes(opt));
+            return {
+                ...prev,
+                [cmd]: {
+                    selected: true,
+                    options: allSelected ? [] : [...options],
+                },
+            };
+        });
+    };
+
     const handleSelectAll = () => {
         const next = {};
         Object.entries(commands).forEach(([cmd, opts]) => {
@@ -237,6 +251,7 @@ export default function SessionCreation() {
                                     onCommandToggle={handleCommandToggle}
                                     selectedOptions={state.options}
                                     onOptionToggle={handleOptionToggle}
+                                    onToggleAllOptions={handleToggleAllCommandOptions}
                                 />
                             );
                         })}
