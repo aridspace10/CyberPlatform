@@ -181,7 +181,13 @@
   overflow-wrap: anywhere;
 }
 
+.question-example summary {
+  cursor: pointer;
+}
+
 .question-example code {
+  display: block;
+  margin-top: 6px;
   font-family: inherit;
 }
 

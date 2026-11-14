@@ -24,8 +24,12 @@ def test_every_sed_setting_generates_a_solvable_example(cl):
     player = ShellState()
     player.fs.from_dict(manager.get_shell()["fs"])
     for question in manager.questions:
+        answer = manager._answers[question["id"]]
         assert question["example"]
-        result = cl.enter_command(question["example"], player)
+        assert question["example"] != answer["solution"]
+        assert answer["path"] not in question["example"]
+        assert "solution" not in question
+        result = cl.enter_command(answer["solution"], player)
         assert result.status == 0, (question, result.stderr)
         assert manager.record_sed(
             "1", player.sed_changes, result.stdout, player
@@ -57,7 +61,7 @@ def test_new_sed_modes_reject_plain_substitution(cl, option):
         f"sed 's/no-such-token/replacement/' {answer['path']}", player
     )
     assert not manager.record_sed("1", player.sed_changes, wrong.stdout, player)
-    correct = cl.enter_command(question["example"], player)
+    correct = cl.enter_command(answer["solution"], player)
     assert correct.status == 0
     assert manager.record_sed("1", player.sed_changes, correct.stdout, player)
 
@@ -87,7 +91,7 @@ def test_sed_syntax_modes_require_requested_feature_even_with_same_result(cl, op
     assert wrong.status == 0
     assert player.sed_changes[0].after == answer["after"]
     assert not manager.record_sed("1", player.sed_changes, wrong.stdout, player)
-    correct = cl.enter_command(question["example"], player)
+    correct = cl.enter_command(answer["solution"], player)
     assert correct.status == 0
     assert manager.record_sed("1", player.sed_changes, correct.stdout, player)
 

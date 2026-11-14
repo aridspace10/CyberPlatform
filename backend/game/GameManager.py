@@ -245,7 +245,7 @@ class GameManager:
                 f"Use grep -n to print {marker} with its line number from {path}"
             ),
         }
-        examples = {
+        solutions = {
             "basic": f"grep {marker} {path}",
             "ignore_case": f"grep -i {marker} {path}",
             "files_with_matches": f"grep -rl {marker} /logs",
@@ -265,6 +265,25 @@ class GameManager:
             "exclude": f"grep -rH --exclude='*.tmp' {marker} /logs",
             "exclude_dir": f"grep -rH --exclude-dir='archive-*' {marker} /logs",
             "regex": f"grep 'TRACE_[A-F0-9]{{8}}' {path}",
+        }
+        examples = {
+            "basic": "grep ERROR /logs/sample.log",
+            "ignore_case": "grep -i error /logs/sample.log",
+            "files_with_matches": "grep -rl ERROR /logs",
+            "line_regexp": "grep -x 'ERROR ready' /logs/sample.log",
+            "word_regexp": "grep -w ERROR /logs/sample.log",
+            "line_number": "grep -n ERROR /logs/sample.log",
+            "invert_match": "grep -v ERROR /logs/sample.log",
+            "count": "grep -c ERROR /logs/sample.log",
+            "only_matching": "grep -o 'ERR_[0-9]+' /logs/sample.log",
+            "recursive": "grep -rH ERROR /logs",
+            "with_filename": "grep -H ERROR /logs/sample.log",
+            "no_filename": "grep -h ERROR /logs/a.log /logs/b.log",
+            "regexp": "grep -e ERROR /logs/sample.log",
+            "include": "grep -rH --include='*.log' ERROR /logs",
+            "exclude": "grep -rH --exclude='*.tmp' ERROR /logs",
+            "exclude_dir": "grep -rH --exclude-dir='archive-*' ERROR /logs",
+            "regex": "grep 'ERR_[0-9]+' /logs/sample.log",
         }
         if mode not in prompts:
             descriptions = {
@@ -321,6 +340,7 @@ class GameManager:
             "line": line,
             "required_option": GREP_FLAGS.get(mode),
             "expected_stdout": expected_stdout,
+            "solution": solutions[mode],
         }
 
     def _add_sed_question(self, index: int, mode: str) -> None:
@@ -355,14 +375,19 @@ class GameManager:
         }
         question_id = f"{self.round_number}-{index}"
         flag = "I" if mode == "ignore_case" else ""
-        example = (
+        solution = (
             f"sed -i.bak 's/{source}/{replacement}/' {path}"
             if mode == "backup"
             else f"sed 's/{source}/{replacement}/{flag}' {path}"
         )
+        examples = {
+            "basic": "sed 's/foo/bar/' /data/sample.txt",
+            "backup": "sed -i.bak 's/foo/bar/' /data/sample.txt",
+            "ignore_case": "sed 's/foo/bar/I' /data/sample.txt",
+        }
         self.questions.append({
             "id": question_id, "command": "sed", "mode": mode,
-            "prompt": prompts[mode], "example": example,
+            "prompt": prompts[mode], "example": examples[mode],
         })
         self._answers[question_id] = {
             "command": "sed",
@@ -372,6 +397,7 @@ class GameManager:
             "after": after,
             "line": after[1],
             "required_option": mode,
+            "solution": solution,
         }
 
     def _add_extended_sed_question(self, index: int, mode: str) -> None:
@@ -450,10 +476,31 @@ class GameManager:
         node = self.shell.fs.resolve(path)
         assert isinstance(node, FileNode)
         node.set_data(list(before))
-        example = (
+        solution = (
             f"sed -f {script_file} {path}" if script_file else
             f"sed {prefix}'{script}' {path}"
         )
+        examples = {
+            "global": "sed 's/foo/bar/g' /data/sample.txt",
+            "occurrence": "sed 's/foo/bar/2' /data/sample.txt",
+            "print_substitution": "sed -n 's/foo/bar/p' /data/sample.txt",
+            "quiet": "sed -n '2p' /data/sample.txt",
+            "expression_option": "sed -e 's/foo/bar/' /data/sample.txt",
+            "script_file": "sed -f /data/example.sed /data/sample.txt",
+            "in_place": "sed -i 's/foo/bar/' /data/sample.txt",
+            "address_line": "sed '2s/foo/bar/' /data/sample.txt",
+            "address_regex": "sed '/READY/s/foo/bar/' /data/sample.txt",
+            "address_last": "sed '$s/foo/bar/' /data/sample.txt",
+            "range": "sed '2,3s/foo/bar/' /data/sample.txt",
+            "negated_address": "sed '1!s/foo/bar/' /data/sample.txt",
+            "delete": "sed '2d' /data/sample.txt",
+            "print": "sed '2p' /data/sample.txt",
+            "multiple_expressions": (
+                "sed -e 's/foo/bar/' -e 's/bar/baz/' /data/sample.txt"
+            ),
+            "custom_delimiter": "sed 's|foo|bar|' /data/sample.txt",
+            "regex_substitution": "sed 's/foo[0-9]+/bar/' /data/sample.txt",
+        }
         expected_stdout = list(after)
         if mode in {"quiet", "print_substitution"}:
             expected_stdout = [after[1]]
@@ -470,7 +517,7 @@ class GameManager:
         self.questions.append({
             "id": question_id, "command": "sed", "mode": mode,
             "prompt": f"Use sed's {mode.replace('_', ' ')} feature on {path}. {target}",
-            "example": example,
+            "example": examples[mode],
         })
         self._answers[question_id] = {
             "command": "sed", "inode_id": node.inode.id, "path": path,
@@ -478,6 +525,7 @@ class GameManager:
             "required_option": mode, "required_features": {mode},
             "expected_stdout": expected_stdout,
             "in_place": mode == "in_place",
+            "solution": solution,
         }
 
     def _credit(self, player_id: str, question_id: str) -> None:

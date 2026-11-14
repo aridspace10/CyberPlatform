@@ -27,8 +27,11 @@ def test_every_grep_setting_generates_a_solvable_example(cl):
     player = ShellState()
     player.fs.from_dict(manager.get_shell()["fs"])
     for question in manager.questions:
+        answer = manager._answers[question["id"]]
         assert question["example"]
-        result = cl.enter_command(question["example"], player)
+        assert question["example"] != answer["solution"]
+        assert "solution" not in question
+        result = cl.enter_command(answer["solution"], player)
         assert result.status == 0, (question, result.stderr)
         assert manager.record_grep("1", player.grep_matches, result.stdout), question
     assert manager.get_game_data(player_id="1")["progress"]["completed"] == len(options)
@@ -59,7 +62,7 @@ def test_new_grep_modes_reject_unrequested_output(cl, option):
     path = question["prompt"].split()[-1]
     wrong = cl.enter_command(f"grep {wrong_pattern} {path}", player)
     assert not manager.record_grep("1", player.grep_matches, wrong.stdout)
-    correct = cl.enter_command(question["example"], player)
+    correct = cl.enter_command(answer["solution"], player)
     assert correct.status == 0
     assert manager.record_grep("1", player.grep_matches, correct.stdout)
 

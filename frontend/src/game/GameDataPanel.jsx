@@ -78,7 +78,10 @@ export default function GameDataPanel({ gameData = EMPTY_GAME_DATA }) {
                         >
                             <p className="question-prompt">{currentQuestion.prompt}</p>
                             {currentQuestion.example && (
-                                <p className="question-example">Example: <code>{currentQuestion.example}</code></p>
+                                <details className="question-example">
+                                    <summary>Show syntax example</summary>
+                                    <code>{currentQuestion.example}</code>
+                                </details>
                             )}
                             <span className="question-status">
                                 {currentQuestion.status === "completed" ? "Completed" : "To do"}
