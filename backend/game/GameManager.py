@@ -19,10 +19,38 @@ QUESTION_MODES = {
         "Match By Line": "line_regexp",
         "Match By Word": "word_regexp",
         "Show Line Number": "line_number",
+        "Invert Match": "invert_match",
+        "Count Matches": "count",
+        "Only Matching Text": "only_matching",
+        "Recursive Search": "recursive",
+        "Show Filename": "with_filename",
+        "Hide Filename": "no_filename",
+        "Explicit Pattern": "regexp",
+        "Include Files": "include",
+        "Exclude Files": "exclude",
+        "Exclude Directories": "exclude_dir",
+        "Regular Expression": "regex",
     },
     "sed": {
         "Save a backup": "backup",
         "Case Insensitive": "ignore_case",
+        "Replace All": "global",
+        "Replace Occurrence": "occurrence",
+        "Print Changes": "print_substitution",
+        "Quiet Output": "quiet",
+        "Expression Option": "expression_option",
+        "Script File": "script_file",
+        "Edit In Place": "in_place",
+        "Line Address": "address_line",
+        "Pattern Address": "address_regex",
+        "Last Line Address": "address_last",
+        "Address Range": "range",
+        "Negated Address": "negated_address",
+        "Delete Lines": "delete",
+        "Print Lines": "print",
+        "Multiple Expressions": "multiple_expressions",
+        "Alternate Delimiter": "custom_delimiter",
+        "Regex Substitution": "regex_substitution",
     },
 }
 GREP_FLAGS = {
@@ -31,6 +59,16 @@ GREP_FLAGS = {
     "line_regexp": "x",
     "word_regexp": "w",
     "line_number": "n",
+    "invert_match": "v",
+    "count": "c",
+    "only_matching": "o",
+    "recursive": "r",
+    "with_filename": "H",
+    "no_filename": "h",
+    "regexp": "e",
+    "include": "include=*.log",
+    "exclude": "exclude=*.tmp",
+    "exclude_dir": "exclude-dir=archive-*",
 }
 
 
@@ -163,10 +201,37 @@ class GameManager:
         contents = [f"INFO {label} started", line, f"INFO {label} complete"]
         if mode == "word_regexp":
             contents.insert(1, f"INFO before{marker}after decoy")
+        if mode == "invert_match":
+            contents = [f"INFO {marker} rejected", f"INFO {label} accepted"]
+            line = contents[1]
+        if mode == "only_matching":
+            contents[1] = f"INFO prefix-{marker}-suffix {label} event"
+            line = contents[1]
+        if mode == "regex":
+            contents[1] = f"INFO {marker} {label} event"
+            line = contents[1]
+        if mode == "recursive":
+            directory = f"/logs/active-{index:02d}"
+            self.shell.fs.add_directory(directory)
+            path = f"{directory}/{label}-{secrets.token_hex(2)}.log"
         self.shell.fs.add_file(path)
         node = self.shell.fs.resolve(path)
         assert isinstance(node, FileNode)
         node.set_data(contents)
+
+        if mode in {"include", "exclude", "exclude_dir"}:
+            if mode == "exclude_dir":
+                decoy_dir = f"/logs/archive-{index:02d}"
+                self.shell.fs.add_directory(decoy_dir)
+                decoy = f"{decoy_dir}/decoy.log"
+            else:
+                decoy = f"/logs/decoy-{index:02d}-{secrets.token_hex(2)}.tmp"
+            self.shell.fs.add_file(decoy)
+            self.shell.fs.resolve(decoy).set_data([f"WARN {marker} decoy"])
+        if mode == "no_filename":
+            decoy = f"/logs/other-{index:02d}-{secrets.token_hex(2)}.log"
+            self.shell.fs.add_file(decoy)
+            self.shell.fs.resolve(decoy).set_data(["INFO unrelated event"])
 
         prompts = {
             "basic": f"Use grep to print the line containing {marker} from {path}",
@@ -180,6 +245,84 @@ class GameManager:
                 f"Use grep -n to print {marker} with its line number from {path}"
             ),
         }
+        solutions = {
+            "basic": f"grep {marker} {path}",
+            "ignore_case": f"grep -i {marker} {path}",
+            "files_with_matches": f"grep -rl {marker} /logs",
+            "line_regexp": f'grep -x "{line}" {path}',
+            "word_regexp": f"grep -w {marker} {path}",
+            "line_number": f"grep -n {marker} {path}",
+            "invert_match": f"grep -v {marker} {path}",
+            "count": f"grep -c {marker} {path}",
+            "only_matching": f"grep -o {marker} {path}",
+            "recursive": f"grep -rH {marker} /logs",
+            "with_filename": f"grep -H {marker} {path}",
+            "no_filename": (
+                f"grep -h {marker} {path} {decoy}" if mode == "no_filename" else ""
+            ),
+            "regexp": f"grep -e {marker} {path}",
+            "include": f"grep -rH --include='*.log' {marker} /logs",
+            "exclude": f"grep -rH --exclude='*.tmp' {marker} /logs",
+            "exclude_dir": f"grep -rH --exclude-dir='archive-*' {marker} /logs",
+            "regex": f"grep 'TRACE_[A-F0-9]{{8}}' {path}",
+        }
+        examples = {
+            "basic": "grep ERROR /logs/sample.log",
+            "ignore_case": "grep -i error /logs/sample.log",
+            "files_with_matches": "grep -rl ERROR /logs",
+            "line_regexp": "grep -x 'ERROR ready' /logs/sample.log",
+            "word_regexp": "grep -w ERROR /logs/sample.log",
+            "line_number": "grep -n ERROR /logs/sample.log",
+            "invert_match": "grep -v ERROR /logs/sample.log",
+            "count": "grep -c ERROR /logs/sample.log",
+            "only_matching": "grep -o 'ERR_[0-9]+' /logs/sample.log",
+            "recursive": "grep -rH ERROR /logs",
+            "with_filename": "grep -H ERROR /logs/sample.log",
+            "no_filename": "grep -h ERROR /logs/a.log /logs/b.log",
+            "regexp": "grep -e ERROR /logs/sample.log",
+            "include": "grep -rH --include='*.log' ERROR /logs",
+            "exclude": "grep -rH --exclude='*.tmp' ERROR /logs",
+            "exclude_dir": "grep -rH --exclude-dir='archive-*' ERROR /logs",
+            "regex": "grep 'ERR_[0-9]+' /logs/sample.log",
+        }
+        if mode not in prompts:
+            descriptions = {
+                "invert_match": "print lines that do not contain",
+                "count": "count lines containing",
+                "only_matching": "print only the matching text",
+                "recursive": "search recursively under /logs for",
+                "with_filename": "print the matching line with its filename for",
+                "no_filename": "print the matching line without a filename for",
+                "regexp": "supply the pattern with -e to find",
+                "include": "search /logs while including only *.log files for",
+                "exclude": "search /logs while excluding *.tmp files for",
+                "exclude_dir": "search /logs while excluding archive-* directories for",
+                "regex": "use a regular expression to find a TRACE marker in",
+            }
+            prompts[mode] = f"Use grep to {descriptions[mode]} {marker} in {path}"
+        pattern = "TRACE_[A-F0-9]{8}" if mode == "regex" else marker
+        if mode == "line_regexp":
+            pattern = line
+        expected_stdout = None
+        if mode in {
+            "invert_match", "count", "only_matching", "recursive",
+            "with_filename", "no_filename", "regexp", "include",
+            "exclude", "exclude_dir", "regex",
+        }:
+            output = {
+                "invert_match": line,
+                "count": "1",
+                "only_matching": marker,
+                "recursive": f"{path}:{line}",
+                "with_filename": f"{path}:{line}",
+                "no_filename": line,
+                "regexp": line,
+                "include": f"{path}:{line}",
+                "exclude": f"{path}:{line}",
+                "exclude_dir": f"{path}:{line}",
+                "regex": line,
+            }[mode]
+            expected_stdout = [output]
         question_id = f"{self.round_number}-{index}"
         self.questions.append(
             {
@@ -187,17 +330,23 @@ class GameManager:
                 "command": "grep",
                 "mode": mode,
                 "prompt": prompts[mode],
+                "example": examples[mode],
             }
         )
         self._answers[question_id] = {
             "command": "grep",
             "inode_id": node.inode.id,
-            "pattern": line if mode == "line_regexp" else marker,
+            "pattern": pattern,
             "line": line,
             "required_option": GREP_FLAGS.get(mode),
+            "expected_stdout": expected_stdout,
+            "solution": solutions[mode],
         }
 
     def _add_sed_question(self, index: int, mode: str) -> None:
+        if mode not in {"basic", "backup", "ignore_case"}:
+            self._add_extended_sed_question(index, mode)
+            return
         label = random.choice(LOG_WORDS)
         path = f"/data/{label}-{index:02d}-{secrets.token_hex(2)}.txt"
         source = f"old{secrets.token_hex(3)}"
@@ -225,9 +374,21 @@ class GameManager:
             ),
         }
         question_id = f"{self.round_number}-{index}"
-        self.questions.append(
-            {"id": question_id, "command": "sed", "mode": mode, "prompt": prompts[mode]}
+        flag = "I" if mode == "ignore_case" else ""
+        solution = (
+            f"sed -i.bak 's/{source}/{replacement}/' {path}"
+            if mode == "backup"
+            else f"sed 's/{source}/{replacement}/{flag}' {path}"
         )
+        examples = {
+            "basic": "sed 's/foo/bar/' /data/sample.txt",
+            "backup": "sed -i.bak 's/foo/bar/' /data/sample.txt",
+            "ignore_case": "sed 's/foo/bar/I' /data/sample.txt",
+        }
+        self.questions.append({
+            "id": question_id, "command": "sed", "mode": mode,
+            "prompt": prompts[mode], "example": examples[mode],
+        })
         self._answers[question_id] = {
             "command": "sed",
             "inode_id": node.inode.id,
@@ -236,6 +397,135 @@ class GameManager:
             "after": after,
             "line": after[1],
             "required_option": mode,
+            "solution": solution,
+        }
+
+    def _add_extended_sed_question(self, index: int, mode: str) -> None:
+        label = random.choice(LOG_WORDS)
+        path = f"/data/{label}-{index:02d}-{secrets.token_hex(2)}.txt"
+        source = f"old{secrets.token_hex(3)}"
+        replacement = f"new{secrets.token_hex(3)}"
+        before = (f"INFO {label} started", f"{source} {label} event")
+        after = (before[0], f"{replacement} {label} event")
+        script = f"s/{source}/{replacement}/"
+        prefix = ""
+        script_file = None
+        if mode == "global":
+            before = (f"{source} {source} event",)
+            after = (f"{replacement} {replacement} event",)
+            script += "g"
+        elif mode == "occurrence":
+            before = (f"{source} {source} {source} event",)
+            after = (f"{source} {replacement} {source} event",)
+            script += "2"
+        elif mode == "print_substitution":
+            prefix = "-n "
+            script += "p"
+        elif mode == "quiet":
+            prefix = "-n "
+            script = "2p"
+            after = before
+        elif mode == "expression_option":
+            prefix = "-e "
+        elif mode == "script_file":
+            script_file = f"/data/script-{index:02d}-{secrets.token_hex(2)}.sed"
+            self.shell.fs.add_file(script_file)
+            self.shell.fs.resolve(script_file).set_data([script])
+        elif mode == "in_place":
+            prefix = "-i "
+        elif mode == "address_line":
+            before = (f"{source} decoy", f"{source} target")
+            after = (before[0], f"{replacement} target")
+            script = "2" + script
+        elif mode == "address_regex":
+            before = (f"{source} decoy", f"TARGET {source}")
+            after = (before[0], f"TARGET {replacement}")
+            script = "/TARGET/" + script
+        elif mode == "address_last":
+            before = (f"{source} first", f"{source} last")
+            after = (before[0], f"{replacement} last")
+            script = "$" + script
+        elif mode == "range":
+            before = (f"{source} first", f"{source} second", f"{source} third")
+            after = (before[0], f"{replacement} second", f"{replacement} third")
+            script = "2,3" + script
+        elif mode == "negated_address":
+            before = (f"{source} first", f"{source} second")
+            after = (before[0], f"{replacement} second")
+            script = "1!" + script
+        elif mode == "delete":
+            before = ("keep first", f"remove {source}", "keep last")
+            after = (before[0], before[2])
+            script = "2d"
+        elif mode == "print":
+            script = "2p"
+            after = before
+        elif mode == "multiple_expressions":
+            final = f"done{secrets.token_hex(3)}"
+            after = (before[0], f"{final} {label} event")
+            prefix = f"-e '{script}' -e "
+            script = f"s/{replacement}/{final}/"
+        elif mode == "custom_delimiter":
+            script = f"s|{source}|{replacement}|"
+        elif mode == "regex_substitution":
+            before = (f"old42 {label} event",)
+            after = (f"{replacement} {label} event",)
+            script = f"s/old[0-9]+/{replacement}/"
+
+        self.shell.fs.add_file(path)
+        node = self.shell.fs.resolve(path)
+        assert isinstance(node, FileNode)
+        node.set_data(list(before))
+        solution = (
+            f"sed -f {script_file} {path}" if script_file else
+            f"sed {prefix}'{script}' {path}"
+        )
+        examples = {
+            "global": "sed 's/foo/bar/g' /data/sample.txt",
+            "occurrence": "sed 's/foo/bar/2' /data/sample.txt",
+            "print_substitution": "sed -n 's/foo/bar/p' /data/sample.txt",
+            "quiet": "sed -n '2p' /data/sample.txt",
+            "expression_option": "sed -e 's/foo/bar/' /data/sample.txt",
+            "script_file": "sed -f /data/example.sed /data/sample.txt",
+            "in_place": "sed -i 's/foo/bar/' /data/sample.txt",
+            "address_line": "sed '2s/foo/bar/' /data/sample.txt",
+            "address_regex": "sed '/READY/s/foo/bar/' /data/sample.txt",
+            "address_last": "sed '$s/foo/bar/' /data/sample.txt",
+            "range": "sed '2,3s/foo/bar/' /data/sample.txt",
+            "negated_address": "sed '1!s/foo/bar/' /data/sample.txt",
+            "delete": "sed '2d' /data/sample.txt",
+            "print": "sed '2p' /data/sample.txt",
+            "multiple_expressions": (
+                "sed -e 's/foo/bar/' -e 's/bar/baz/' /data/sample.txt"
+            ),
+            "custom_delimiter": "sed 's|foo|bar|' /data/sample.txt",
+            "regex_substitution": "sed 's/foo[0-9]+/bar/' /data/sample.txt",
+        }
+        expected_stdout = list(after)
+        if mode in {"quiet", "print_substitution"}:
+            expected_stdout = [after[1]]
+        elif mode == "print":
+            expected_stdout = [before[0], before[1], before[1]]
+        elif mode == "in_place":
+            expected_stdout = []
+        target = (
+            f"File should contain: {'; '.join(after)}"
+            if mode == "in_place" else
+            f"Expected output: {'; '.join(expected_stdout)}"
+        )
+        question_id = f"{self.round_number}-{index}"
+        self.questions.append({
+            "id": question_id, "command": "sed", "mode": mode,
+            "prompt": f"Use sed's {mode.replace('_', ' ')} feature on {path}. {target}",
+            "example": examples[mode],
+        })
+        self._answers[question_id] = {
+            "command": "sed", "inode_id": node.inode.id, "path": path,
+            "before": before, "after": after, "line": after[-1],
+            "required_option": mode, "required_features": {mode},
+            "expected_stdout": expected_stdout,
+            "in_place": mode == "in_place",
+            "solution": solution,
         }
 
     def _credit(self, player_id: str, question_id: str) -> None:
@@ -256,6 +546,9 @@ class GameManager:
         for question_id, answer in self._answers.items():
             if answer["command"] != "grep" or question_id in completed:
                 continue
+            if (answer.get("expected_stdout") is not None
+                    and stdout != answer["expected_stdout"]):
+                continue
             if any(
                 match.inode_id == answer["inode_id"]
                 and match.pattern == answer["pattern"]
@@ -265,6 +558,10 @@ class GameManager:
                     or answer["required_option"] in match.options
                 )
                 and (("l" in match.options) == (answer["required_option"] == "l"))
+                and all(
+                    flag not in match.options or answer["required_option"] == flag
+                    for flag in ("c", "o", "v")
+                )
                 and (stdout is None or match.output in stdout)
                 for match in matches
             ):
@@ -295,6 +592,24 @@ class GameManager:
                 ):
                     continue
                 mode = answer["required_option"]
+                if "required_features" in answer:
+                    if not answer["required_features"].issubset(edit.features):
+                        continue
+                    if edit.in_place != answer["in_place"]:
+                        continue
+                    if edit.in_place:
+                        current = shell.fs.resolve(answer["path"])
+                        if (not isinstance(current, FileNode)
+                                or tuple(current.get_data()) != answer["after"]):
+                            continue
+                    if stdout != answer["expected_stdout"]:
+                        continue
+                    if (edit.output != tuple(answer["expected_stdout"])
+                            and not edit.in_place):
+                        continue
+                    self._credit(player_id, question_id)
+                    changed = True
+                    break
                 if mode == "backup":
                     if not edit.in_place or not edit.backup_suffix:
                         continue

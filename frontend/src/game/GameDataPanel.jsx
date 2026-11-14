@@ -77,6 +77,12 @@ export default function GameDataPanel({ gameData = EMPTY_GAME_DATA }) {
                             aria-live="polite"
                         >
                             <p className="question-prompt">{currentQuestion.prompt}</p>
+                            {currentQuestion.example && (
+                                <details className="question-example">
+                                    <summary>Show syntax example</summary>
+                                    <code>{currentQuestion.example}</code>
+                                </details>
+                            )}
                             <span className="question-status">
                                 {currentQuestion.status === "completed" ? "Completed" : "To do"}
                             </span>

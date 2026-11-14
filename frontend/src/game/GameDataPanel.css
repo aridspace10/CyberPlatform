@@ -175,6 +175,22 @@
   overflow-wrap: anywhere;
 }
 
+.question-example {
+  margin: 10px 0 0;
+  color: #a3c9ad;
+  overflow-wrap: anywhere;
+}
+
+.question-example summary {
+  cursor: pointer;
+}
+
+.question-example code {
+  display: block;
+  margin-top: 6px;
+  font-family: inherit;
+}
+
 .question-status {
   display: block;
   margin-top: 12px;

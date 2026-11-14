@@ -30,6 +30,7 @@ class SedCommand:
     occurrence: int | None = None
     print_substitution: bool = False
     ignore_case: bool = False
+    delimiter: str = "/"
 
 
 def _read_delimited(script: str, index: int, delimiter: str) -> tuple[str, int]:
@@ -143,6 +144,7 @@ def _parse_script(script: str) -> list[SedCommand]:
                 int(occurrence_text) if occurrence_text else None,
                 "p" in flags,
                 "I" in flags,
+                delimiter,
             )
         )
     if not commands:
@@ -261,6 +263,7 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
 
     scripts: list[str] = []
     script_files: list[str] = []
+    expression_option = False
     in_place = False
     backup_suffix = ""
     suppress_print = False
@@ -278,9 +281,11 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
             if not args:
                 return CommandResult(1, stderr=["sed: argument required for -e"])
             scripts.append(args.pop(0))
+            expression_option = True
             continue
         if options and arg.startswith("--expression="):
             scripts.append(arg.split("=", 1)[1])
+            expression_option = True
             continue
         if options and arg in ("-f", "--file"):
             if not args:
@@ -321,6 +326,42 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
         return CommandResult(1, stderr=[str(error)])
     except re.error as error:
         return CommandResult(1, stderr=[f"sed: invalid expression: {error}"])
+
+    features = set()
+    if suppress_print:
+        features.add("quiet")
+    if script_files:
+        features.add("script_file")
+    if expression_option:
+        features.add("expression_option")
+    if len(scripts) > 1:
+        features.add("multiple_expressions")
+    if in_place:
+        features.add("in_place")
+    for command in commands:
+        if command.operation == "d":
+            features.add("delete")
+        elif command.operation == "p":
+            features.add("print")
+        else:
+            if command.global_replace:
+                features.add("global")
+            if command.occurrence is not None:
+                features.add("occurrence")
+            if command.print_substitution:
+                features.add("print_substitution")
+            if command.ignore_case:
+                features.add("ignore_case")
+            if command.delimiter != "/":
+                features.add("custom_delimiter")
+            if re.search(r"[.^$*+?{}\[\]|()]", command.pattern.pattern):
+                features.add("regex_substitution")
+        if command.first is not None:
+            features.add("address_" + command.first.kind)
+        if command.second is not None:
+            features.add("range")
+        if command.negate:
+            features.add("negated_address")
 
     stdout: list[str] = []
     stderr: list[str] = []
@@ -389,7 +430,7 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
             )
         else:
             stdout.extend(output)
-        if source is not None and tuple(new) != content.lines:
+        if source is not None:
             ctx.system.shell.sed_changes.append(
                 SedChange(
                     inode_id=source.inode.id,
@@ -399,6 +440,7 @@ def run_sed(ctx: CommandContext, useage: Callable[[str], list[str]]) -> CommandR
                     in_place=in_place,
                     backup_suffix=backup_suffix,
                     ignore_case=used_ignore_case,
+                    features=frozenset(features),
                 )
             )
     return CommandResult(status, stdout, stderr)

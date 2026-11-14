@@ -1485,6 +1485,7 @@ class CommandLine:
         excludes: list[str] = []
         excluded_dirs: list[str] = []
         pattern: str | None = None
+        explicit_regexp = False
         args = list(ctx.args)
         files: list[str] = []
         index = 0
@@ -1529,6 +1530,7 @@ class CommandLine:
                     index += 1
                 else:
                     pattern = arg.split("=", 1)[1]
+                explicit_regexp = True
             elif arg in (
                 "--ignore-case", "--invert-match", "--line-number",
                 "--files-with-matches", "--count", "--word-regexp",
@@ -1707,33 +1709,36 @@ class CommandLine:
             for name, active in (
                 ("i", ignore_case), ("l", list_files), ("x", whole_line),
                 ("w", whole_word), ("n", line_numbers),
+                ("v", invert), ("c", count_lines), ("o", only_matching),
+                ("r", recursive), ("H", force_filename),
+                ("h", suppress_filename), ("e", explicit_regexp),
             )
             if active
+        ) | frozenset(
+            f"{kind}={value}"
+            for kind, values in (
+                ("include", includes), ("exclude", excludes),
+                ("exclude-dir", excluded_dirs),
+            )
+            for value in values
         )
         for name, content, inode_id in candidates:
             file_selected = False
             selected_count = 0
             file_output: list[str] = []
+            selected_lines: list[tuple[str, list[str]]] = []
             for line_index, line in enumerate(content.lines, start=1):
                 matches = list(regex.finditer(line))
                 matched = regex.fullmatch(line) is not None if whole_line else bool(matches)
                 selected = matched != invert
                 if not selected:
                     continue
-                if not invert and not (count_lines or only_matching) and inode_id is not None:
-                    emitted = name if list_files else line
-                    if not list_files:
-                        if line_numbers:
-                            emitted = f"{line_index}:{emitted}"
-                        if show_filenames:
-                            emitted = f"{name}:{emitted}"
-                    ctx.system.shell.grep_matches.add(
-                        GrepMatch(inode_id, pattern, line, active_options, emitted)
-                    )
                 file_selected = True
                 selected_count += 1
                 if count_lines or list_files:
+                    selected_lines.append((line, []))
                     continue
+                before_output = len(file_output)
                 if only_matching:
                     if invert:
                         continue
@@ -1754,6 +1759,7 @@ class CommandLine:
                     if show_filenames:
                         text = f"{name}:{text}"
                     file_output.append(text)
+                selected_lines.append((line, file_output[before_output:]))
 
             any_selected |= file_selected
             if list_files:
@@ -1766,6 +1772,23 @@ class CommandLine:
                 stdout.append(count_text)
             else:
                 stdout.extend(file_output)
+
+            if inode_id is not None:
+                for line, outputs in selected_lines:
+                    if list_files:
+                        emitted_outputs = [name]
+                    elif count_lines:
+                        count_output = (
+                            f"{name}:{selected_count}"
+                            if show_filenames else str(selected_count)
+                        )
+                        emitted_outputs = [count_output]
+                    else:
+                        emitted_outputs = outputs
+                    for emitted in emitted_outputs:
+                        ctx.system.shell.grep_matches.add(
+                            GrepMatch(inode_id, pattern, line, active_options, emitted)
+                        )
 
         # Errors take precedence over matches; otherwise the shell status reports
         # whether at least one line was selected across all readable inputs.

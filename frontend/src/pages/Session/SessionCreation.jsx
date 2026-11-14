@@ -26,8 +26,19 @@ export default function SessionCreation() {
     const gameOptions = ["MiniGames"]
     const selectedCommandCount = Object.values(commandStates).filter(state => state.selected).length;
     const commands = {
-        grep: ["Case Insensitive", "Find By Filename", "Match By Line", "Match By Word", "Show Line Number"],
-        sed:  ["Save a backup", "Case Insensitive"],
+        grep: [
+            "Case Insensitive", "Find By Filename", "Match By Line", "Match By Word",
+            "Show Line Number", "Invert Match", "Count Matches", "Only Matching Text",
+            "Recursive Search", "Show Filename", "Hide Filename", "Explicit Pattern",
+            "Include Files", "Exclude Files", "Exclude Directories", "Regular Expression",
+        ],
+        sed: [
+            "Save a backup", "Case Insensitive", "Replace All", "Replace Occurrence",
+            "Print Changes", "Quiet Output", "Expression Option", "Script File",
+            "Edit In Place", "Line Address", "Pattern Address", "Last Line Address",
+            "Address Range", "Negated Address", "Delete Lines", "Print Lines",
+            "Multiple Expressions", "Alternate Delimiter", "Regex Substitution",
+        ],
     };
 
     const getCommandState = (cmd) => commandStates[cmd] || { selected: false, options: [] };
@@ -52,6 +63,20 @@ export default function SessionCreation() {
                     options: hasOpt
                         ? current.options.filter(o => o !== opt)
                         : [...current.options, opt],
+                },
+            };
+        });
+    };
+
+    const handleToggleAllCommandOptions = (cmd, options) => {
+        setCommandStates(prev => {
+            const current = prev[cmd] || { selected: false, options: [] };
+            const allSelected = current.selected && options.every(opt => current.options.includes(opt));
+            return {
+                ...prev,
+                [cmd]: {
+                    selected: true,
+                    options: allSelected ? [] : [...options],
                 },
             };
         });
@@ -226,6 +251,7 @@ export default function SessionCreation() {
                                     onCommandToggle={handleCommandToggle}
                                     selectedOptions={state.options}
                                     onOptionToggle={handleOptionToggle}
+                                    onToggleAllOptions={handleToggleAllCommandOptions}
                                 />
                             );
                         })}

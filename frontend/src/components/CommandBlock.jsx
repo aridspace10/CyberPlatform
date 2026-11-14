@@ -1,8 +1,9 @@
 import './CommandBlock.css'
 import { useState } from 'react';
 
-export default function CommandBlock({ command, options, commandSelected, onCommandToggle, selectedOptions, onOptionToggle }) {
+export default function CommandBlock({ command, options, commandSelected, onCommandToggle, selectedOptions, onOptionToggle, onToggleAllOptions }) {
     const [collapsed, setCollapsed] = useState(true);
+    const allOptionsSelected = commandSelected && options.every(opt => selectedOptions.includes(opt));
 
     const handleCommandToggle = (e) => {
         e.stopPropagation();
@@ -30,6 +31,15 @@ export default function CommandBlock({ command, options, commandSelected, onComm
             </div>
             {!collapsed && (
                 <div className="command-options-list">
+                    <div className="command-options-actions">
+                        <button
+                            type="button"
+                            className="command-options-toggle"
+                            onClick={() => onToggleAllOptions(command, options)}
+                        >
+                            {allOptionsSelected ? "Clear options" : "Select all options"}
+                        </button>
+                    </div>
                     {options.map(opt => {
                         const optEnabled = commandSelected && selectedOptions.includes(opt);
                         return (

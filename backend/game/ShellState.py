@@ -23,6 +23,7 @@ class SedChange:
     in_place: bool
     backup_suffix: str
     ignore_case: bool
+    features: frozenset[str] = frozenset()
 
 
 class ShellState:
