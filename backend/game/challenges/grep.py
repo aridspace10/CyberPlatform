@@ -102,7 +102,7 @@ class GrepPack(BasePack):
             "basic": f"Use grep to print the line containing {marker} from {path}",
             "ignore_case": f"Use grep -i to find {marker} regardless of case in {path}",
             "files_with_matches": (
-                f"Use grep -rl to print the filename containing {marker} under /logs"
+                f"Use grep to print filenames containing {marker} under /logs"
             ),
             "line_regexp": f'Use grep -x to print exactly "{line}" from {path}',
             "word_regexp": f"Use grep -w to find {marker} as a whole word in {path}",
@@ -150,18 +150,27 @@ class GrepPack(BasePack):
             "exclude_dir": "grep -rH --exclude-dir='archive-*' ERROR /logs",
             "regex": "grep 'ERR_[0-9]+' /logs/sample.log",
         }
+        directory_prompts = {
+            "recursive": f"Use grep to search recursively for {marker} under /logs",
+            "include": (f"Use grep to search for {marker} in *.log files under /logs"),
+            "exclude": (
+                f"Use grep to search for {marker}, excluding *.tmp files, under /logs"
+            ),
+            "exclude_dir": (
+                f"Use grep to search for {marker}, excluding archive-* directories, "
+                "under /logs"
+            ),
+        }
+        if mode in directory_prompts:
+            prompts[mode] = directory_prompts[mode]
         if mode not in prompts:
             descriptions = {
                 "invert_match": "print lines that do not contain",
                 "count": "count lines containing",
                 "only_matching": "print only the matching text",
-                "recursive": "search recursively under /logs for",
                 "with_filename": "print the matching line with its filename for",
                 "no_filename": "print the matching line without a filename for",
                 "regexp": "supply the pattern with -e to find",
-                "include": "search /logs while including only *.log files for",
-                "exclude": "search /logs while excluding *.tmp files for",
-                "exclude_dir": "search /logs while excluding archive-* directories for",
                 "regex": "use a regular expression to find a TRACE marker in",
             }
             prompts[mode] = f"Use grep to {descriptions[mode]} {marker} in {path}"

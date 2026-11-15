@@ -38,6 +38,34 @@ def test_every_grep_setting_generates_a_solvable_example(cl):
 
 
 @pytest.mark.parametrize("option", [
+    "Find By Filename", "Recursive Search", "Include Files",
+    "Exclude Files", "Exclude Directories",
+])
+def test_directory_search_prompt_does_not_reveal_matching_file(cl, option):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Directory search", "gameType": "MiniGames",
+        "commands": {"grep": {"selected": True, "options": [option]}},
+        "options": {"rounds": 1, "questionCount": 1, "seed": 81},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    answer = manager._answers[question["id"]]
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    result = cl.enter_command(answer["solution"], player)
+    assert result.status == 0
+    matching_file = result.stdout[0].split(":", 1)[0]
+    assert question["prompt"].endswith("under /logs")
+    assert matching_file not in question["prompt"]
+    assert matching_file not in question["example"]
+    if option == "Find By Filename":
+        assert "-rl" not in question["prompt"]
+    assert manager.record_grep("1", player.grep_matches, result.stdout)
+
+
+@pytest.mark.parametrize("option", [
     "Invert Match", "Count Matches", "Only Matching Text", "Recursive Search",
     "Show Filename", "Hide Filename", "Explicit Pattern", "Include Files",
     "Exclude Files", "Exclude Directories", "Regular Expression",
