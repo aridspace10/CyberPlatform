@@ -337,7 +337,9 @@ def test_new_commands_generate_a_mixed_round_and_score_over_websocket():
         question = next(
             q for q in runtime.game_manager.questions if q["command"] == "wc"
         )
-        solution = runtime.game_manager._answers[question["id"]]["solution"]
+        solution = runtime.game_manager._challenge_engine.challenges[
+            question["id"]
+        ].goal.solution
 
         with client.websocket_connect(f"/ws/{session_id}") as websocket:
             websocket.send_json({

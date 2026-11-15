@@ -21,14 +21,14 @@ def test_cat_minigame_requires_the_intended_file_and_output(cl, options, mode):
     })
     manager.start_round(["1"])
     question = manager.questions[0]
-    answer = manager._answers[question["id"]]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
     assert question["mode"] == mode
-    assert question["example"] != answer["solution"]
+    assert question["example"] != goal.solution
     player = ShellState()
     player.fs.from_dict(manager.get_shell()["fs"])
 
     source_paths = [
-        part for part in answer["solution"].split()[1:]
+        part for part in goal.solution.split()[1:]
         if not part.startswith("-")
     ]
     decoy_paths = []
@@ -42,12 +42,12 @@ def test_cat_minigame_requires_the_intended_file_and_output(cl, options, mode):
     flag = "-n " if mode == "numbered" else ""
     wrong = cl.enter_command(f"cat {flag}{' '.join(decoy_paths)}", player)
     assert wrong.status == 0
-    assert wrong.stdout == answer["expected_stdout"]
+    assert tuple(wrong.stdout) == goal.expected_stdout
     assert not manager.record_command_runs("1", player.command_runs, wrong.stdout)
 
-    correct = cl.enter_command(answer["solution"], player)
+    correct = cl.enter_command(goal.solution, player)
     assert correct.status == 0
-    assert correct.stdout == answer["expected_stdout"]
+    assert tuple(correct.stdout) == goal.expected_stdout
     assert manager.record_command_runs("1", player.command_runs, correct.stdout)
 
 

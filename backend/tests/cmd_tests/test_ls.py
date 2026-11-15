@@ -27,27 +27,27 @@ def test_ls_minigame_question_uses_the_requested_directory(cl, options, mode):
     })
     manager.start_round(["1"])
     question = manager.questions[0]
-    answer = manager._answers[question["id"]]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
     assert question["mode"] == mode
-    assert question["example"] != answer["solution"]
+    assert question["example"] != goal.solution
     player = ShellState()
     player.fs.from_dict(manager.get_shell()["fs"])
 
-    directory = answer["solution"].split()[-1]
+    directory = goal.solution.split()[-1]
     original = player.fs.resolve(directory)
     decoy_dir = "/inventory/other"
     player.fs.add_directory(decoy_dir)
     for child in original.items:
         player.fs.add_file(f"{decoy_dir}/{child.name}")
-    flag = " ".join(answer["solution"].split()[1:-1])
+    flag = " ".join(goal.solution.split()[1:-1])
     wrong = cl.enter_command(f"ls {flag} {decoy_dir}", player)
     assert wrong.status == 0
-    assert wrong.stdout == answer["expected_stdout"]
+    assert tuple(wrong.stdout) == goal.expected_stdout
     assert not manager.record_command_runs("1", player.command_runs, wrong.stdout)
 
-    correct = cl.enter_command(answer["solution"], player)
+    correct = cl.enter_command(goal.solution, player)
     assert correct.status == 0
-    assert correct.stdout == answer["expected_stdout"]
+    assert tuple(correct.stdout) == goal.expected_stdout
     assert manager.record_command_runs("1", player.command_runs, correct.stdout)
     assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
 

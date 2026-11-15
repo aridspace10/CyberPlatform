@@ -5,6 +5,7 @@ import random
 import secrets
 import time
 
+from .ChallengeEngine import ChallengeEngine
 from .filenode import FileNode
 from .ShellState import CommandRun, GrepMatch, SedChange, ShellState
 
@@ -104,6 +105,7 @@ class GameManager:
         self.shell = ShellState()
         self.questions: list[dict] = []
         self._answers: dict[str, dict] = {}
+        self._challenge_engine: ChallengeEngine | None = None
         self._completed: dict[str, set[str]] = {}
         self._scores: dict[str, int] = {}
         self.round_number = 0
@@ -135,6 +137,7 @@ class GameManager:
         self.shell.allow_pipes = self.allow_pipes
         self.questions = []
         self._answers = {}
+        self._challenge_engine = None
         self._completed = {}
         self._scores = {}
         self.round_number = 0
@@ -166,13 +169,10 @@ class GameManager:
             self.shell.fs.add_directory("logs")
         if "sed" in self.commands:
             self.shell.fs.add_directory("data")
-        for command, directory in (
-            ("ls", "inventory"), ("cat", "documents"), ("wc", "metrics")
-        ):
-            if command in self.commands:
-                self.shell.fs.add_directory(directory)
         self.questions = []
         self._answers = {}
+        self._challenge_engine = ChallengeEngine(self.shell, self.round_number)
+        self._challenge_engine.prepare(self.commands)
         self._completed = {str(player_id): set() for player_id in player_ids}
         for player_id in player_ids:
             self._scores.setdefault(str(player_id), 0)
@@ -203,12 +203,9 @@ class GameManager:
                 self._add_grep_question(index, mode)
             elif command == "sed":
                 self._add_sed_question(index, mode)
-            elif command == "ls":
-                self._add_ls_question(index, mode)
-            elif command == "cat":
-                self._add_cat_question(index, mode)
             else:
-                self._add_wc_question(index, mode)
+                challenge = self._challenge_engine.create(index, command, mode)
+                self.questions.append(challenge.public_data())
 
         self.deadline = (
             time.time() + self.time_limit_seconds
@@ -216,128 +213,6 @@ class GameManager:
             else None
         )
         return self.get_shell()
-
-    def _add_ls_question(self, index: int, mode: str) -> None:
-        directory = f"/inventory/set-{index:02d}-{secrets.token_hex(2)}"
-        self.shell.fs.add_directory(directory)
-        marker = secrets.token_hex(3)
-        for name in (f"report-{marker}.txt", "notes.txt", f".draft-{marker}"):
-            self.shell.fs.add_file(f"{directory}/{name}")
-        node = self.shell.fs.resolve(directory)
-        assert isinstance(node, FileNode)
-        flag = {"basic": "", "hidden": "-A ", "long": "-l "}[mode]
-        detail = 1 if mode == "long" else 0
-        extras = {"showhidden": True} if mode == "hidden" else {}
-        rows = self.shell.fs.list_files(directory, detail=detail, extras=extras)
-        assert isinstance(rows, list)
-        expected = [" ".join(row) for row in rows]
-        prompts = {
-            "basic": f"Use ls to list the visible entries in {directory}",
-            "hidden": f"Use ls to include hidden entries in {directory}",
-            "long": f"Use ls to show a long listing of {directory}",
-        }
-        examples = {
-            "basic": "ls /inventory/sample",
-            "hidden": "ls -A /inventory/sample",
-            "long": "ls -l /inventory/sample",
-        }
-        self._add_output_question(
-            index, "ls", mode, prompts[mode], examples[mode],
-            f"ls {flag}{directory}", (node.inode.id,), expected,
-        )
-
-    def _add_cat_question(self, index: int, mode: str) -> None:
-        marker = secrets.token_hex(3)
-        path = f"/documents/note-{index:02d}-{marker}.txt"
-        lines = [f"REF {marker} opened", "owner notified"]
-        self.shell.fs.add_file(path)
-        node = self.shell.fs.resolve(path)
-        assert isinstance(node, FileNode)
-        node.set_data(list(lines))
-        paths = [path]
-        inode_ids = [node.inode.id]
-        if mode == "multiple":
-            second = f"/documents/appendix-{index:02d}-{marker}.txt"
-            self.shell.fs.add_file(second)
-            second_node = self.shell.fs.resolve(second)
-            assert isinstance(second_node, FileNode)
-            second_node.set_data([f"REF {marker} closed"])
-            paths.append(second)
-            inode_ids.append(second_node.inode.id)
-            lines.append(f"REF {marker} closed")
-        expected = (
-            [f"{number} {line}" for number, line in enumerate(lines, 1)]
-            if mode == "numbered" else lines
-        )
-        flag = "-n " if mode == "numbered" else ""
-        prompt = (
-            f"Use cat to print both files in order: {paths[0]} then {paths[1]}"
-            if mode == "multiple" else
-            f"Use cat to {'number and print' if mode == 'numbered' else 'print'} "
-            f"the lines in {path}"
-        )
-        examples = {
-            "basic": "cat /documents/sample.txt",
-            "numbered": "cat -n /documents/sample.txt",
-            "multiple": "cat /documents/first.txt /documents/second.txt",
-        }
-        self._add_output_question(
-            index, "cat", mode, prompt, examples[mode],
-            f"cat {flag}{' '.join(paths)}", tuple(inode_ids), expected,
-        )
-
-    def _add_wc_question(self, index: int, mode: str) -> None:
-        marker = secrets.token_hex(3)
-        path = f"/metrics/report-{index:02d}-{marker}.txt"
-        lines = [f"café {marker}", "delta echo"]
-        self.shell.fs.add_file(path)
-        node = self.shell.fs.resolve(path)
-        assert isinstance(node, FileNode)
-        node.set_data(lines)
-        content = "\n".join(lines) + "\n"
-        counts = {
-            "lines": str(content.count("\n")),
-            "words": str(len(content.split())),
-            "bytes": str(len(content.encode("utf-8"))),
-            "chars": str(len(content)),
-        }
-        flag = {"basic": "", "lines": "-l ", "words": "-w ",
-                "bytes": "-c ", "chars": "-m "}[mode]
-        expected = (
-            [" ".join(counts[key] for key in ("lines", "words", "bytes"))]
-            if mode == "basic" else [counts[mode]]
-        )
-        task = {
-            "basic": "show line, word, and byte counts",
-            "lines": "count lines", "words": "count words",
-            "bytes": "count bytes", "chars": "count characters",
-        }[mode]
-        examples = {
-            "basic": "wc /metrics/sample.txt",
-            "lines": "wc -l /metrics/sample.txt",
-            "words": "wc -w /metrics/sample.txt",
-            "bytes": "wc -c /metrics/sample.txt",
-            "chars": "wc -m /metrics/sample.txt",
-        }
-        self._add_output_question(
-            index, "wc", mode, f"Use wc to {task} in {path}", examples[mode],
-            f"wc {flag}{path}", (node.inode.id,), expected,
-        )
-
-    def _add_output_question(
-        self, index: int, command: str, mode: str, prompt: str,
-        example: str, solution: str, inode_ids: tuple[int, ...],
-        expected_stdout: list[str],
-    ) -> None:
-        question_id = f"{self.round_number}-{index}"
-        self.questions.append({
-            "id": question_id, "command": command, "mode": mode,
-            "prompt": prompt, "example": example,
-        })
-        self._answers[question_id] = {
-            "command": command, "inode_ids": inode_ids,
-            "expected_stdout": expected_stdout, "solution": solution,
-        }
 
     def _add_grep_question(self, index: int, mode: str) -> None:
         label = random.choice(LOG_WORDS)
@@ -679,29 +554,33 @@ class GameManager:
         self._completed.setdefault(str(player_id), set()).add(question_id)
         self._scores[str(player_id)] = self._scores.get(str(player_id), 0) + 1
 
+    def record_attempt(
+        self, player_id: str, shell: ShellState, stdout: list[str]
+    ) -> bool:
+        """Evaluate one successful terminal input against active challenges."""
+        grep_progress = self.record_grep(player_id, shell.grep_matches, stdout)
+        sed_progress = self.record_sed(player_id, shell.sed_changes, stdout, shell)
+        output_progress = self.record_command_runs(
+            player_id, shell.command_runs, stdout
+        )
+        return grep_progress or sed_progress or output_progress
+
     def record_command_runs(
         self, player_id: str, runs: list[CommandRun], stdout: list[str]
     ) -> bool:
         """Credit output questions from successful reads of the intended nodes."""
-        if not self.questions or self.finished or self.is_expired():
+        if (
+            not self.questions
+            or self.finished
+            or self.is_expired()
+            or not self._challenge_engine
+        ):
             return False
         completed = self._completed.setdefault(str(player_id), set())
-        changed = False
-        for question_id, answer in self._answers.items():
-            if answer["command"] not in {"ls", "cat", "wc"} or question_id in completed:
-                continue
-            expected = answer["expected_stdout"]
-            if stdout != expected:
-                continue
-            if any(
-                run.command == answer["command"]
-                and run.inode_ids == answer["inode_ids"]
-                and run.output == tuple(expected)
-                for run in runs
-            ):
-                self._credit(player_id, question_id)
-                changed = True
-        return changed
+        credited = self._challenge_engine.evaluate(runs, stdout, completed)
+        for question_id in credited:
+            self._credit(player_id, question_id)
+        return bool(credited)
 
     def record_grep(
         self,
