@@ -12,6 +12,7 @@ from db.modals import (
 from db.session import get_db
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from game.GameManager import GameManager
 from network.SessionManger import session_manager
 from network.WebsocketServer import router as websocket_router
 from routers.users import get_db as get_users_db
@@ -308,6 +309,53 @@ def test_selected_commands_share_configured_question_count():
         )
 
 
+def test_round_planner_rotates_commands_and_replays_seeded_sessions():
+    config = {
+        "name": "Varied session", "gameType": "MiniGames",
+        "commands": {
+            command: {"selected": True, "options": []}
+            for command in ("ls", "cat", "wc", "grep", "sed")
+        },
+        "options": {"rounds": 3, "questionCount": 2, "seed": 1107},
+    }
+
+    def play_rounds():
+        manager = GameManager()
+        manager.set_config(config)
+        rounds = []
+        for _ in range(3):
+            manager.start_round(["1"])
+            rounds.append(list(manager.questions))
+        return rounds
+
+    first = play_rounds()
+    assert first == play_rounds()
+    assert {question["command"] for round_questions in first
+            for question in round_questions} == set(config["commands"])
+    assert all("solution" not in question for round_questions in first
+               for question in round_questions)
+
+
+def test_session_allows_fewer_questions_than_selected_commands():
+    client, _testing_session = make_client()
+    payload = creation_payload("SinglePlayer")
+    payload["config"]["commands"] = {
+        command: {"selected": True, "options": []}
+        for command in ("ls", "cat", "wc", "grep", "sed")
+    }
+    payload["config"]["options"].update({
+        "rounds": 3, "questionCount": 2, "seed": 1107,
+    })
+
+    with client:
+        response = client.post("/api/session_create", json=payload)
+        assert response.status_code == 201
+        session_id = str(response.json()["session_id"])
+        runtime = session_manager.get_session(session_id)
+        assert len(runtime.game_manager.questions) == 2
+        client.portal.call(session_manager.remove_session, session_id)
+
+
 def test_new_commands_generate_a_mixed_round_and_score_over_websocket():
     client, _testing_session = make_client()
     payload = creation_payload("SinglePlayer")
@@ -370,15 +418,18 @@ def test_minigames_rejects_commands_without_questions():
         assert "no MiniGames questions" in response.json()["detail"]
 
 
-def test_question_count_must_cover_selected_commands():
+def test_question_count_can_be_less_than_selected_commands():
     client, _testing_session = make_client()
     payload = creation_payload("SinglePlayer")
     payload["config"]["commands"]["sed"]["selected"] = True
     payload["config"]["options"]["questionCount"] = 1
     with client:
         response = client.post("/api/session_create", json=payload)
-        assert response.status_code == 422
-        assert "each selected command" in response.json()["detail"]
+        assert response.status_code == 201
+        session_id = str(response.json()["session_id"])
+        runtime = session_manager.get_session(session_id)
+        assert len(runtime.game_manager.questions) == 1
+        client.portal.call(session_manager.remove_session, session_id)
 
 
 def test_sandbox_is_marked_and_excluded_from_active_sessions():

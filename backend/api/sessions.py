@@ -68,6 +68,7 @@ class GameOptions(BaseModel):
     rounds: int = Field(default=5, ge=1, le=20)
     questionCount: int = Field(default=10, ge=1, le=50)
     timeLimitSeconds: int = Field(default=300, ge=30, le=3600)
+    seed: int | None = Field(default=None, ge=0)
 
 
 class SessionConfig(BaseModel):
@@ -175,13 +176,6 @@ async def session_create(
             status_code=422,
             detail="A selected command has no MiniGames questions",
         )
-    if config.gameType == "MiniGames" and config.options.questionCount < len(
-        selected_commands
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail="Questions per round must cover each selected command",
-        )
     for command in selected_commands & set(QUESTION_MODES):
         unknown_options = set(config.commands[command].options) - set(
             QUESTION_MODES[command]
@@ -194,6 +188,8 @@ async def session_create(
 
     initial_state = "running" if config.playType == "SinglePlayer" else "waiting"
     config_data = config.model_dump()
+    if config_data["options"]["seed"] is None:
+        del config_data["options"]["seed"]
     config_data["creatorID"] = user_id
     runtime_session = None
 

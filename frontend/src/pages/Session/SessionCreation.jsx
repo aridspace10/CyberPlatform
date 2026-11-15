@@ -106,11 +106,6 @@ export default function SessionCreation() {
             setError("Select at least one command");
             return;
         }
-        if (questionCount < selectedCommandCount) {
-            setError("Add at least one question per selected command");
-            return;
-        }
-
         const config = {
             "name": name.trim(),
             "playType": playType,

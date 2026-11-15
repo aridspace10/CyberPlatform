@@ -54,6 +54,30 @@ def test_wc_minigame_counts_the_intended_file(cl, options, mode):
     assert manager.record_command_runs("1", player.command_runs, correct.stdout)
 
 
+def test_wc_round_varies_report_sizes(cl):
+    from game.GameManager import GameManager
+
+    manager = GameManager()
+    manager.set_config({
+        "name": "Varied wc", "gameType": "MiniGames",
+        "commands": {"wc": {"selected": True, "options": []}},
+        "options": {"rounds": 1, "questionCount": 3, "seed": 41},
+    })
+    manager.start_round(["1"])
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    challenges = manager._challenge_engine.challenges.values()
+    assert len({challenge.variant for challenge in challenges}) == 3
+    assert sorted(
+        len(player.fs.resolve(challenge.goal.solution.split()[-1]).get_data())
+        for challenge in challenges
+    ) == [1, 2, 3]
+    for challenge in challenges:
+        result = cl.enter_command(challenge.goal.solution, player)
+        assert result.status == 0
+        assert manager.record_command_runs("1", player.command_runs, result.stdout)
+
+
 def test_wc_help(cl, shell_empty):
     assert_help(cl, shell_empty, "wc")
 

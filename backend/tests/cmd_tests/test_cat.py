@@ -51,6 +51,27 @@ def test_cat_minigame_requires_the_intended_file_and_output(cl, options, mode):
     assert manager.record_command_runs("1", player.command_runs, correct.stdout)
 
 
+def test_cat_round_varies_document_lengths(cl):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Varied cat", "gameType": "MiniGames",
+        "commands": {"cat": {"selected": True, "options": []}},
+        "options": {"rounds": 1, "questionCount": 3, "seed": 41},
+    })
+    manager.start_round(["1"])
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    challenges = manager._challenge_engine.challenges.values()
+    assert len({challenge.variant for challenge in challenges}) == 3
+    assert sorted(
+        len(challenge.goal.expected_stdout) for challenge in challenges
+    ) == [2, 3, 4]
+    for challenge in challenges:
+        result = cl.enter_command(challenge.goal.solution, player)
+        assert result.status == 0
+        assert manager.record_command_runs("1", player.command_runs, result.stdout)
+
+
 @pytest.mark.parametrize("lines", [[], ["cat", "", "wolf"]])
 def test_cat_buffered_input(run_buffered_command, lines):
     assert_success(run_buffered_command("cat", lines), lines)
