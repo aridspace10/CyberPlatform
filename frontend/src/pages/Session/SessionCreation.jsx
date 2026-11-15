@@ -26,6 +26,9 @@ export default function SessionCreation() {
     const gameOptions = ["MiniGames"]
     const selectedCommandCount = Object.values(commandStates).filter(state => state.selected).length;
     const commands = {
+        ls: ["Show Hidden", "Long Listing"],
+        cat: ["Number Lines", "Combine Files"],
+        wc: ["Count Lines", "Count Words", "Count Bytes", "Count Characters"],
         grep: [
             "Case Insensitive", "Find By Filename", "Match By Line", "Match By Word",
             "Show Line Number", "Invert Match", "Count Matches", "Only Matching Text",
@@ -103,11 +106,6 @@ export default function SessionCreation() {
             setError("Select at least one command");
             return;
         }
-        if (questionCount < selectedCommandCount) {
-            setError("Add at least one question per selected command");
-            return;
-        }
-
         const config = {
             "name": name.trim(),
             "playType": playType,

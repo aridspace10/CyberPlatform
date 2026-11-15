@@ -1,9 +1,75 @@
 import pytest
-from game.ShellState import ShellState
+from game.GameManager import GameManager
 from game.identity import EffectiveIdentity
+from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_help
+
+
+@pytest.mark.parametrize(
+    ("options", "mode"),
+    [([], "basic"), (["Number Lines"], "numbered"),
+     (["Combine Files"], "multiple")],
+)
+def test_cat_minigame_requires_the_intended_file_and_output(cl, options, mode):
+    manager = GameManager()
+    manager.set_config({
+        "name": "cat game", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"cat": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
+    assert question["mode"] == mode
+    assert question["example"] != goal.solution
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    source_paths = [
+        part for part in goal.solution.split()[1:]
+        if not part.startswith("-")
+    ]
+    decoy_paths = []
+    for number, source_path in enumerate(source_paths, 1):
+        decoy_path = f"/documents/duplicate-{number}.txt"
+        player.fs.add_file(decoy_path)
+        player.fs.resolve(decoy_path).set_data(
+            list(player.fs.resolve(source_path).get_data())
+        )
+        decoy_paths.append(decoy_path)
+    flag = "-n " if mode == "numbered" else ""
+    wrong = cl.enter_command(f"cat {flag}{' '.join(decoy_paths)}", player)
+    assert wrong.status == 0
+    assert tuple(wrong.stdout) == goal.expected_stdout
+    assert not manager.record_command_runs("1", player.command_runs, wrong.stdout)
+
+    correct = cl.enter_command(goal.solution, player)
+    assert correct.status == 0
+    assert tuple(correct.stdout) == goal.expected_stdout
+    assert manager.record_command_runs("1", player.command_runs, correct.stdout)
+
+
+def test_cat_round_varies_document_lengths(cl):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Varied cat", "gameType": "MiniGames",
+        "commands": {"cat": {"selected": True, "options": []}},
+        "options": {"rounds": 1, "questionCount": 3, "seed": 41},
+    })
+    manager.start_round(["1"])
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    challenges = manager._challenge_engine.challenges.values()
+    assert len({challenge.variant for challenge in challenges}) == 3
+    assert sorted(
+        len(challenge.goal.expected_stdout) for challenge in challenges
+    ) == [2, 3, 4]
+    for challenge in challenges:
+        result = cl.enter_command(challenge.goal.solution, player)
+        assert result.status == 0
+        assert manager.record_command_runs("1", player.command_runs, result.stdout)
 
 
 @pytest.mark.parametrize("lines", [[], ["cat", "", "wolf"]])
@@ -49,7 +115,9 @@ def test_cat_uses_owner_group_other_and_root_permissions(cl, shell_basic):
         "public": {"r": False, "w": False, "x": False},
     }
 
-    shell_basic.identity = EffectiveIdentity("reader", "readers", frozenset({"readers"}))
+    shell_basic.identity = EffectiveIdentity(
+        "reader", "readers", frozenset({"readers"})
+    )
     assert cl.enter_command("cat f1.txt", shell_basic).stdout == [
         "ERROR no",
         "INFO hey",
@@ -57,7 +125,9 @@ def test_cat_uses_owner_group_other_and_root_permissions(cl, shell_basic):
         "error 1",
     ]
 
-    shell_basic.identity = EffectiveIdentity("visitor", "visitors", frozenset({"visitors"}))
+    shell_basic.identity = EffectiveIdentity(
+        "visitor", "visitors", frozenset({"visitors"})
+    )
     denied = cl.enter_command("cat f1.txt", shell_basic)
     assert denied.status != 0
     assert denied.stderr and "Permission denied" in denied.stderr[0]

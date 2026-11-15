@@ -68,6 +68,7 @@ class GameOptions(BaseModel):
     rounds: int = Field(default=5, ge=1, le=20)
     questionCount: int = Field(default=10, ge=1, le=50)
     timeLimitSeconds: int = Field(default=300, ge=30, le=3600)
+    seed: int | None = Field(default=None, ge=0)
 
 
 class SessionConfig(BaseModel):
@@ -169,18 +170,11 @@ async def session_create(
         name for name, selection in config.commands.items() if selection.selected
     }
     if config.gameType == "MiniGames" and not selected_commands:
-        raise HTTPException(status_code=422, detail="Select grep or sed for MiniGames")
-    if config.gameType == "MiniGames" and selected_commands - {"grep", "sed"}:
+        raise HTTPException(status_code=422, detail="Select a command for MiniGames")
+    if config.gameType == "MiniGames" and selected_commands - set(QUESTION_MODES):
         raise HTTPException(
             status_code=422,
-            detail="Only grep and sed questions are available",
-        )
-    if config.gameType == "MiniGames" and config.options.questionCount < len(
-        selected_commands
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail="Questions per round must cover each selected command",
+            detail="A selected command has no MiniGames questions",
         )
     for command in selected_commands & set(QUESTION_MODES):
         unknown_options = set(config.commands[command].options) - set(
@@ -194,6 +188,8 @@ async def session_create(
 
     initial_state = "running" if config.playType == "SinglePlayer" else "waiting"
     config_data = config.model_dump()
+    if config_data["options"]["seed"] is None:
+        del config_data["options"]["seed"]
     config_data["creatorID"] = user_id
     runtime_session = None
 

@@ -11,6 +11,71 @@ from tests.cmd_tests.creation_helpers import assert_success
 from tests.cmd_tests.path_helpers import tree_state
 from tests.command_helpers import assert_help
 
+
+@pytest.mark.parametrize(
+    ("options", "mode"),
+    [([], "basic"), (["Show Hidden"], "hidden"), (["Long Listing"], "long")],
+)
+def test_ls_minigame_question_uses_the_requested_directory(cl, options, mode):
+    from game.GameManager import GameManager
+
+    manager = GameManager()
+    manager.set_config({
+        "name": "ls game", "gameType": "MiniGames", "playType": "SinglePlayer",
+        "commands": {"ls": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
+    assert question["mode"] == mode
+    assert question["example"] != goal.solution
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+
+    directory = goal.solution.split()[-1]
+    original = player.fs.resolve(directory)
+    decoy_dir = "/inventory/other"
+    player.fs.add_directory(decoy_dir)
+    for child in original.items:
+        player.fs.add_file(f"{decoy_dir}/{child.name}")
+    flag = " ".join(goal.solution.split()[1:-1])
+    wrong = cl.enter_command(f"ls {flag} {decoy_dir}", player)
+    assert wrong.status == 0
+    assert tuple(wrong.stdout) == goal.expected_stdout
+    assert not manager.record_command_runs("1", player.command_runs, wrong.stdout)
+
+    correct = cl.enter_command(goal.solution, player)
+    assert correct.status == 0
+    assert tuple(correct.stdout) == goal.expected_stdout
+    assert manager.record_command_runs("1", player.command_runs, correct.stdout)
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
+
+def test_ls_round_uses_distinct_directory_scenarios(cl):
+    from game.GameManager import GameManager
+
+    manager = GameManager()
+    manager.set_config({
+        "name": "Varied ls", "gameType": "MiniGames",
+        "commands": {"ls": {"selected": True, "options": []}},
+        "options": {"rounds": 1, "questionCount": 3, "seed": 41},
+    })
+    manager.start_round(["1"])
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    challenges = manager._challenge_engine.challenges.values()
+    assert len({challenge.variant for challenge in challenges}) == 3
+    assert len({challenge.prompt.split(".")[0] for challenge in challenges}) == 3
+    assert sorted(
+        len(player.fs.resolve(challenge.goal.solution.split()[-1]).items)
+        for challenge in challenges
+    ) == [2, 4, 6]
+    for challenge in challenges:
+        result = cl.enter_command(challenge.goal.solution, player)
+        assert result.status == 0
+        assert manager.record_command_runs("1", player.command_runs, result.stdout)
+
+
 LS_FILES = [
     "xms.bin",
     "silly.c",
