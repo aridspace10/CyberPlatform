@@ -60,6 +60,13 @@
     margin-top: 12px;
 }
 
+.session-field-help {
+    margin: 4px 0 0;
+    color: #9ca3af;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
 /* Allow Pipes label + switch on same row */
 .inline-field {
     display: flex;
