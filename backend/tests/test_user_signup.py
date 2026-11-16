@@ -117,3 +117,27 @@ def test_startup_retires_legacy_demo_password_without_creating_new_user(
         assert legacy_user.password == retired_hash
 
     engine.dispose()
+
+
+def test_local_dev_seed_enables_quick_login_only_when_requested(tmp_path, monkeypatch):
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(seed, "CONFIG_FOLDER", str(tmp_path))
+
+    with Session(engine) as db:
+        seed.seed_db(db, local_dev_login=True)
+        developer = db.query(User).filter_by(username="jack").one()
+        developer_id = developer.id
+        assert verify_password("1234", developer.password)
+
+        seed.seed_db(db)
+        db.refresh(developer)
+        assert developer.id == developer_id
+        assert not verify_password("1234", developer.password)
+
+        seed.seed_db(db, local_dev_login=True)
+        db.refresh(developer)
+        assert developer.id == developer_id
+        assert verify_password("1234", developer.password)
+
+    engine.dispose()
