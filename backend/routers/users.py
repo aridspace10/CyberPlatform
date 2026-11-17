@@ -85,9 +85,11 @@ def get_friends(
         .all()
     )
     friend_ids = [
-        friendship.recipient_id
-        if friendship.requester_id == user_id
-        else friendship.requester_id
+        (
+            friendship.recipient_id
+            if friendship.requester_id == user_id
+            else friendship.requester_id
+        )
         for friendship in friendships
     ]
     if not friend_ids:
@@ -267,13 +269,20 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 
 # GET USERS
 @router.get("/")
-def get_users(db: Session = Depends(get_db)):
-    return db.query(User).all()
+def get_users(_user_id: int = Depends(get_current_user), db: Session = Depends(get_db)):
+    return [public_user(user) for user in db.query(User).all()]
 
 
 @router.get("/{user_id}")
-def get_user(user_id: int, db: Session = Depends(get_db)):
-    return db.query(User).filter(User.id == user_id).first()
+def get_user(
+    user_id: int,
+    _current_user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return public_user(user)
 
 
 # UPDATE USER
@@ -301,7 +310,7 @@ def update_user(
     db.commit()
     db.refresh(user)
 
-    return user
+    return {"id": user.id, "username": user.username, "email": user.email}
 
 
 # DELETE USER

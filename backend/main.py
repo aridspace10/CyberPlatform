@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
 
     db = SessionLocal()
     try:
-        seed_db(db)  # ✅ run once on startup
+        seed_db(db, local_dev_login=getattr(app.state, "local_dev_login", False))
     finally:
         db.close()
 
