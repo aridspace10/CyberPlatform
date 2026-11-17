@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, UniqueConstraint, text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -46,6 +46,15 @@ class User(Base):
     username: Mapped[Optional[str]] = mapped_column(String, unique=True)
     email: Mapped[Optional[str]] = mapped_column(String)
     password: Mapped[Optional[str]] = mapped_column(String)
+
+
+class AuthRateLimit(Base):
+    __tablename__ = "auth_rate_limits"
+    __table_args__ = (Index("ix_auth_rate_limits_window_start", "window_start"),)
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    window_start: Mapped[int] = mapped_column(nullable=False)
+    hits: Mapped[int] = mapped_column(nullable=False)
 
 
 class Friendship(Base):
