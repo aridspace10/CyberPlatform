@@ -12,8 +12,14 @@ export async function enterTutorial(user_id) {
         body: JSON.stringify({ user_id })
     });
 
-    const data = await res.json();
-    return data
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(data.detail || "Could not enter Sandbox. Please try again");
+    }
+    if (data.session_id == null) {
+        throw new Error("Could not enter Sandbox. Please try again");
+    }
+    return data;
 }
 
 export async function getFullSessionData(session_id) {

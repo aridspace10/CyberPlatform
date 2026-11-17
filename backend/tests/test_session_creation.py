@@ -1,3 +1,4 @@
+import pytest
 from api.sessions import router
 from db.authentication import create_access_token
 from db.modals import (
@@ -433,7 +434,7 @@ def test_question_count_can_be_less_than_selected_commands():
 
 
 def test_sandbox_is_marked_and_excluded_from_active_sessions():
-    client, _testing_session = make_client()
+    client, testing_session = make_client()
 
     with client:
         response = client.post("/api/sandbox/42")
@@ -442,6 +443,11 @@ def test_sandbox_is_marked_and_excluded_from_active_sessions():
         sandbox = session_manager.get_session(sandbox_id)
         assert sandbox.is_sandbox is True
         assert sandbox.game_manager.game_type == "Tutorial"
+        db = testing_session()
+        assert db.get(GameSession, int(sandbox_id)) is not None
+        assert db.query(ScenarioToSession).filter_by(sessionID=int(sandbox_id)).count() == 1
+        assert db.query(SessionShell).filter_by(SessionID=int(sandbox_id)).count() == 1
+        db.close()
 
         game_data = client.get(f"/api/session/{sandbox_id}").json()["gameData"]
         assert game_data["isSandbox"] is True
@@ -483,6 +489,71 @@ def test_sandbox_is_marked_and_excluded_from_active_sessions():
         }
 
         client.portal.call(session_manager.remove_session, sandbox_id)
+
+
+def assert_no_sandbox_state(testing_session, original_runtimes):
+    db = testing_session()
+    try:
+        assert db.query(GameSession).count() == 0
+        assert db.query(ScenarioToSession).count() == 0
+        assert db.query(SessionShell).count() == 0
+    finally:
+        db.close()
+    assert set(session_manager.sessions) == original_runtimes
+
+
+def test_sandbox_missing_scenario_returns_error_without_partial_state():
+    client, testing_session = make_client()
+    db = testing_session()
+    db.delete(db.query(Scenario).filter_by(name="Tutorial").one())
+    db.commit()
+    db.close()
+    original_runtimes = set(session_manager.sessions)
+
+    with client:
+        response = client.post("/api/sandbox/42")
+        assert response.status_code == 503
+        assert response.json() == {
+            "detail": "Sandbox is unavailable: Tutorial configuration is missing"
+        }
+        assert_no_sandbox_state(testing_session, original_runtimes)
+
+
+@pytest.mark.parametrize("config", ["{bad json", {"name": "Tutorial", "options": {"rounds": "bad"}}])
+def test_sandbox_malformed_scenario_returns_error_without_partial_state(config):
+    client, testing_session = make_client()
+    db = testing_session()
+    db.query(Scenario).filter_by(name="Tutorial").one().config = config
+    db.commit()
+    db.close()
+    original_runtimes = set(session_manager.sessions)
+
+    with client:
+        response = client.post("/api/sandbox/42")
+        assert response.status_code == 503
+        assert response.json() == {
+            "detail": "Sandbox is unavailable: Tutorial configuration is invalid"
+        }
+        assert_no_sandbox_state(testing_session, original_runtimes)
+
+
+def test_sandbox_storage_failure_rolls_back_database_and_runtime(monkeypatch):
+    client, testing_session = make_client()
+    original_runtimes = set(session_manager.sessions)
+
+    with client:
+        with monkeypatch.context() as patch:
+            def fail_commit(_session):
+                raise RuntimeError("Storage unavailable")
+
+            patch.setattr(testing_session.class_, "commit", fail_commit)
+            response = client.post("/api/sandbox/42")
+
+        assert response.status_code == 500
+        assert response.json() == {
+            "detail": "Could not create Sandbox. Please try again"
+        }
+        assert_no_sandbox_state(testing_session, original_runtimes)
 
 
 def test_session_creation_uses_authenticated_creator_and_rejects_anonymous():
