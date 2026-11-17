@@ -7,9 +7,10 @@ from db.authentication import (
 )
 from db.modals import Friendship, GameSession, SessionShell, User
 from db.session import SessionLocal
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from network.SessionManger import session_manager
 from pydantic import BaseModel
+from services.auth_rate_limit import enforce_auth_rate_limit
 from services.user_service import friendship_between
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -234,7 +235,8 @@ async def remove_friend(
 
 
 @router.post("/login")
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    enforce_auth_rate_limit(db, request, "login", data.username)
     user = db.query(User).filter(User.username == data.username).first()
 
     if not user or not verify_password(data.password, user.password):
@@ -247,7 +249,8 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 # CREATE USER
 @router.post("/", status_code=201)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
+def create_user(user: UserCreate, request: Request, db: Session = Depends(get_db)):
+    enforce_auth_rate_limit(db, request, "signup")
     if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=409, detail="Username is already taken")
 
