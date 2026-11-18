@@ -92,3 +92,14 @@ export const declineFriendRequest = (requestId) =>
 
 export const removeFriend = (userId) =>
   friendRequest(`/me/friends/${userId}`, { method: "DELETE" });
+
+export const getBlockedUsers = () => friendRequest("/me/blocks");
+
+export const blockUser = (userId) =>
+  friendRequest("/me/blocks", {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId }),
+  });
+
+export const unblockUser = (userId) =>
+  friendRequest(`/me/blocks/${userId}`, { method: "DELETE" });
