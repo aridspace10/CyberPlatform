@@ -65,14 +65,9 @@ def test_signup_creates_account_without_exposing_password():
         }
         assert client.get("/users/").status_code == 401
         assert client.get(f"/users/{user_id}").status_code == 401
-        assert client.get("/users/", headers=authorization).json() == [
-            {"id": user_id, "username": "jack2"}
-        ]
-        assert client.get(f"/users/{user_id}", headers=authorization).json() == {
-            "id": user_id,
-            "username": "jack2",
-        }
-        assert client.get("/users/999", headers=authorization).status_code == 404
+        assert client.get("/users/", headers=authorization).status_code == 410
+        assert client.get(f"/users/{user_id}", headers=authorization).status_code == 410
+        assert client.get("/users/999", headers=authorization).status_code == 410
 
         updated = client.put(
             f"/users/{user_id}?username=jack3&email=new@example.com",

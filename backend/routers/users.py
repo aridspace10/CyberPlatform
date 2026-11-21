@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from db.authentication import (
     LoginRequest,
     create_access_token,
@@ -5,14 +7,22 @@ from db.authentication import (
     hash_password,
     verify_password,
 )
-from db.modals import Friendship, GameSession, SessionShell, User
+from db.modals import (
+    Friendship,
+    GameSession,
+    SessionShell,
+    User,
+    UserBlock,
+    UserRateLimit,
+)
 from db.session import SessionLocal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from network.SessionManger import session_manager
 from pydantic import BaseModel
 from services.auth_rate_limit import enforce_auth_rate_limit
 from services.user_service import friendship_between
-from sqlalchemy import or_
+from sqlalchemy import or_, text
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -28,6 +38,65 @@ class FriendRequestCreate(BaseModel):
 
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+SEARCH_LIMIT = 30
+REQUEST_LIMIT = 10
+REQUEST_COOLDOWN = timedelta(hours=24)
+MAX_OUTGOING_PENDING = 10
+
+
+def utc_now():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def enforce_limit(db: Session, user_id: int, action: str, window: int, limit: int):
+    now = int(datetime.now(timezone.utc).timestamp())
+    bucket = now // window
+    statement = (
+        sqlite_insert(UserRateLimit)
+        .values(user_id=user_id, action=action, bucket=bucket, count=1)
+        .on_conflict_do_update(
+            index_elements=["user_id", "action", "bucket"],
+            set_={"count": UserRateLimit.count + 1},
+        )
+        .returning(UserRateLimit.count)
+    )
+    count = db.execute(statement).scalar_one()
+    db.query(UserRateLimit).filter(
+        UserRateLimit.user_id == user_id,
+        UserRateLimit.action == action,
+        UserRateLimit.bucket < bucket - 2,
+    ).delete(synchronize_session=False)
+    db.commit()
+    if count > limit:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please try again later.",
+            headers={"Retry-After": str(window - now % window)},
+        )
+
+
+def blocked_between(db: Session, user_id: int, other_id: int) -> bool:
+    return (
+        db.query(UserBlock.id)
+        .filter(
+            or_(
+                (UserBlock.blocker_id == user_id) & (UserBlock.blocked_id == other_id),
+                (UserBlock.blocker_id == other_id) & (UserBlock.blocked_id == user_id),
+            )
+        )
+        .first()
+        is not None
+    )
+
+
+def unavailable_request():
+    raise HTTPException(status_code=409, detail="Friend request unavailable")
+
+
+def begin_write(db: Session):
+    # SQLite serializes these read/modify/write paths across API workers.
+    db.execute(text("BEGIN IMMEDIATE"))
 
 
 def get_db():
@@ -60,9 +129,29 @@ def search_users(
     query = query.strip()
     if not query:
         return []
+    enforce_limit(db, user_id, "friend_search", 60, SEARCH_LIMIT)
+    if len(query) < 2 or len(query) > 32:
+        raise HTTPException(status_code=400, detail="Search needs 2 to 32 characters")
+    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    hidden_ids = [
+        item[0]
+        for item in db.query(UserBlock.blocked_id).filter(
+            UserBlock.blocker_id == user_id
+        )
+    ]
+    hidden_ids += [
+        item[0]
+        for item in db.query(UserBlock.blocker_id).filter(
+            UserBlock.blocked_id == user_id
+        )
+    ]
     users = (
         db.query(User)
-        .filter(User.id != user_id, User.username.ilike(f"%{query}%"))
+        .filter(
+            User.id != user_id,
+            User.id.notin_(hidden_ids),
+            User.username.ilike(f"%{escaped}%", escape="\\"),
+        )
         .order_by(User.username)
         .limit(20)
         .all()
@@ -136,19 +225,41 @@ def send_friend_request(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    enforce_limit(db, user_id, "friend_request", 3600, REQUEST_LIMIT)
     if data.user_id == user_id:
         raise HTTPException(status_code=400, detail="You cannot add yourself")
+    begin_write(db)
     other = db.get(User, data.user_id)
-    if other is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    if other is None or blocked_between(db, user_id, data.user_id):
+        unavailable_request()
     existing = friendship_between(db, user_id, data.user_id)
     if existing is not None:
-        raise HTTPException(
-            status_code=409, detail="Friend relationship already exists"
-        )
-    request = Friendship(requester_id=user_id, recipient_id=data.user_id)
-    db.add(request)
-    db.commit()
+        if existing.status not in ("declined", "cancelled") or (
+            existing.declined_at is None
+            or utc_now() - existing.declined_at < REQUEST_COOLDOWN
+        ):
+            unavailable_request()
+    outgoing = (
+        db.query(Friendship)
+        .filter(Friendship.requester_id == user_id, Friendship.status == "pending")
+        .count()
+    )
+    if outgoing >= MAX_OUTGOING_PENDING:
+        unavailable_request()
+    if existing is None:
+        request = Friendship(requester_id=user_id, recipient_id=data.user_id)
+        db.add(request)
+    else:
+        request = existing
+        request.requester_id = user_id
+        request.recipient_id = data.user_id
+        request.status = "pending"
+        request.declined_at = None
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        unavailable_request()
     db.refresh(request)
     return {"id": request.id, "user": public_user(other), "status": request.status}
 
@@ -159,13 +270,26 @@ def accept_friend_request(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    begin_write(db)
     request = db.get(Friendship, request_id)
     if request is None or request.status != "pending":
         raise HTTPException(status_code=404, detail="Friend request not found")
     if request.recipient_id != user_id:
         raise HTTPException(status_code=403, detail="Only the recipient can accept")
-    request.status = "accepted"
+    changed = (
+        db.query(Friendship)
+        .filter(
+            Friendship.id == request_id,
+            Friendship.recipient_id == user_id,
+            Friendship.status == "pending",
+        )
+        .update({Friendship.status: "accepted"}, synchronize_session=False)
+    )
+    if not changed:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="Friend request not found")
     db.commit()
+    db.refresh(request)
     requester = db.get(User, request.requester_id)
     return {
         "id": request.id,
@@ -180,26 +304,98 @@ def delete_friend_request(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    begin_write(db)
     request = db.get(Friendship, request_id)
     if request is None or request.status != "pending":
         raise HTTPException(status_code=404, detail="Friend request not found")
     if user_id not in (request.requester_id, request.recipient_id):
         raise HTTPException(status_code=403, detail="Not your friend request")
-    db.delete(request)
+    changed = (
+        db.query(Friendship)
+        .filter(Friendship.id == request_id, Friendship.status == "pending")
+        .update(
+            {
+                Friendship.status: "declined"
+                if user_id == request.recipient_id
+                else "cancelled",
+                Friendship.declined_at: utc_now(),
+            },
+            synchronize_session=False,
+        )
+    )
+    if not changed:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="Friend request not found")
     db.commit()
     return {"message": "Friend request removed"}
 
 
-@router.delete("/me/friends/{friend_id}")
-async def remove_friend(
-    friend_id: int,
+@router.get("/me/blocks")
+def get_blocks(user_id: int = Depends(get_current_user), db: Session = Depends(get_db)):
+    blocked_ids = [
+        row[0]
+        for row in db.query(UserBlock.blocked_id).filter(
+            UserBlock.blocker_id == user_id
+        )
+    ]
+    return [
+        public_user(user)
+        for user in db.query(User)
+        .filter(User.id.in_(blocked_ids))
+        .order_by(User.username)
+    ]
+
+
+@router.post("/me/blocks")
+async def block_user(
+    data: FriendRequestCreate,
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    friendship = friendship_between(db, user_id, friend_id)
-    if friendship is None or friendship.status != "accepted":
-        raise HTTPException(status_code=404, detail="Friend not found")
+    if data.user_id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot block yourself")
+    begin_write(db)
+    other = db.get(User, data.user_id)
+    if other is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    existing = (
+        db.query(UserBlock)
+        .filter_by(blocker_id=user_id, blocked_id=data.user_id)
+        .first()
+    )
+    if existing is None:
+        db.add(UserBlock(blocker_id=user_id, blocked_id=data.user_id))
+    friendship = friendship_between(db, user_id, data.user_id)
     affected_sessions = (
+        private_sessions_for_pair(db, user_id, data.user_id)
+        if friendship and friendship.status == "accepted"
+        else []
+    )
+    if friendship is not None:
+        db.delete(friendship)
+    for session in affected_sessions:
+        removed_id = data.user_id if session.creatorID == user_id else user_id
+        shell = db.get(SessionShell, (session.id, removed_id))
+        if shell is not None:
+            db.delete(shell)
+    db.commit()
+    await disconnect_private_sessions(affected_sessions, user_id, data.user_id)
+    return {"message": "User blocked"}
+
+
+@router.delete("/me/blocks/{blocked_id}")
+def unblock_user(
+    blocked_id: int,
+    user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db.query(UserBlock).filter_by(blocker_id=user_id, blocked_id=blocked_id).delete()
+    db.commit()
+    return {"message": "User unblocked"}
+
+
+def private_sessions_for_pair(db: Session, user_id: int, friend_id: int):
+    return (
         db.query(GameSession)
         .filter(
             GameSession.visibility == "friends_only",
@@ -207,14 +403,10 @@ async def remove_friend(
         )
         .all()
     )
-    db.delete(friendship)
-    for session in affected_sessions:
-        removed_id = friend_id if session.creatorID == user_id else user_id
-        shell = db.get(SessionShell, (session.id, removed_id))
-        if shell is not None:
-            db.delete(shell)
-    db.commit()
-    for session in affected_sessions:
+
+
+async def disconnect_private_sessions(sessions, user_id: int, friend_id: int):
+    for session in sessions:
         removed_id = friend_id if session.creatorID == user_id else user_id
         runtime = session_manager.get_session(str(session.id))
         if runtime == "404":
@@ -231,6 +423,27 @@ async def remove_friend(
             if int(player.user_id) == removed_id:
                 runtime.players.pop(username)
         await runtime.broadcast_game_state()
+
+
+@router.delete("/me/friends/{friend_id}")
+async def remove_friend(
+    friend_id: int,
+    user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    begin_write(db)
+    friendship = friendship_between(db, user_id, friend_id)
+    if friendship is None or friendship.status != "accepted":
+        raise HTTPException(status_code=404, detail="Friend not found")
+    affected_sessions = private_sessions_for_pair(db, user_id, friend_id)
+    db.delete(friendship)
+    for session in affected_sessions:
+        removed_id = friend_id if session.creatorID == user_id else user_id
+        shell = db.get(SessionShell, (session.id, removed_id))
+        if shell is not None:
+            db.delete(shell)
+    db.commit()
+    await disconnect_private_sessions(affected_sessions, user_id, friend_id)
     return {"message": "Friend removed"}
 
 
@@ -272,20 +485,16 @@ def create_user(user: UserCreate, request: Request, db: Session = Depends(get_db
 
 # GET USERS
 @router.get("/")
-def get_users(_user_id: int = Depends(get_current_user), db: Session = Depends(get_db)):
-    return [public_user(user) for user in db.query(User).all()]
+def get_users(_user_id: int = Depends(get_current_user)):
+    raise HTTPException(status_code=410, detail="Use friend search")
 
 
 @router.get("/{user_id}")
 def get_user(
     user_id: int,
     _current_user_id: int = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    user = db.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return public_user(user)
+    raise HTTPException(status_code=410, detail="Use friend search")
 
 
 # UPDATE USER

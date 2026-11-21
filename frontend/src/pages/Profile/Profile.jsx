@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import {
-  acceptFriendRequest, declineFriendRequest, getFriendRequests, getFriends,
-  removeFriend, searchUsers, sendFriendRequest,
+  acceptFriendRequest, blockUser, declineFriendRequest, getBlockedUsers, getFriendRequests, getFriends,
+  removeFriend, searchUsers, sendFriendRequest, unblockUser,
 } from "../../api/users";
 import "./Profile.css";
 
@@ -11,6 +11,7 @@ export default function Profile() {
   const { user } = useAuth();
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState({ incoming: [], outgoing: [] });
+  const [blocked, setBlocked] = useState([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,18 +21,20 @@ export default function Profile() {
   const [message, setMessage] = useState("");
 
   const refresh = useCallback(async () => {
-    const [nextFriends, nextRequests] = await Promise.all([getFriends(), getFriendRequests()]);
+    const [nextFriends, nextRequests, nextBlocked] = await Promise.all([getFriends(), getFriendRequests(), getBlockedUsers()]);
     setFriends(nextFriends);
     setRequests(nextRequests);
+    setBlocked(nextBlocked);
   }, []);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getFriends(), getFriendRequests()])
-      .then(([nextFriends, nextRequests]) => {
+    Promise.all([getFriends(), getFriendRequests(), getBlockedUsers()])
+      .then(([nextFriends, nextRequests, nextBlocked]) => {
         if (!active) return;
         setFriends(nextFriends);
         setRequests(nextRequests);
+        setBlocked(nextBlocked);
       })
       .catch((err) => { if (active) setError(err.message); })
       .finally(() => { if (active) setLoading(false); });
@@ -65,6 +68,7 @@ export default function Profile() {
   const friendIds = new Set(friends.map((friend) => friend.id));
   const incomingIds = new Set(requests.incoming.map((request) => request.user.id));
   const outgoingIds = new Set(requests.outgoing.map((request) => request.user.id));
+  const blockedIds = new Set(blocked.map((blockedUser) => blockedUser.id));
 
   return (
     <main className="profile-page">
@@ -88,7 +92,7 @@ export default function Profile() {
             </div>
           </form>
           {results.length > 0 && <ul className="profile-list" aria-label="Search results">
-            {results.filter((result) => result.id !== user?.id).map((result) => {
+            {results.filter((result) => result.id !== user?.id && !blockedIds.has(result.id)).map((result) => {
               const status = friendIds.has(result.id) ? "Friends"
                 : outgoingIds.has(result.id) ? "Request sent"
                 : incomingIds.has(result.id) ? "Request received" : null;
@@ -107,7 +111,10 @@ export default function Profile() {
             <p className="profile-empty">No friends yet. Search for someone to add.</p> :
             <ul className="profile-list">{friends.map((friend) => <li key={friend.id}>
               <span>{friend.username}</span>
-              <button className="profile-secondary" disabled={busy} onClick={() => act(() => removeFriend(friend.id), `${friend.username} removed from friends`)}>Remove</button>
+              <div className="profile-actions">
+                <button className="profile-secondary" disabled={busy} onClick={() => act(() => removeFriend(friend.id), `${friend.username} removed from friends`)}>Remove</button>
+                <button className="profile-secondary" disabled={busy} onClick={() => act(() => blockUser(friend.id), `${friend.username} blocked`)}>Block</button>
+              </div>
             </li>)}</ul>}
         </section>
 
@@ -120,7 +127,18 @@ export default function Profile() {
               <div className="profile-actions">
                 <button disabled={busy} onClick={() => act(() => acceptFriendRequest(request.id), `${request.user.username} added as a friend`)}>Accept</button>
                 <button className="profile-secondary" disabled={busy} onClick={() => act(() => declineFriendRequest(request.id), "Request declined")}>Decline</button>
+                <button className="profile-secondary" disabled={busy} onClick={() => act(() => blockUser(request.user.id), `${request.user.username} blocked`)}>Block</button>
               </div>
+            </li>)}</ul>}
+        </section>
+
+        <section className="profile-card" aria-labelledby="blocked-title">
+          <h2 id="blocked-title">Blocked accounts <span className="profile-count">{blocked.length}</span></h2>
+          {loading ? <p className="profile-empty">Loading...</p> : blocked.length === 0 ?
+            <p className="profile-empty">No blocked accounts.</p> :
+            <ul className="profile-list">{blocked.map((blockedUser) => <li key={blockedUser.id}>
+              <span>{blockedUser.username}</span>
+              <button className="profile-secondary" disabled={busy} onClick={() => act(() => unblockUser(blockedUser.id), `${blockedUser.username} unblocked`)}>Unblock</button>
             </li>)}</ul>}
         </section>
 

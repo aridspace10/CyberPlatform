@@ -1,6 +1,16 @@
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    event,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -68,9 +78,38 @@ class Friendship(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    pair_key: Mapped[Optional[str]] = mapped_column(String, unique=True)
     requester_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     recipient_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    declined_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+
+@event.listens_for(Friendship, "before_insert")
+def set_friendship_pair_key(mapper, connection, target):
+    low = min(target.requester_id, target.recipient_id)
+    high = max(target.requester_id, target.recipient_id)
+    target.pair_key = f"{low}:{high}"
+
+
+class UserBlock(Base):
+    __tablename__ = "user_blocks"
+    __table_args__ = (UniqueConstraint("blocker_id", "blocked_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    blocker_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    blocked_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class UserRateLimit(Base):
+    __tablename__ = "user_rate_limits"
+    __table_args__ = (UniqueConstraint("user_id", "action", "bucket"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String, nullable=False)
+    bucket: Mapped[int] = mapped_column(nullable=False)
+    count: Mapped[int] = mapped_column(nullable=False, default=0)
 
 
 class JoinRequest(Base):
