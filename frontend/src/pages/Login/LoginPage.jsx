@@ -18,7 +18,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(username, password);
-      navigate("/")
+      navigate(location.state?.from || "/")
     } catch {
       setError("ACCESS DENIED — INVALID CREDENTIALS");
     } finally {

@@ -116,20 +116,30 @@ def list_sessions(
         except (JWTError, KeyError, TypeError, ValueError):
             pass
     sessions = []
-    for sid, runtime in session_manager.sessions.items():
-        if runtime.is_sandbox or not sid.isdecimal():
+    for saved in db.query(DatabaseGameSession).order_by(DatabaseGameSession.id.desc()):
+        scenario = db.query(ScenarioToSession).filter_by(sessionID=saved.id).first()
+        scenario_type = db.get(Scenario, scenario.scenarioID) if scenario else None
+        if scenario_type is None or scenario_type.name == "Tutorial":
             continue
-        saved = get_session(db, int(sid))
-        if saved is None:
+        config = scenario.config or {}
+        if isinstance(config, str):
+            try:
+                config = json.loads(config)
+            except json.JSONDecodeError:
+                continue
+        if not isinstance(config, dict):
             continue
+        runtime = session_manager.get_session(str(saved.id))
+        state = runtime.state if runtime != "404" else saved.state
+        member_count = db.query(SessionShell).filter_by(SessionID=saved.id).count()
         member = (
             user_id is not None
             and db.get(SessionShell, (saved.id, user_id)) is not None
         )
         if not member and (
-            runtime.game_manager.play_type != "Versus"
-            or runtime.state != "waiting"
-            or db.query(SessionShell).filter_by(SessionID=saved.id).count() >= 2
+            config.get("playType") != "Versus"
+            or state != "waiting"
+            or member_count >= 2
         ):
             continue
         if saved.visibility == "private" and not member:
@@ -140,11 +150,13 @@ def list_sessions(
             continue
         sessions.append(
             {
-                "id": sid,
+                "id": str(saved.id),
                 "name": saved.name,
-                "players": len(runtime.connected_players()),
-                "state": runtime.state,
+                "players": len(runtime.connected_players()) if runtime != "404" else 0,
+                "state": state,
                 "visibility": saved.visibility,
+                "play_type": config.get("playType"),
+                "member": member,
             }
         )
     return {"sessions": sessions}

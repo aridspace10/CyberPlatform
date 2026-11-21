@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
+import { enterTutorial } from "../../api/sessions";
+import { SiteFooter, SiteHeader } from "../../SiteChrome";
 import {
   acceptFriendRequest, blockUser, declineFriendRequest, getBlockedUsers, getFriendRequests, getFriends,
   removeFriend, searchUsers, sendFriendRequest, unblockUser,
@@ -8,7 +10,8 @@ import {
 import "./Profile.css";
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState({ incoming: [], outgoing: [] });
   const [blocked, setBlocked] = useState([]);
@@ -19,6 +22,20 @@ export default function Profile() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [enteringSandbox, setEnteringSandbox] = useState(false);
+
+  const handleEnterSandbox = async () => {
+    setError("");
+    setEnteringSandbox(true);
+    try {
+      const data = await enterTutorial(user.id);
+      navigate(`/game/${data.session_id}`);
+    } catch (err) {
+      setError(err.message || "Could not enter Sandbox. Please try again.");
+    } finally {
+      setEnteringSandbox(false);
+    }
+  };
 
   const refresh = useCallback(async () => {
     const [nextFriends, nextRequests, nextBlocked] = await Promise.all([getFriends(), getFriendRequests(), getBlockedUsers()]);
@@ -71,12 +88,15 @@ export default function Profile() {
   const blockedIds = new Set(blocked.map((blockedUser) => blockedUser.id));
 
   return (
-    <main className="profile-page">
-      <header className="profile-header">
-        <Link className="profile-back" to="/">← Home</Link>
-        <h1>Profile &amp; Friends</h1>
-        <p>Signed in as <strong>{user?.username}</strong></p>
-      </header>
+    <div className="homepage profile-page">
+      <a className="home-skip-link" href="#main-content">Skip to content</a>
+      <SiteHeader user={user} enteringSandbox={enteringSandbox} onEnterSandbox={handleEnterSandbox} />
+      <main className="profile-main" id="main-content">
+        <header className="profile-header">
+          <p className="home-kicker">YOUR SPACE / PROFILE</p>
+          <h1>Profile <span>&amp; friends.</span></h1>
+          <p>Signed in as <strong>{user?.username}</strong>. Find people to practice with and manage your connections.</p>
+        </header>
 
       {error && <p className="profile-notice profile-error" role="alert">{error}</p>}
       {message && <p className="profile-notice profile-success" role="status">{message}</p>}
@@ -152,6 +172,8 @@ export default function Profile() {
             </li>)}</ul>}
         </section>
       </div>
-    </main>
+      </main>
+      <SiteFooter user={user} onLogout={logout} />
+    </div>
   );
 }

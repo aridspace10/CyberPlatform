@@ -1,38 +1,65 @@
-.profile-page {
-  min-height: 100vh;
-  padding: 40px;
-  background: #0f1117;
-  color: #e8eaf0;
-  font-family: 'Courier New', monospace;
-  text-align: left;
+.profile-main {
+  width: min(100% - 80px, 1440px);
+  margin-inline: auto;
+  padding: 72px 0 112px;
 }
-.profile-header { max-width: 1100px; margin: 0 auto 28px; padding-bottom: 18px; border-bottom: 1px solid #2a2d38; }
-.profile-back { color: #c8f04a; font-size: 0.8rem; }
-.profile-header h1 { color: #c8f04a; font-size: 1.8rem; margin: 12px 0; }
-.profile-header p { color: #9ca3af; }
-.profile-header strong { color: #e8eaf0; }
-.profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; max-width: 1100px; margin: 0 auto; }
-.profile-card { padding: 24px; border: 1px solid #2a2d38; border-radius: 8px; background: #16191f; }
-.profile-card h2 { margin: 0 0 20px; font-size: 1rem; letter-spacing: 0.06em; text-transform: uppercase; }
-.profile-count { color: #c8f04a; }
-.profile-search label { display: block; color: #9ca3af; font-size: 0.8rem; margin-bottom: 8px; }
+
+.profile-header {
+  margin-bottom: 42px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid var(--home-line);
+}
+
+.profile-header h1 {
+  margin: 18px 0 16px;
+  font-size: clamp(52px, 5vw, 76px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.profile-header h1 span,
+.profile-header strong,
+.profile-count { color: var(--home-green); }
+.profile-header > p:last-child { max-width: 650px; color: var(--home-muted); font-size: 19px; line-height: 1.5; }
+
+.profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.profile-card { min-width: 0; padding: 30px; border: 1px solid var(--home-line); background: var(--home-panel); }
+.profile-card h2 { margin: 0 0 25px; font-size: 27px; font-weight: 700; line-height: 1.1; }
+.profile-count { margin-left: 6px; font-family: "Share Tech Mono", monospace; font-size: 14px; font-weight: 400; }
+.profile-search label { display: block; margin-bottom: 10px; color: var(--home-muted); font-family: "Share Tech Mono", monospace; font-size: 12px; letter-spacing: 0.04em; }
 .profile-search-row { display: flex; gap: 8px; }
-.profile-search input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #343946; border-radius: 5px; background: #0f1117; color: #e8eaf0; font: inherit; }
-.profile-search input:focus { outline: 2px solid #c8f04a; outline-offset: 1px; }
-.profile-card button { padding: 8px 12px; border: 1px solid #c8f04a; border-radius: 5px; background: #c8f04a; color: #0f1117; font: inherit; font-size: 0.8rem; font-weight: bold; white-space: nowrap; }
-.profile-card button.profile-secondary { background: transparent; color: #c8f04a; }
-.profile-card button:disabled { opacity: 0.5; cursor: wait; }
-.profile-list { list-style: none; margin: 18px 0 0; padding: 0; }
-.profile-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 10px 0; border-top: 1px solid #2a2d38; overflow-wrap: anywhere; }
-.profile-list li:first-child { border-top: 0; }
-.profile-actions { display: flex; gap: 8px; }
-.profile-status, .profile-empty { color: #9ca3af; font-size: 0.8rem; }
+.profile-search input { flex: 1; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #496056; border-radius: 0; background: #07120f; color: var(--home-text); font: inherit; font-size: 17px; }
+.profile-search input::placeholder { color: #8ba195; }
+.profile-page .profile-card button { min-height: 42px; padding: 8px 14px; border: 1px solid var(--home-green); border-radius: 0; background: var(--home-green); color: #102015; font: inherit; font-size: 15px; font-weight: 700; white-space: nowrap; }
+.profile-page .profile-card button:hover:not(:disabled) { background: #d2ff95; }
+.profile-page .profile-card button.profile-secondary { background: transparent; color: var(--home-green); }
+.profile-page .profile-card button.profile-secondary:hover:not(:disabled) { background: rgba(185, 239, 112, 0.1); }
+.profile-page .profile-card button:disabled { opacity: 0.5; cursor: wait; }
+.profile-page input:focus-visible,
+.profile-page button:focus-visible,
+.profile-page a:focus-visible { outline: 3px solid var(--home-green); outline-offset: 3px; }
+.profile-list { list-style: none; margin: 20px 0 0; padding: 0; }
+.profile-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 54px; padding: 12px 0; border-top: 1px solid var(--home-line); overflow-wrap: anywhere; font-size: 17px; }
+.profile-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.profile-status, .profile-empty { color: var(--home-muted); font-size: 16px; }
 .profile-empty { margin: 0; }
-.profile-notice { max-width: 1100px; margin: 0 auto 20px; padding: 10px 14px; border-radius: 5px; }
-.profile-error { color: #ff9090; border: 1px solid #7c3030; }
-.profile-success { color: #c8f04a; border: 1px solid #5e741f; }
-@media (max-width: 720px) {
-  .profile-page { padding: 24px 16px; }
+.profile-notice { margin: 0 0 20px; padding: 12px 16px; border: 1px solid; font-family: "Share Tech Mono", monospace; font-size: 13px; }
+.profile-error { color: #ffad9b; border-color: #90544b; }
+.profile-success { color: var(--home-green); border-color: #587a48; }
+
+@media (max-width: 1080px) {
+  .profile-main { width: min(100% - 48px, 1440px); }
+}
+
+@media (max-width: 760px) {
+  .profile-main { padding: 56px 0 80px; }
   .profile-grid { grid-template-columns: 1fr; }
-  .profile-card { padding: 18px; }
+}
+
+@media (max-width: 480px) {
+  .profile-main { width: min(100% - 36px, 1440px); padding-top: 46px; }
+  .profile-card { padding: 22px 18px; }
+  .profile-list li { align-items: flex-start; flex-direction: column; }
+  .profile-actions { justify-content: flex-start; }
 }
