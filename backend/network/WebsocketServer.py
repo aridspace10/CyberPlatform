@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from game.commandline import CommandResult, Interaction
 from game.ProcessManager import ProcessState
 from jose import JWTError
-from network.SessionManger import Player, session_manager
+from network.SessionManger import Player, SessionAlreadyConnected, session_manager
 from services.session_service import get_session, get_session_shell, is_sandbox_session
 from services.user_service import get_user_by_id, is_friend
 from sqlalchemy.orm import Session
@@ -266,7 +266,11 @@ async def websocket_endpoint(
                 player.shell.vars = shell["vars"]
                 player.shell.fs.from_dict(shell["fs"])
                 session.players[username] = player
-        await session.connect(websocket, username, user_id)
+        try:
+            await session.connect(websocket, username, user_id)
+        except SessionAlreadyConnected:
+            await websocket.close(code=4409)
+            return
         session.logger.record_session_event(
             event="user_connected", user_id=user_id, username=username
         )

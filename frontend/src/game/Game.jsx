@@ -27,6 +27,7 @@ export default function Game() {
     const [cwd, setCwd] = useState("/");
     const [access, setAccess] = useState(null);
     const [accessError, setAccessError] = useState("");
+    const [connectionConflict, setConnectionConflict] = useState(false);
     const [joinAttempt, setJoinAttempt] = useState(0);
     const [joinRequests, setJoinRequests] = useState([]);
     const [inviteNotice, setInviteNotice] = useState("");
@@ -45,6 +46,8 @@ export default function Game() {
         const socket = new WebSocket(`${WEBSOCKET_URL}/ws/${sessionId}`);
 
         socket.onopen = () => {
+            setConnectionConflict(false);
+            setAccessError("");
             socket.send(JSON.stringify({
                 type: "join",
                 token: localStorage.getItem("token"),
@@ -96,6 +99,11 @@ export default function Game() {
                 getSessionAccess(sessionId).then(setAccess).catch(error => setAccessError(error.message));
             }
             if (event.code === 4404) setAccessError("Session not found");
+            if (event.code === 4409) {
+                setState(null);
+                setConnectionConflict(true);
+                setAccessError("This session is already open in another tab. Close that tab, then try again.");
+            }
         };
 
         wsRef.current = socket;
@@ -186,6 +194,11 @@ export default function Game() {
                     {access.status === "denied" && <p>You cannot join this session.</p>}
                 </div>}
                 {accessError && <p role="alert">{accessError}</p>}
+                {connectionConflict && <button onClick={() => {
+                    setConnectionConflict(false);
+                    setAccessError("");
+                    setJoinAttempt(attempt => attempt + 1);
+                }}>Try joining again</button>}
                 {inviteNotice && <p role="status">{inviteNotice}</p>}
                 {state === "waiting" && <WaitingScreen players={players} canStart={String(gameData?.creatorID) === String(user?.id)} onGameStart={() => wsRef.current?.send(JSON.stringify({ type: "start_game" }))} />}
                 {state === "waiting" && String(gameData?.creatorID) === String(user?.id) &&

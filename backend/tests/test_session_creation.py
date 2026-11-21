@@ -684,6 +684,50 @@ def test_public_versus_allows_authenticated_guest_and_hides_solo_session():
         client.portal.call(session_manager.remove_session, str(solo_id))
 
 
+@pytest.mark.parametrize("play_type", ["SinglePlayer", "Versus"])
+def test_same_user_cannot_join_one_session_from_two_tabs(play_type):
+    client, _testing_session = make_client()
+    with client:
+        response = client.post("/api/session_create", json=creation_payload(play_type))
+        assert response.status_code == 201
+        session_id = str(response.json()["session_id"])
+        runtime = session_manager.get_session(session_id)
+        token = authorization(42, "creator")["Authorization"].split(" ", 1)[1]
+
+        with client.websocket_connect(f"/ws/{session_id}") as first:
+            first.send_json({"token": token})
+            assert first.receive_json() == {
+                "type": "system", "message": "creator joined session"
+            }
+            assert first.receive_json()["players"] == ["creator"]
+            player = runtime.players["creator"]
+
+            with client.websocket_connect(f"/ws/{session_id}") as second:
+                second.send_json({"token": token})
+                with pytest.raises(WebSocketDisconnect) as rejected:
+                    second.receive_json()
+                assert rejected.value.code == 4409
+
+            assert runtime.connected_players() == [player]
+            first.send_json({"type": "chat", "message": "first tab still works"})
+            assert first.receive_json() == {
+                "type": "chat", "user": "creator", "message": "first tab still works"
+            }
+            first.send_json({"type": "command", "input": "echo first-tab-command"})
+            output = first.receive_json()
+            assert output["type"] == "command_output"
+            assert output["stdout"] == ["first-tab-command"]
+
+        assert runtime.connected_players() == []
+        with client.websocket_connect(f"/ws/{session_id}") as rejoined:
+            rejoined.send_json({"token": token})
+            assert rejoined.receive_json()["message"] == "creator joined session"
+            assert rejoined.receive_json()["players"] == ["creator"]
+            assert runtime.players["creator"] is player
+
+        client.portal.call(session_manager.remove_session, session_id)
+
+
 def test_reused_username_cannot_inherit_another_players_runtime_shell():
     client, testing_session = make_client()
     with client:
