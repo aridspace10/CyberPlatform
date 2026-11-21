@@ -16,9 +16,10 @@ from db.modals import (
     UserRateLimit,
 )
 from db.session import SessionLocal
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from network.SessionManger import session_manager
 from pydantic import BaseModel
+from services.auth_rate_limit import enforce_auth_rate_limit
 from services.user_service import friendship_between
 from sqlalchemy import or_, text
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -174,9 +175,11 @@ def get_friends(
         .all()
     )
     friend_ids = [
-        friendship.recipient_id
-        if friendship.requester_id == user_id
-        else friendship.requester_id
+        (
+            friendship.recipient_id
+            if friendship.requester_id == user_id
+            else friendship.requester_id
+        )
         for friendship in friendships
     ]
     if not friend_ids:
@@ -445,7 +448,8 @@ async def remove_friend(
 
 
 @router.post("/login")
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    enforce_auth_rate_limit(db, request, "login", data.username)
     user = db.query(User).filter(User.username == data.username).first()
 
     if not user or not verify_password(data.password, user.password):
@@ -458,7 +462,8 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 # CREATE USER
 @router.post("/", status_code=201)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
+def create_user(user: UserCreate, request: Request, db: Session = Depends(get_db)):
+    enforce_auth_rate_limit(db, request, "signup")
     if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=409, detail="Username is already taken")
 
@@ -480,12 +485,15 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 
 # GET USERS
 @router.get("/")
-def get_users(db: Session = Depends(get_db)):
+def get_users(_user_id: int = Depends(get_current_user)):
     raise HTTPException(status_code=410, detail="Use friend search")
 
 
 @router.get("/{user_id}")
-def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user(
+    user_id: int,
+    _current_user_id: int = Depends(get_current_user),
+):
     raise HTTPException(status_code=410, detail="Use friend search")
 
 
@@ -514,7 +522,7 @@ def update_user(
     db.commit()
     db.refresh(user)
 
-    return user
+    return {"id": user.id, "username": user.username, "email": user.email}
 
 
 # DELETE USER

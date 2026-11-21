@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime
 from typing import Dict, Literal
 
@@ -8,15 +9,12 @@ from db.modals import JoinRequest, Scenario, ScenarioToSession, SessionShell
 from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from game.GameManager import QUESTION_MODES
+from game.GameManager import GameManager, QUESTION_MODES
 from jose import JWTError
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
 from services.session_logging import SessionLogger
 from services.session_service import (
-    add_session,
-    add_session_scenario,
-    add_session_shell,
     get_sandbox_session,
     get_scenario_byname,
     get_session,
@@ -26,6 +24,7 @@ from services.user_service import get_user_by_id, is_friend
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 
 
 def friend_scope_allows(db: Session, session: DatabaseGameSession, user_id: int):
@@ -425,24 +424,63 @@ async def get_sandbox(
     # get sandbox from db if exist
     tut = get_sandbox_session(db, int(user_id))
     if tut is None:
-        # Create a tutorial session
-        sessionID = add_session(db, int(user_id), "Sandbox", "running")
-        session = session_manager.add_session(str(sessionID), "Sandbox")
-        session.is_sandbox = True
-        session.state = "running"
-        # Generate tutorial config
         scenario = get_scenario_byname(db, "Tutorial")
         if scenario is None:
-            return {"error": "No tutorial config"}
-        config = scenario.config or {}
-        if isinstance(config, str):
-            config = json.loads(config)
-        session.game_manger.set_config(config)
-        # Add tutorial config to db
-        add_session_scenario(db, sessionID, scenario.id, session.game_manger.gen_config)
-        # Add user to tutorial session with shell gained from tutorial config to db
-        add_session_shell(db, sessionID, int(user_id), session.game_manger.get_shell())
-        return {"session_id": sessionID}
+            raise HTTPException(
+                status_code=503, detail="Sandbox is unavailable: Tutorial configuration is missing"
+            )
+        try:
+            config = scenario.config
+            if isinstance(config, str):
+                config = json.loads(config)
+            if (
+                not isinstance(config, dict)
+                or config.get("name") != "Tutorial"
+                or config.get("gameType", "Tutorial") != "Tutorial"
+            ):
+                raise ValueError("Invalid Tutorial configuration")
+            game_manager = GameManager()
+            game_manager.set_config(config)
+            shell = game_manager.get_shell()
+        except (ValueError, TypeError, AttributeError, KeyError):
+            logger.exception("Invalid Tutorial configuration")
+            raise HTTPException(
+                status_code=503, detail="Sandbox is unavailable: Tutorial configuration is invalid"
+            ) from None
+
+        session_id = None
+        try:
+            database_session = DatabaseGameSession(
+                name="Sandbox", creatorID=current_user_id, state="running"
+            )
+            db.add(database_session)
+            db.flush()
+            session_id = str(database_session.id)
+            session = session_manager.add_session(session_id, "Sandbox")
+            session.is_sandbox = True
+            session.state = "running"
+            session.game_manager = game_manager
+            session.game_manger = game_manager
+            db.add(ScenarioToSession(
+                scenarioID=scenario.id,
+                sessionID=database_session.id,
+                config=game_manager.gen_config,
+            ))
+            db.add(SessionShell(
+                SessionID=database_session.id,
+                UserID=current_user_id,
+                shell=shell,
+            ))
+            db.commit()
+        except Exception:
+            db.rollback()
+            if session_id is not None:
+                await session_manager.remove_session(session_id)
+            logger.exception("Could not create Sandbox")
+            raise HTTPException(
+                status_code=500, detail="Could not create Sandbox. Please try again"
+            ) from None
+        return {"session_id": database_session.id}
     else:
         # Tutorial Exists in db, bring to session manger if needed (add please)
         if session_manager.get_session(str(tut.id)) == "404":

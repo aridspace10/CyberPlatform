@@ -164,8 +164,10 @@ def test_friend_request_conflicts_and_recipient_can_decline():
 def test_search_and_friend_request_limits_and_legacy_user_routes():
     client, _ = make_client()
     with client:
-        assert client.get("/users/").status_code == 410
-        assert client.get("/users/2").status_code == 410
+        assert client.get("/users/").status_code == 401
+        assert client.get("/users/2").status_code == 401
+        assert client.get("/users/", headers=auth(1)).status_code == 410
+        assert client.get("/users/2", headers=auth(1)).status_code == 410
         assert client.get("/users/search?query=%25", headers=auth(1)).status_code == 400
         assert client.get("/users/search?query=%25%25", headers=auth(1)).json() == []
         for _ in range(28):
