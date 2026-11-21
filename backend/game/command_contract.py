@@ -6,6 +6,7 @@ compatibility.
 """
 
 COMMAND_CONTRACTS = {
+    "help": ("List available commands or explain one command.", "[COMMAND]", "none", "--help", "Returns 1 for an unknown command or extra operands.", "Only commands built into this shell are listed."),
     "ls": ("List directory entries.", "[PATH]", "none", "-R -l -i -a -A -d -h -s -t -c -u -r -S -X --help", "Returns 1 when a path or option fails.", "No color, sorting choices beyond implemented keys, or GNU formatting."),
     "mkdir": ("Create directories.", "DIRECTORY...", "none", "-p/--parents -m/--mode MODE -v/--verbose -h/--help", "Returns 1 when any directory cannot be created.", "Mode is this filesystem's three-digit permission model."),
     "cd": ("Change the shell working directory.", "DIRECTORY", "none", "none", "Returns 1 for a missing or non-directory operand.", "A directory operand is required; HOME and OLDPWD are not implemented."),
@@ -34,6 +35,7 @@ COMMAND_CONTRACTS = {
 }
 
 COMMAND_EXAMPLES = {
+    "help": "help ls",
     "ls": "ls /",
     "mkdir": "mkdir demo",
     "cd": "cd /",
