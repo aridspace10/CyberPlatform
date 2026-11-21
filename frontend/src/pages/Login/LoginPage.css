@@ -31,13 +31,15 @@ body {
   font-family: var(--font-mono);
 }
 
-/* ── Centering wrapper ── */
+/* ── Center the card when it fits, and let tall pages scroll from the top. ── */
 .login-page-wrapper {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  padding: 24px 16px;
+  background: var(--bg-deep);
 }
 
 /* ── Scanline overlay ── */
@@ -73,7 +75,8 @@ body::after {
 .login-page {
   position: relative;
   z-index: 10;
-  width: 420px;
+  width: min(420px, 100%);
+  margin-block: auto;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -390,6 +393,7 @@ body::after {
   margin-top: 12px;
   text-align: center;
   min-height: 14px;
+  overflow-wrap: anywhere;
 }
 
 .login-success {
@@ -399,6 +403,7 @@ body::after {
   margin-top: 12px;
   text-align: center;
   min-height: 14px;
+  overflow-wrap: anywhere;
 }
 
 /* ── Ambient glow orb ── */
@@ -429,4 +434,19 @@ body::after {
 .login-page .already-btn:hover {
   color: #fff;
   box-shadow: 0 0 30px rgba(255, 59, 59, 0.3);
+}
+
+@media (max-width: 480px) {
+  .login-panel {
+    padding: 32px 20px 28px;
+  }
+
+  .login-logo-name {
+    font-size: clamp(18px, 6vw, 24px);
+    letter-spacing: 0.12em;
+  }
+
+  .login-page button {
+    letter-spacing: 0.15em;
+  }
 }
