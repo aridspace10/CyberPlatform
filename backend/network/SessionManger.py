@@ -16,6 +16,10 @@ from services.session_logging import SessionLogger
 Username = str
 
 
+class SessionAlreadyConnected(Exception):
+    """A user already has an active socket in this game session."""
+
+
 class Player:
     def __init__(self, websocket: WebSocket | None, username: str, user_id: str):
         self.websocket = websocket
@@ -269,6 +273,8 @@ class GameSession:
     async def connect(self, websocket: WebSocket, username: str, user_id: str):
         if username in self.players and self.players[username].user_id != user_id:
             raise ValueError("Username belongs to another session player")
+        if username in self.connections.values():
+            raise SessionAlreadyConnected
         self.connections[websocket] = username
 
         if username not in self.players:
