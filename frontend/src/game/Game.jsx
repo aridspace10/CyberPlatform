@@ -98,6 +98,9 @@ export default function Game() {
 
             if (data.type === "system") {
                 addCommandLine(`[SYSTEM] ${data.message}`);
+                if (data.message === `${user.username} joined session`) {
+                    addCommandLine("[SYSTEM] Type 'help' to see available commands.");
+                }
             }
 
             if (data.type === "command_output") {
