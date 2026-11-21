@@ -1,3 +1,4 @@
+import fnmatch
 import posixpath
 from datetime import datetime
 
@@ -298,6 +299,83 @@ class FileSystem:
     def resolve(self, path: str) -> FileNode | PathResolutionError:
         """Resolve a path without changing the current directory."""
         return self._resolve(path, self.current, set())
+
+    def glob(self, path: str, active: list[bool]) -> list[str]:
+        """Expand active pathname metacharacters against this virtual filesystem.
+
+        Unmatched patterns remain literal, as in a shell without nullglob.
+        Quoted or escaped metacharacters have a false entry in ``active``.
+        """
+        if not any(
+            enabled and char in "*?["
+            for char, enabled in zip(path, active, strict=True)
+        ):
+            return [path]
+
+        def match_pattern(chars: str, flags: list[bool]) -> str:
+            escapes = {"*": "[*]", "?": "[?]", "[": "[[]", "]": "[]]"}
+            return "".join(
+                char if enabled else escapes.get(char, char)
+                for char, enabled in zip(chars, flags, strict=True)
+            )
+
+        components = path.split("/")
+        masks = []
+        offset = 0
+        for component in components:
+            masks.append(active[offset : offset + len(component)])
+            offset += len(component) + 1
+
+        absolute = path.startswith("/")
+        candidates = ["/" if absolute else ""]
+        for index, component in enumerate(components):
+            if index == 0 and absolute:
+                continue
+            if not component:
+                continue
+            flags = masks[index]
+            magic = any(
+                enabled and char in "*?["
+                for char, enabled in zip(component, flags, strict=True)
+            )
+            next_candidates = []
+            for prefix in candidates:
+                base = self.resolve(prefix or ".")
+                if isinstance(base, str) or base.get_type() != NodeType.DIRECTORY:
+                    continue
+                if magic:
+                    if self.permission_error(base, "r") or self.permission_error(
+                        base, "x"
+                    ):
+                        continue
+                    pattern = match_pattern(component, flags)
+                    names = sorted(
+                        child.name for child in base.items
+                        if (not child.name.startswith(".") or component.startswith("."))
+                        and fnmatch.fnmatchcase(child.name, pattern)
+                    )
+                else:
+                    names = [component]
+                for name in names:
+                    separator = "" if not prefix or prefix.endswith("/") else "/"
+                    candidate = f"{prefix}{separator}{name}"
+                    # An entry must exist. The final component may be a
+                    # dangling symlink, which is still a matching directory entry.
+                    if index == len(components) - 1 and magic:
+                        next_candidates.append(candidate)
+                    elif not isinstance(self.resolve(candidate), str):
+                        next_candidates.append(candidate)
+            candidates = next_candidates
+            if not candidates:
+                return [path]
+
+        if path.endswith("/"):
+            candidates = [
+                candidate + "/" for candidate in candidates
+                if isinstance(node := self.resolve(candidate), FileNode)
+                and node.get_type() == NodeType.DIRECTORY
+            ]
+        return candidates or [path]
 
     def display_path(self, node: FileNode) -> str:
         """Return a canonical absolute path, with the filesystem root as '/'."""

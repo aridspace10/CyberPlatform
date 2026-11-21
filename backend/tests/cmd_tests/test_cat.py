@@ -84,6 +84,18 @@ def test_cat_nonexistent_file(cl, shell_empty):
     assert result.stderr == ["cat: missing.txt: No directory named missing.txt"]
 
 
+def test_cat_expands_file_patterns_in_sorted_order(cl, shell_empty):
+    shell_empty.fs.add_file("b.log")
+    shell_empty.fs.add_file("a.log")
+    shell_empty.fs.resolve("a.log").set_data(["first"])
+    shell_empty.fs.resolve("b.log").set_data(["second"])
+
+    result = cl.enter_command("cat *.log", shell_empty)
+
+    assert_success(result, ["first", "second"])
+    assert shell_empty.command_runs[-1].args == ("a.log", "b.log")
+
+
 def test_cat_error(cl, shell_empty):
     cmd = cl.enter_command("cat -x missing.txt", shell_empty)
     assert cmd.stderr == ["cat: Unknown Argument Given (x)"]

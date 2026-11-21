@@ -81,6 +81,11 @@ ticks, and background jobs are not supported by the current engine.
 
 ### Command input
 
+Unquoted `*`, `?`, and bracket patterns such as `[ab]` in command arguments
+expand against the simulated filesystem. Matching paths are sorted; hidden
+entries require a pattern beginning with `.`. Quoting or escaping a pattern
+keeps it literal, and a pattern with no matches stays unchanged.
+
 Commands receive an immutable `InputBuffer` containing a tuple of lines and a
 final-newline flag. File operands and `<` redirections snapshot the file's data
 and newline metadata; a failed `<` open returns an error before the command runs
