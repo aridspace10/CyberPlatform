@@ -1,66 +1,62 @@
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { getSessions } from "../api/sessions";
+import "./SessionsList.css";
 
-import { useEffect, useState } from "react";
-import { useNavigate } from 'react-router-dom';
-import "./SessionsList.css"
-import { API_URL } from "../api/config";
+const visibilityLabels = {
+  public: "Public",
+  private: "Private",
+  friends_only: "Friends only",
+};
 
-export default function SessionList() {
-  const navigate = useNavigate();
+export default function SessionsList({ user, authLoading }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const handleEnter = async (sessionId) => {
-    navigate(`/game/${sessionId}`);
-  }
-
-  useEffect(() => {
-    fetch(`${API_URL}/sessions`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then(res => {
-        if (!res.ok) throw new Error("Could not load sessions");
-        return res.json();
-      })
-      .then(data => setSessions(data.sessions || []))
-      .catch(() => setError("Could not load sessions. Refresh to try again."))
-      .finally(() => setLoading(false));
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setSessions((await getSessions()).sessions || []);
+    } catch (err) {
+      setError(err.message || "Could not load sessions.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return (
-  <div>
-    <h2>Active Sessions</h2>
+  useEffect(() => { if (!authLoading) refresh(); }, [authLoading, refresh]);
 
-    <table className="session-table">
-      <thead>
-        <tr>
-          <th>Session ID</th>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Players</th>
-          <th></th>
-        </tr>
-      </thead>
+  return <section className="sessions-list" aria-labelledby="sessions-list-title">
+    <div className="sessions-list-heading">
+      <div>
+        <p className="home-kicker">OPEN LOBBIES &amp; YOUR SESSIONS</p>
+        <h2 id="sessions-list-title">Available sessions <span>{!loading && !error ? String(sessions.length).padStart(2, "0") : "--"}</span></h2>
+      </div>
+      <button type="button" onClick={refresh} disabled={loading}>Refresh list</button>
+    </div>
 
-      <tbody>
-        {loading && <tr><td colSpan={5}>Loading sessions...</td></tr>}
-        {error && <tr><td colSpan={5} role="alert">{error}</td></tr>}
-        {!loading && !error && sessions.length === 0 && (
-          <tr>
-            <td colSpan={5}>No sessions available. Create a Versus game to play with others.</td>
-          </tr>
-        )}
-        {sessions.map((s) => (
-          <tr key={s.id}>
-            <td>{s.id}</td>
-            <td>{s.name}</td>
-            <td>{{ public: "Public", private: "Private", friends_only: "Friends Only" }[s.visibility]}</td>
-            <td>{s.players}</td>
-            <td><button onClick={() => handleEnter(s.id)}>Enter</button></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+    {loading && <p className="sessions-message" role="status">Loading sessions…</p>}
+    {error && <p className="sessions-message sessions-error" role="alert">{error} <button type="button" onClick={refresh}>Try again</button></p>}
+    {!loading && !error && sessions.length === 0 && <div className="sessions-empty">
+      <span aria-hidden="true">&gt;_</span>
+      <h3>No sessions available yet.</h3>
+      <p>Create a session to start practicing with others.</p>
+      {user && <Link to="/session-create">Create a session <span aria-hidden="true">↗</span></Link>}
+    </div>}
+    {!loading && !error && sessions.length > 0 && <div className="sessions-table-wrap">
+      <table className="session-table">
+        <thead><tr><th scope="col">Session</th><th scope="col">Mode</th><th scope="col">Access</th><th scope="col">Status</th><th scope="col">Online</th><th scope="col"><span className="sessions-sr-only">Action</span></th></tr></thead>
+        <tbody>{sessions.map(session => <tr key={session.id}>
+          <td><span className="session-id">#{session.id}</span><strong>{session.name || "Untitled session"}</strong></td>
+          <td>{session.play_type === "SinglePlayer" ? "Solo" : "Versus"}</td>
+          <td>{visibilityLabels[session.visibility] || session.visibility}</td>
+          <td><span className={`session-state session-state-${session.state || "unknown"}`}>{session.state || "Unknown"}</span></td>
+          <td>{session.players}</td>
+          <td><Link className="session-enter" to={user ? `/game/${session.id}` : "/login"} state={user ? undefined : { from: `/game/${session.id}` }}>{user ? session.member ? "Open →" : "Join →" : "Sign in →"}</Link></td>
+        </tr>)}</tbody>
+      </table>
+    </div>}
+  </section>;
 }

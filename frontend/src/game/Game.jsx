@@ -3,7 +3,7 @@ import Gamescreen from "./Gamescreen";
 import WaitingScreen from "./WaitingScreen";
 import Versus from "./Versus";
 import GameDataPanel from "./GameDataPanel";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { SessionContext } from "../components/SessionContext";
 import GeneralTab from "../components/GeneralTab";
@@ -203,6 +203,16 @@ export default function Game() {
             className={`game${isSandbox ? " sandbox" : ""}${isSandbox && !sandboxSettings.wrapLines ? " sandbox-no-wrap" : ""}${isSandbox && sandboxSettings.highContrast ? " sandbox-high-contrast" : ""}${isSandbox && sandboxSettings.reducedMotion ? " sandbox-reduced-motion" : ""}`}
             style={isSandbox ? { "--sandbox-terminal-font-size": `${sandboxSettings.fontSize}px` } : undefined}
           >
+            <header className="game-topbar">
+                <Link className="game-topbar-brand" to="/" aria-label="CyberPlatform home"><span className="game-topbar-mark" aria-hidden="true">&gt;_</span><span>CYBER<span>PLATFORM</span></span></Link>
+                <span className="game-topbar-label">{isSandbox ? "SANDBOX / TERMINAL" : "SESSION / TERMINAL"}</span>
+                <nav className="game-topbar-links" aria-label="Site navigation">
+                    <Link to="/">Home</Link>
+                    <Link to="/sessions">Sessions</Link>
+                    <Link to="/profile">Profile</Link>
+                </nav>
+            </header>
+            <div className="game-workspace">
             <div className="sidebar-page">
                 <div className="sidebar-nav">
                     {["General", "Settings", "Environment", "Chat"].map(tab => (
@@ -270,6 +280,7 @@ export default function Game() {
                 {!state && !access && !accessError && <h1>Loading...</h1>}
             </main>
             {gameData && <GameDataPanel gameData={gameData} />}
+            </div>
           </div>
         </SessionContext.Provider>
     )
