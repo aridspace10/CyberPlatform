@@ -26,9 +26,11 @@ from game.Parser import (
     NotNode,
     OrNode,
     Pipe,
+    Quoted,
     Sequence,
     SimpleCommand,
     lex,
+    segment_text,
 )
 from game.Process import ProcessState
 from game.ProcessManager import ProcessManager
@@ -428,12 +430,17 @@ class CommandLine:
             args = []
             for arg in atom.args:
                 word = ""
+                active = []
                 for part in arg.parts:
                     if isinstance(part, str):
                         word += part
+                        active.extend([True] * len(part))
+                    elif isinstance(part, Quoted):
+                        word += part.value
+                        active.extend([False] * len(part.value))
                     else:
                         if part.name == "?":
-                            word += str(sys.shell.last_status)
+                            value = str(sys.shell.last_status)
                         elif part.name not in sys.shell.vars:
                             return CommandResult(
                                 1,
@@ -443,8 +450,10 @@ class CommandLine:
                                 None,
                             )
                         else:
-                            word += sys.shell.vars[part.name]
-                args.append(word)
+                            value = sys.shell.vars[part.name]
+                        word += value
+                        active.extend([not part.quoted] * len(value))
+                args.extend(sys.fs.glob(word, active))
             return self.execute(args, fdin, sys)
         else:
             # save state
@@ -595,10 +604,7 @@ class CommandLine:
     @staticmethod
     def describe_andor(andor: AndOr) -> str:
         def describe_word(word) -> str:
-            return "".join(
-                part if isinstance(part, str) else f"${part.name}"
-                for part in word.parts
-            )
+            return "".join(segment_text(part) for part in word.parts)
 
         def describe_command(command: Command) -> str:
             if isinstance(command.atom, SimpleCommand):

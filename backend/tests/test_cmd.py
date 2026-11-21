@@ -760,7 +760,7 @@ def test_parser_groups_pipelines_before_left_associative_conditionals():
 def test_parser_preserves_double_quote_variable_segment():
     ast = CommandParser(lex('echo "$NAME"')).parse()
     word = ast.parts[0].pipeline.first.parts[0].atom.args[1]
-    assert word.parts == [VarUse("NAME")]
+    assert word.parts == [VarUse("NAME", quoted=True)]
 
 
 def test_parser_assigns_background_to_preceding_job_and_allows_trailing_separator():

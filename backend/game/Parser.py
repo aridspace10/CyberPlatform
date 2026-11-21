@@ -24,6 +24,12 @@ class Redirection:
 @dataclass
 class VarUse:
     name: Identifier
+    quoted: bool = False
+
+
+@dataclass
+class Quoted:
+    value: str
 
 
 @dataclass
@@ -31,7 +37,15 @@ class Word:
     parts: list["Segment"]
 
 
-Segment = str | VarUse
+Segment = str | VarUse | Quoted
+
+
+def segment_text(part: Segment) -> str:
+    if isinstance(part, str):
+        return part
+    if isinstance(part, Quoted):
+        return part.value
+    return f"${part.name}"
 
 
 @dataclass
@@ -143,8 +157,9 @@ OPERATORS = {
 def lex(text: str) -> list[Token]:
     """Tokenize shell words with quote-aware `$NAME` and `$?` expansion.
 
-    Braced parameter expansion, command substitution, globbing, and word splitting
-    are intentionally unsupported.
+    Braced parameter expansion, command substitution, and word splitting are
+    intentionally unsupported. Quoted and escaped characters retain their
+    literal status for pathname expansion during execution.
     """
     tokens: list[Token] = []
     i = 0
@@ -185,7 +200,7 @@ def lex(text: str) -> list[Token]:
         parts: list[Segment] = []
         buffer = ""
 
-        def flush() -> None:
+        def flush(parts: list[Segment] = parts) -> None:
             nonlocal buffer
             if buffer:
                 parts.append(buffer)
@@ -208,14 +223,14 @@ def lex(text: str) -> list[Token]:
                         continue
                     if quote == '"' and text[i] == "$":
                         if quoted:
-                            quote_parts.append(quoted)
+                            quote_parts.append(Quoted(quoted))
                             quoted = ""
                         variable, next_index = read_variable(i)
                         if variable is None:
                             quoted += "$"
                             i += 1
                         else:
-                            quote_parts.append(variable)
+                            quote_parts.append(VarUse(variable.name, quoted=True))
                             i = next_index
                         continue
                     quoted += text[i]
@@ -223,21 +238,16 @@ def lex(text: str) -> list[Token]:
                 if i >= n:
                     raise SyntaxError("Unterminated quote")
                 i += 1
-                if quote == "'":
-                    buffer += quoted
-                else:
-                    if quote_parts:
-                        flush()
-                        if quoted:
-                            quote_parts.append(quoted)
-                        parts.extend(quote_parts)
-                    else:
-                        buffer += quoted
+                flush()
+                if quoted:
+                    quote_parts.append(Quoted(quoted))
+                parts.extend(quote_parts)
                 continue
             if c == "\\":
                 if i + 1 >= n:
                     raise SyntaxError("Trailing escape")
-                buffer += text[i + 1]
+                flush()
+                parts.append(Quoted(text[i + 1]))
                 i += 2
                 continue
             if c == "$":
@@ -254,9 +264,7 @@ def lex(text: str) -> list[Token]:
             i += 1
 
         flush()
-        value = "".join(
-            part if isinstance(part, str) else f"${part.name}" for part in parts
-        )
+        value = "".join(segment_text(part) for part in parts)
         tokens.append(Token("WORD", value, parts or [""]))
     return tokens
 
