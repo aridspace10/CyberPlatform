@@ -10,6 +10,7 @@ import GeneralTab from "../components/GeneralTab";
 import EnvironmentTab from "../components/EnvironmentTab";
 import SettingsTab from "../components/SettingsTab";
 import ChatTab from "../components/ChatTab"
+import { DEFAULT_SANDBOX_SETTINGS, loadSandboxSettings, saveSandboxSettings } from "./sandboxSettings";
 import { WEBSOCKET_URL } from "../api/config";
 import { answerSessionRequest, getSessionAccess, getSessionRequests, requestSessionJoin } from "../api/sessions";
 import "./Gamescreen.css"
@@ -21,9 +22,12 @@ export default function Game() {
     const wsRef = useRef(null);
     const [commandLog, setCommandLog] = useState([]);
     const [chatLog, setChatLog] = useState([]);
+    const [unreadChatCount, setUnreadChatCount] = useState(0);
     const [state, setState] = useState(null);
     const [gameData, setGameData] = useState(null);
     const [activeTab, setActiveTab] = useState("General");
+    const [sandboxSettings, setSandboxSettings] = useState(() => loadSandboxSettings(user.id));
+    const notificationRef = useRef({ activeTab, isSandbox: false, enabled: sandboxSettings.chatNotifications });
     const [cwd, setCwd] = useState("/");
     const [access, setAccess] = useState(null);
     const [accessError, setAccessError] = useState("");
@@ -31,6 +35,19 @@ export default function Game() {
     const [joinAttempt, setJoinAttempt] = useState(0);
     const [joinRequests, setJoinRequests] = useState([]);
     const [inviteNotice, setInviteNotice] = useState("");
+    const isSandbox = gameData?.isSandbox === true;
+
+    useEffect(() => {
+        notificationRef.current = {
+            activeTab,
+            isSandbox,
+            enabled: sandboxSettings.chatNotifications,
+        };
+    }, [activeTab, isSandbox, sandboxSettings.chatNotifications]);
+
+    useEffect(() => {
+        if (isSandbox) saveSandboxSettings(user.id, sandboxSettings);
+    }, [isSandbox, sandboxSettings, user.id]);
 
     function addCommandLine(text) {
         setCommandLog(prev => [...prev, text]);
@@ -62,12 +79,19 @@ export default function Game() {
                     user: typeof data.user === "string" ? data.user : "Player",
                     message: data.message,
                 });
+                const notification = notificationRef.current;
+                if (notification.isSandbox && notification.enabled && notification.activeTab !== "Chat") {
+                    setUnreadChatCount(count => count + 1);
+                }
             }
 
             if (data.type === "lobby_update") {
                 setPlayers(data.players);
                 setState(data.state);
-                if (data.gameData) setGameData(data.gameData);
+                if (data.gameData) {
+                    notificationRef.current.isSandbox = data.gameData.isSandbox === true;
+                    setGameData(data.gameData);
+                }
                 if (data.cwd) setCwd(data.cwd);
                 return;
             }
@@ -154,12 +178,28 @@ export default function Game() {
     };
 
     const handleTabSwitch = (tab) => {
+        notificationRef.current.activeTab = tab;
         setActiveTab(tab);
+        if (tab === "Chat") setUnreadChatCount(0);
+    };
+
+    const handleSandboxSettingChange = (key, value) => {
+        if (key === "chatNotifications") notificationRef.current.enabled = value;
+        setSandboxSettings(current => ({ ...current, [key]: value }));
+        if (key === "chatNotifications" && !value) setUnreadChatCount(0);
+    };
+
+    const handleResetSandboxSettings = () => {
+        notificationRef.current.enabled = DEFAULT_SANDBOX_SETTINGS.chatNotifications;
+        setSandboxSettings({ ...DEFAULT_SANDBOX_SETTINGS });
     };
 
     return (
         <SessionContext.Provider value={{ sessionId, wsRef, addCommandLine }}>
-          <div className="game">
+          <div
+            className={`game${isSandbox ? " sandbox" : ""}${isSandbox && !sandboxSettings.wrapLines ? " sandbox-no-wrap" : ""}${isSandbox && sandboxSettings.highContrast ? " sandbox-high-contrast" : ""}${isSandbox && sandboxSettings.reducedMotion ? " sandbox-reduced-motion" : ""}`}
+            style={isSandbox ? { "--sandbox-terminal-font-size": `${sandboxSettings.fontSize}px` } : undefined}
+          >
             <div className="sidebar-page">
                 <div className="sidebar-nav">
                     {["General", "Settings", "Environment", "Chat"].map(tab => (
@@ -171,11 +211,13 @@ export default function Game() {
                             onClick={() => handleTabSwitch(tab)}
                         >
                             {tab}
+                            {tab === "Chat" && isSandbox && unreadChatCount > 0 && sandboxSettings.chatNotifications &&
+                                <span className="sidebar-tab-badge" aria-label={`${unreadChatCount} unread messages`}>{unreadChatCount > 99 ? "99+" : unreadChatCount}</span>}
                         </button>
                     ))}
                 </div>
                 {activeTab === "General" && <GeneralTab />}
-                {activeTab === "Settings" && <SettingsTab />}
+                {activeTab === "Settings" && <SettingsTab isSandbox={isSandbox} settings={sandboxSettings} onChange={handleSandboxSettingChange} onReset={handleResetSandboxSettings} />}
                 {activeTab === "Environment" && <EnvironmentTab />}
                 {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} username={user?.username} />}
             </div>

@@ -1,0 +1,94 @@
+.settings-tab {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.settings-intro {
+    margin: -8px 0 2px;
+    color: #aeb4be;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 56px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #30343b;
+    cursor: pointer;
+}
+
+.setting-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+}
+
+.setting-copy strong {
+    color: #e8eaf0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.setting-copy small {
+    color: #aeb4be;
+    font-size: 0.7rem;
+    line-height: 1.4;
+}
+
+.setting-row select {
+    flex: 0 0 auto;
+    max-width: 78px;
+    padding: 5px 3px;
+    border: 1px solid #505861;
+    border-radius: 4px;
+    background: #1a1d23;
+    color: #e8eaf0;
+    font: inherit;
+    font-size: 0.75rem;
+}
+
+.setting-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    accent-color: #00e676;
+    cursor: pointer;
+}
+
+.setting-row:focus-within {
+    border-bottom-color: #00e676;
+}
+
+.setting-row select:focus-visible,
+.setting-row input:focus-visible,
+.settings-reset:focus-visible {
+    outline: 2px solid #00e676;
+    outline-offset: 2px;
+}
+
+.settings-reset {
+    align-self: flex-start;
+    padding: 7px 10px;
+    border: 1px solid #53645b;
+    border-radius: 4px;
+    background: transparent;
+    color: #dce1e5;
+    font-size: 0.75rem;
+}
+
+.settings-reset:hover:not(:disabled) {
+    border-color: #00e676;
+    color: #00e676;
+}
+
+.settings-reset:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
