@@ -19,7 +19,7 @@
 .home-skip-link { position: absolute; z-index: 200; top: -80px; left: 16px; padding: 10px 16px; background: var(--home-green); color: var(--home-bg) !important; font-weight: 700; }
 .home-skip-link:focus { top: 12px; }
 
-.home-header, .home-footer, .home-hero, .home-section, .home-sandbox, .home-dev-tools { width: min(100% - 80px, 1440px); margin-inline: auto; }
+.home-header, .home-footer, .home-hero, .home-section, .home-ad, .home-sandbox, .home-dev-tools { width: min(100% - 80px, 1440px); margin-inline: auto; }
 .home-header, .home-footer { position: relative; z-index: 1; display: flex; align-items: center; }
 .home-header { min-height: 92px; gap: 36px; border-bottom: 1px solid var(--home-line); }
 .home-brand { display: inline-flex; align-items: center; flex: none; gap: 12px; font-family: "Share Tech Mono", monospace; font-size: 17px; font-weight: 700; letter-spacing: -0.065em; white-space: nowrap; }
@@ -95,6 +95,13 @@
 .home-step p { max-width: 340px; color: var(--home-muted); font-size: 16px; line-height: 1.45; }
 .home-step-arrow { position: absolute; top: 25px; right: 28px; color: #76947d; font-size: 24px; }
 
+.home-ad { margin-bottom: 112px; }
+.home-ad-heading { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 12px; color: #849b8d; font-family: "Share Tech Mono", monospace; font-size: 10px; letter-spacing: 0.14em; }
+.home-ad-unit, .home-ad-preview { min-height: 160px; border: 1px solid var(--home-line); background: #0b1915; }
+.home-ad-preview { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px; text-align: center; }
+.home-ad-preview > span { color: var(--home-green); font-family: "Share Tech Mono", monospace; font-size: 13px; letter-spacing: 0.15em; }
+.home-ad-preview p { margin-top: 10px; color: var(--home-muted); font-size: 16px; }
+
 .home-sandbox { position: relative; display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); align-items: center; min-height: 438px; padding: 72px 72px 80px; border: 1px solid #35513f; background: radial-gradient(circle at 20% 50%, rgba(95, 158, 72, 0.13), transparent 48%), #10211a; }
 .home-sandbox-mark { color: var(--home-green); font-family: "Share Tech Mono", monospace; font-size: clamp(90px, 14vw, 210px); line-height: 1; letter-spacing: -0.22em; text-shadow: 0 0 100px rgba(185, 239, 112, 0.18); }
 .home-sandbox-copy { max-width: 650px; }
@@ -124,7 +131,7 @@
 .home-footer-links button { padding: 0; border: 0; border-radius: 0; background: none; color: inherit; }
 
 @media (max-width: 1080px) {
-  .home-header, .home-footer, .home-hero, .home-section, .home-sandbox, .home-dev-tools { width: min(100% - 48px, 1440px); }
+  .home-header, .home-footer, .home-hero, .home-section, .home-ad, .home-sandbox, .home-dev-tools { width: min(100% - 48px, 1440px); }
   .home-hero { gap: 32px; min-height: auto; padding: 72px 0 88px; }
   .home-hero h1 { font-size: clamp(54px, 6vw, 72px); }
   .home-terminal-screen { min-height: 320px; padding: 24px; }
@@ -144,6 +151,7 @@
   .home-strip p { flex-basis: 100%; order: 2; }
   .home-strip > span:last-child { font-size: 22px; }
   .home-section { padding: 76px 0; }
+  .home-ad { margin-bottom: 76px; }
   .home-section-heading { display: block; }
   .home-section-heading > p { margin-top: 25px; }
   .home-step-grid { grid-template-columns: 1fr; }
@@ -158,7 +166,8 @@
 }
 
 @media (max-width: 480px) {
-  .home-header, .home-footer, .home-hero, .home-section, .home-sandbox, .home-dev-tools { width: min(100% - 36px, 1440px); }
+  .home-header, .home-footer, .home-hero, .home-section, .home-ad, .home-sandbox, .home-dev-tools { width: min(100% - 36px, 1440px); }
+  .home-ad-heading > span:last-child { display: none; }
   .home-brand { font-size: 14px; gap: 8px; }
   .home-brand-mark { width: 32px; height: 32px; font-size: 16px; }
   .home-header-action { min-height: 36px; gap: 7px; padding: 0 9px; font-size: 13px !important; }

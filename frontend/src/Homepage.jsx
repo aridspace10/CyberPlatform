@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { enterTutorial } from "./api/sessions";
 import { useAuth } from "./auth/useAuth";
 import SessionList from "./components/SessionsList";
+import HomepageAd from "./HomepageAd";
 import "./Homepage.css";
 
 const steps = [
@@ -113,6 +114,8 @@ export default function Homepage() {
             {steps.map(([number, commands, title, description]) => <article className="home-step" key={number}><span className="home-step-number">{number}</span><span className="home-step-command">{commands}</span><h3>{title}</h3><p>{description}</p><span className="home-step-arrow" aria-hidden="true">↗</span></article>)}
           </div>
         </section>
+
+        <HomepageAd />
 
         <section className="home-sandbox" id="the-sandbox" aria-labelledby="home-sandbox-title">
           <div className="home-sandbox-mark" aria-hidden="true">&gt;_</div>
