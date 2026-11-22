@@ -27,10 +27,6 @@ export default function GeneralTab() {
         }
     }
 
-    const handleReset = () => {
-
-    }
-
     const handleDownloadDiagnostics = async () => {
         setDiagnosticsError("");
         try {
@@ -60,7 +56,6 @@ export default function GeneralTab() {
                 <small>Contains only your activity and errors from this session.</small>
                 {diagnosticsError && <p role="alert">{diagnosticsError}</p>}
             </div>
-            <button className="tab-button" onClick={handleReset}>Reset</button>
             <button className="tab-button" onClick={handleExit}>Exit</button>
         </div>
     )
