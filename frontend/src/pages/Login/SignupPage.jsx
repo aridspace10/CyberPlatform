@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "../../auth/useAuth";
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
 export default function Signup() {
   const { signup } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -23,7 +24,7 @@ export default function Signup() {
           setError(result);
           return;
         }
-        navigate("/login", { state: { accountCreated: true } });
+        navigate("/login", { state: { accountCreated: true, from: location.state?.from }, replace: true });
     } catch (err) {
       setError(err.message || "Could not create account. Please try again.");
     } finally {
@@ -143,7 +144,7 @@ export default function Signup() {
             </div>
           </div>
 
-          <button className="already-btn" onClick={() => {navigate("/login")}} disabled={loading}>
+          <button className="already-btn" onClick={() => navigate("/login", { state: { from: location.state?.from } })} disabled={loading}>
             <span>{"Already Have an account"}</span>
           </button>
 
