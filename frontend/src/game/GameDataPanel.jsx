@@ -8,7 +8,7 @@ const EMPTY_GAME_DATA = {
     progress: { completed: 0, total: 0 },
 };
 
-export default function GameDataPanel({ gameData = EMPTY_GAME_DATA }) {
+export default function GameDataPanel({ id, gameData = EMPTY_GAME_DATA }) {
     const data = gameData || EMPTY_GAME_DATA;
     const [now, setNow] = useState(0);
     const [selectedQuestionId, setSelectedQuestionId] = useState(null);
@@ -45,7 +45,7 @@ export default function GameDataPanel({ gameData = EMPTY_GAME_DATA }) {
     if (data.isSandbox || data.gameType === "Tutorial") return null;
 
     return (
-        <aside className="game-data-panel" aria-label="Game data">
+        <aside id={id} className="game-data-panel" aria-label="Game data">
             <header className="game-data-header">
                 <span className="game-data-eyebrow">Session</span>
                 <h1>{data.sessionName || "Session"}</h1>
