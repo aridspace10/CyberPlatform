@@ -491,6 +491,47 @@ def test_sandbox_is_marked_and_excluded_from_active_sessions():
         client.portal.call(session_manager.remove_session, sandbox_id)
 
 
+def test_saved_sessions_remain_browsable_with_member_and_public_scope():
+    client, _testing_session = make_client()
+    with client:
+        versus_id = str(
+            client.post("/api/session_create", json=creation_payload("Versus"))
+            .json()["session_id"]
+        )
+        solo_id = str(
+            client.post("/api/session_create", json=creation_payload("SinglePlayer"))
+            .json()["session_id"]
+        )
+        private_payload = creation_payload("Versus")
+        private_payload["config"]["visibility"] = "private"
+        private_id = str(
+            client.post("/api/session_create", json=private_payload)
+            .json()["session_id"]
+        )
+        client.portal.call(session_manager.remove_session, versus_id)
+        client.portal.call(session_manager.remove_session, solo_id)
+        client.portal.call(session_manager.remove_session, private_id)
+
+        own = {
+            item["id"]: item for item in client.get("/api/sessions").json()["sessions"]
+        }
+        assert own[versus_id]["member"] is True
+        assert own[solo_id]["member"] is True
+        assert own[private_id]["member"] is True
+        assert own[versus_id]["players"] == 0
+        assert own[versus_id]["play_type"] == "Versus"
+
+        guest = {
+            item["id"]: item
+            for item in client.get(
+                "/api/sessions", headers=authorization(43, "guest")
+            ).json()["sessions"]
+        }
+        assert guest[versus_id]["member"] is False
+        assert solo_id not in guest
+        assert private_id not in guest
+
+
 def assert_no_sandbox_state(testing_session, original_runtimes):
     db = testing_session()
     try:

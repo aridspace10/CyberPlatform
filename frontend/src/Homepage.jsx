@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { enterTutorial } from "./api/sessions";
 import { useAuth } from "./auth/useAuth";
-import SessionList from "./components/SessionsList";
 import HomepageAd from "./HomepageAd";
+import { SiteFooter, SiteHeader } from "./SiteChrome";
 import "./Homepage.css";
 
 const steps = [
@@ -69,19 +69,7 @@ export default function Homepage() {
   return (
     <div className="homepage">
       <a className="home-skip-link" href="#main-content">Skip to content</a>
-      <header className="home-header">
-        <Link className="home-brand" to="/" aria-label="CyberPlatform home"><span className="home-brand-mark" aria-hidden="true">&gt;_</span><span>CYBER<span>PLATFORM</span></span></Link>
-        <nav className="home-nav" aria-label="Main navigation">
-          <a href="#how-it-works">How it works</a>
-          <a href="#the-sandbox">The Sandbox</a>
-          {user ? <Link to="/profile">Profile</Link> : <Link to="/login">Sign in</Link>}
-        </nav>
-        {user ? (
-          <button className="home-header-action" type="button" onClick={handleEnterSandbox} disabled={enteringSandbox}>Enter Sandbox <span aria-hidden="true">↗</span></button>
-        ) : !loading ? (
-          <Link className="home-header-action" to="/signup">Get started <span aria-hidden="true">↗</span></Link>
-        ) : null}
-      </header>
+      <SiteHeader user={user} loading={loading} enteringSandbox={enteringSandbox} onEnterSandbox={handleEnterSandbox} />
 
       <main id="main-content">
         <section className="home-hero" aria-labelledby="home-title">
@@ -130,10 +118,10 @@ export default function Homepage() {
           {user ? sandboxButton("Enter your Sandbox") : <div className="home-cta-actions"><Link className="home-button home-button-primary" to="/signup">Create an account <span aria-hidden="true">↗</span></Link><Link to="/login">Already have an account? Sign in</Link></div>}
         </section>
 
-        {import.meta.env.DEV && <section className="home-dev-tools" aria-label="Local development tools"><h2>Local development tools</h2><p>Multiplayer sessions are still under development.</p><Link to="/session-create">Create a session</Link><SessionList /></section>}
+        {import.meta.env.DEV && <section className="home-dev-tools" aria-label="Local development tools"><h2>Local development tools</h2><p>Multiplayer sessions are still under development.</p><Link to="/sessions">Browse sessions</Link></section>}
       </main>
 
-      <footer className="home-footer"><Link className="home-brand" to="/" aria-label="CyberPlatform home"><span className="home-brand-mark" aria-hidden="true">&gt;_</span><span>CYBER<span>PLATFORM</span></span></Link><p>Practice makes progress.</p><div className="home-footer-links">{user ? <button type="button" onClick={logout}>Sign out</button> : <Link to="/login">Sign in</Link>}<a href="#main-content">Back to top ↑</a></div></footer>
+      <SiteFooter user={user} onLogout={logout} />
     </div>
   );
 }
