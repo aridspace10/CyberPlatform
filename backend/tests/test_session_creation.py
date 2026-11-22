@@ -518,7 +518,8 @@ def test_saved_sessions_remain_browsable_with_member_and_public_scope():
         assert own[versus_id]["member"] is True
         assert own[solo_id]["member"] is True
         assert own[private_id]["member"] is True
-        assert own[versus_id]["players"] == 0
+        assert own[versus_id]["connected_players"] == 0
+        assert own[versus_id]["joined_players"] == 1
         assert own[versus_id]["play_type"] == "Versus"
 
         guest = {
@@ -530,6 +531,48 @@ def test_saved_sessions_remain_browsable_with_member_and_public_scope():
         assert guest[versus_id]["member"] is False
         assert solo_id not in guest
         assert private_id not in guest
+
+
+def test_session_list_tracks_connected_and_joined_players_across_reconnects():
+    client, _testing_session = make_client()
+    with client:
+        response = client.post("/api/session_create", json=creation_payload("Versus"))
+        assert response.status_code == 201
+        session_id = str(response.json()["session_id"])
+        runtime = session_manager.get_session(session_id)
+        creator_token = authorization(42, "creator")["Authorization"].split(" ", 1)[1]
+        guest_token = authorization(43, "guest")["Authorization"].split(" ", 1)[1]
+
+        def counts():
+            entries = client.get("/api/sessions").json()["sessions"]
+            entry = next(item for item in entries if item["id"] == session_id)
+            return entry["connected_players"], entry["joined_players"]
+
+        assert counts() == (0, 1)
+        with client.websocket_connect(f"/ws/{session_id}") as creator:
+            creator.send_json({"token": creator_token})
+            creator.receive_json()
+            creator.receive_json()
+            assert counts() == (1, 1)
+
+            with client.websocket_connect(f"/ws/{session_id}") as guest:
+                guest.send_json({"token": guest_token})
+                guest.receive_json()
+                guest.receive_json()
+                assert counts() == (2, 2)
+
+            assert len(runtime.players) == 2  # retained for reconnect
+            assert counts() == (1, 2)
+
+        assert counts() == (0, 2)
+        with client.websocket_connect(f"/ws/{session_id}") as guest:
+            guest.send_json({"token": guest_token})
+            guest.receive_json()
+            guest.receive_json()
+            assert counts() == (1, 2)
+
+        assert counts() == (0, 2)
+        client.portal.call(session_manager.remove_session, session_id)
 
 
 def assert_no_sandbox_state(testing_session, original_runtimes):

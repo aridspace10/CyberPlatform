@@ -152,7 +152,10 @@ def list_sessions(
             {
                 "id": str(saved.id),
                 "name": saved.name,
-                "players": len(runtime.connected_players()) if runtime != "404" else 0,
+                "connected_players": (
+                    len(runtime.connected_players()) if runtime != "404" else 0
+                ),
+                "joined_players": member_count,
                 "state": state,
                 "visibility": saved.visibility,
                 "play_type": config.get("playType"),
