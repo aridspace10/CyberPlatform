@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import "./Gamescreen.css"
-export default function Gamescreen({wsRef, commandLog, addCommandLine, username, cwd}) {
+export default function Gamescreen({wsRef, commandLog, addCommandLine, username, cwd, interaction}) {
     const [input, setInput] = useState("");
     const [history, setHistory] = useState([]);
     const [historyIndex, setHistoryIndex] = useState(null);
     const draftRef = useRef("");
     const inputRef = useRef(null);
+    const isForeground = interaction?.mode === "foreground";
+    const foregroundPrompt = typeof interaction?.prompt === "string" ? interaction.prompt : "";
+    const waitingForProcess = isForeground && !foregroundPrompt;
 
     useEffect(() => {
         inputRef.current?.focus();
@@ -40,12 +43,12 @@ export default function Gamescreen({wsRef, commandLog, addCommandLine, username,
     }
 
     function handleTerminalEnter(e) {
-        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        if (!isForeground && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
             e.preventDefault();
             navigateHistory(e.key === "ArrowUp" ? -1 : 1);
             return;
         }
-        if (e.key !== "Enter" || !input.trim()) return;
+        if (e.key !== "Enter" || (!isForeground && !input.trim()) || waitingForProcess) return;
         if (!wsRef.current || wsRef.current.readyState !== 1) {
             addCommandLine("[SYSTEM] Not connected");
             return;
@@ -54,10 +57,20 @@ export default function Gamescreen({wsRef, commandLog, addCommandLine, username,
             type: "command",
             input: input
         }));
-        addCommandLine(`${username || "user"}@cyber:${formatPath(cwd)}$ ${input}`);
-        setHistory(previous => [...previous, input].slice(-100));
+        addCommandLine(`${isForeground ? foregroundPrompt : `${username || "user"}@cyber:${formatPath(cwd)}$`} ${input}`);
+        if (!isForeground) setHistory(previous => [...previous, input].slice(-100));
         setHistoryIndex(null);
         draftRef.current = "";
+        setInput("");
+    }
+
+    function cancelForeground() {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+            addCommandLine("[SYSTEM] Not connected");
+            return;
+        }
+        wsRef.current.send(JSON.stringify({ type: "command", input: "^C" }));
+        addCommandLine("^C");
         setInput("");
     }
 
@@ -76,7 +89,7 @@ export default function Gamescreen({wsRef, commandLog, addCommandLine, username,
                     ))}
                     <div className="prompt-row">
                         <span className="prompt-label">
-                            {username || "user"}@cyber:{formatPath(cwd)}$
+                            {isForeground ? (foregroundPrompt || "Running…") : `${username || "user"}@cyber:${formatPath(cwd)}$`}
                         </span>
                         <input
                             ref={inputRef}
@@ -84,14 +97,16 @@ export default function Gamescreen({wsRef, commandLog, addCommandLine, username,
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={handleTerminalEnter}
-                            aria-label="Terminal command"
+                            aria-label={isForeground ? "Terminal response" : "Terminal command"}
+                            disabled={waitingForProcess}
                             spellCheck="false"
                             autoFocus
                         />
-                        <div className="history-controls" aria-label="Command history">
+                        {!isForeground && <div className="history-controls" aria-label="Command history">
                             <button type="button" title="Previous command (Up arrow)" aria-label="Previous command" disabled={!history.length} onClick={() => navigateHistory(-1)}>↑</button>
                             <button type="button" title="Next command (Down arrow)" aria-label="Next command" disabled={historyIndex === null} onClick={() => navigateHistory(1)}>↓</button>
-                        </div>
+                        </div>}
+                        {isForeground && <button type="button" className="cancel-foreground" onClick={cancelForeground}>Cancel</button>}
                     </div>
                 </div>
             </div>

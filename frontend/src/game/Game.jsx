@@ -29,6 +29,7 @@ export default function Game() {
     const [sandboxSettings, setSandboxSettings] = useState(() => loadSandboxSettings(user.id));
     const notificationRef = useRef({ activeTab, isSandbox: false, enabled: sandboxSettings.chatNotifications });
     const [cwd, setCwd] = useState("/");
+    const [terminalInteraction, setTerminalInteraction] = useState(null);
     const [access, setAccess] = useState(null);
     const [accessError, setAccessError] = useState("");
     const [connectionConflict, setConnectionConflict] = useState(false);
@@ -105,12 +106,17 @@ export default function Game() {
 
             if (data.type === "command_output") {
                 if (data.cwd) setCwd(data.cwd);
+                setTerminalInteraction(data.interaction?.mode === "foreground" ? data.interaction : null);
                 data.stdout.forEach(line => addCommandLine(line));
                 data.stderr.forEach(line => addCommandLine(line));
                 if (data.status !== undefined && data.status !== 0 &&
                     data.stdout.length === 0 && data.stderr.length === 0) {
                     addCommandLine(`[exit status ${data.status}: no output]`);
                 }
+            }
+
+            if (data.type === "terminal_state") {
+                setTerminalInteraction(data.busy ? { mode: data.mode || "foreground", prompt: data.prompt || "" } : null);
             }
 
             if (data.type === "background_job_complete") {
@@ -273,6 +279,7 @@ export default function Game() {
                         addCommandLine={addCommandLine}
                         username={user?.username}
                         cwd={cwd}
+                        interaction={terminalInteraction}
                     />
                 )}
                 {state === "starting" && <Versus players={players} />}
