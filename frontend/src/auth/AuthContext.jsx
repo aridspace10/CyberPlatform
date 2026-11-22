@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createUser, loginUser } from "../api/users";
 import { AuthContext } from "./auth-context";
 import { BACKEND_URL } from "../api/config";
@@ -20,7 +20,13 @@ async function getCurrentUser(token) {
   const response = await fetch(`${BACKEND_URL}/users/me`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!response.ok) throw new Error("Your sign-in has expired");
+  if (!response.ok) {
+    const error = new Error(response.status === 401
+      ? "Your sign-in has expired"
+      : "Could not check your sign-in. Please retry.");
+    error.status = response.status;
+    throw error;
+  }
 
   const user = await response.json();
   if (!Number.isInteger(user?.id)) throw new Error("Invalid user response");
@@ -29,29 +35,48 @@ async function getCurrentUser(token) {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [authError, setAuthError] = useState("");
   const [loading, setLoading] = useState(
     () => Boolean(localStorage.getItem("token"))
   );
+  const requestId = useRef(0);
 
   const logout = useCallback(() => {
+    requestId.current += 1;
     localStorage.removeItem("token");
     setUser(null);
+    setAuthError("");
     setLoading(false);
   }, []);
 
-  // Load user on app start
+  const loadUser = useCallback(async (token) => {
+    const id = ++requestId.current;
+    setLoading(true);
+    setAuthError("");
+    try {
+      const currentUser = await getCurrentUser(token);
+      if (id === requestId.current) setUser(currentUser);
+      return currentUser;
+    } catch (error) {
+      if (id === requestId.current) {
+        if (error.status === 401) logout();
+        else setAuthError("Could not check your sign-in. Please retry.");
+      }
+      throw error;
+    } finally {
+      if (id === requestId.current) setLoading(false);
+    }
+  }, [logout]);
+
+  const retryUser = useCallback(() => {
+    const token = localStorage.getItem("token");
+    return token ? loadUser(token) : Promise.reject(new Error("No saved sign-in"));
+  }, [loadUser]);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
-
-    if (!token) return;
-
-    getCurrentUser(token)
-      .then(currentUser => {
-        setUser(currentUser);
-        setLoading(false);
-      })
-      .catch(logout);
-  }, [logout]);
+    if (token) loadUser(token).catch(() => {});
+  }, [loadUser]);
 
   const signup = async (username, email, password, cpassword) => {
     if (!validator.isEmail(email)) {
@@ -77,17 +102,11 @@ export function AuthProvider({ children }) {
     const data = await loginUser(username, password);
 
     localStorage.setItem("token", data.access_token);
-
-    try {
-      setUser(await getCurrentUser(data.access_token));
-    } catch (error) {
-      logout();
-      throw error;
-    }
+    return loadUser(data.access_token);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, signup }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, signup, authError, retryUser }}>
       {children}
     </AuthContext.Provider>
   );

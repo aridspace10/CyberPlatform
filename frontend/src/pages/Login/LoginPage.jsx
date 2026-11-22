@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, retryUser, authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -19,8 +19,10 @@ export default function Login() {
     try {
       await login(username, password);
       navigate(location.state?.from || "/")
-    } catch {
-      setError("ACCESS DENIED — INVALID CREDENTIALS");
+    } catch (err) {
+      setError(err.status === 401
+        ? "ACCESS DENIED — INVALID CREDENTIALS"
+        : "Sign-in service is unavailable. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -111,8 +113,9 @@ export default function Login() {
 
           {/* Error */}
           <div className={error ? "login-error" : "login-success"} role="status">
-            {error || (location.state?.accountCreated ? "Account created. Sign in to continue." : "")}
+            {error || authError || (location.state?.accountCreated ? "Account created. Sign in to continue." : "")}
           </div>
+          {authError && <button type="button" onClick={() => retryUser().then(() => navigate(location.state?.from || "/")).catch(() => {})} disabled={loading}>Retry sign-in check</button>}
         </div>
 
         {/* Footer */}
