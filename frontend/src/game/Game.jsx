@@ -309,7 +309,7 @@ export default function Game() {
                     </>}
                     {access.status === "pending" && <>
                         <p>Your request is waiting for host approval.</p>
-                        <button onClick={() => setJoinAttempt(attempt => attempt + 1)}>Try joining again</button>
+                        <button onClick={handleReconnect}>Try joining again</button>
                     </>}
                     {access.status === "denied" && <p>You cannot join this session.</p>}
                 </div>}
@@ -319,11 +319,7 @@ export default function Game() {
                     <button type="button" onClick={handleReconnect}>Reconnect to session</button>
                 </div>}
                 {connectionStatus === "connecting" && joinAttempt > 0 && <p role="status">Reconnecting to session...</p>}
-                {connectionConflict && <button onClick={() => {
-                    setConnectionConflict(false);
-                    setAccessError("");
-                    setJoinAttempt(attempt => attempt + 1);
-                }}>Try joining again</button>}
+                {connectionConflict && <button onClick={handleReconnect}>Try joining again</button>}
                 {inviteNotice && <p role="status">{inviteNotice}</p>}
                 {state === "waiting" && <WaitingScreen players={players} canStart={String(gameData?.creatorID) === String(user?.id)} onGameStart={() => wsRef.current?.send(JSON.stringify({ type: "start_game" }))} />}
                 {state === "waiting" && String(gameData?.creatorID) === String(user?.id) &&

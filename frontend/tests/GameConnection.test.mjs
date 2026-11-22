@@ -137,3 +137,36 @@ test("intentional missing-session and auth closures do not offer reconnect", asy
         await auth.unmount();
     }
 });
+
+test("permission and duplicate-tab closures keep their deliberate retry paths", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ name: "Private game", status: "pending" }) });
+    const permission = await renderGame();
+    try {
+        await act(async () => permission.socket().close(4403));
+        assert.match(permission.container.textContent, /waiting for host approval/);
+        assert.equal(permission.container.querySelector(".session-connection-panel"), null);
+        await act(async () => [...permission.container.querySelectorAll("button")]
+            .find(button => button.textContent === "Try joining again")
+            .dispatchEvent(new window.MouseEvent("click", { bubbles: true })));
+        assert.equal(sockets.length, 2);
+        assert.match(permission.container.textContent, /Reconnecting to session/);
+    } finally {
+        await permission.unmount();
+        globalThis.fetch = originalFetch;
+    }
+
+    const conflict = await renderGame();
+    try {
+        await act(async () => conflict.socket().close(4409));
+        assert.match(conflict.container.textContent, /already open in another tab/);
+        assert.equal(conflict.container.querySelector(".session-connection-panel"), null);
+        await act(async () => [...conflict.container.querySelectorAll("button")]
+            .find(button => button.textContent === "Try joining again")
+            .dispatchEvent(new window.MouseEvent("click", { bubbles: true })));
+        assert.equal(sockets.length, 2);
+        assert.match(conflict.container.textContent, /Reconnecting to session/);
+    } finally {
+        await conflict.unmount();
+    }
+});
