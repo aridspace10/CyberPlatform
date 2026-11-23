@@ -83,6 +83,7 @@ class CommandLine:
         self.network = nm
 
         self.commands = {
+            "help": self.help,
             "ls": self.ls,
             "mkdir": self.mkdir,
             "cd": self.cd,
@@ -686,6 +687,24 @@ class CommandLine:
         if type not in COMMAND_CONTRACTS:
             return [f"{type}: help is unavailable\n"]
         return format_command_help(type)
+
+    def help(self, ctx: CommandContext) -> CommandResult:
+        if not ctx.args:
+            width = max(map(len, self.commands))
+            return CommandResult(stdout=[
+                "Available commands:",
+                *(
+                    f"  {name:<{width}}  {COMMAND_CONTRACTS[name][0]}"
+                    for name in sorted(self.commands)
+                ),
+                "Run 'help COMMAND' for details.",
+            ])
+        if len(ctx.args) != 1:
+            return CommandResult(1, stderr=["help: expected one command name"])
+        command = ctx.args[0]
+        if command not in self.commands:
+            return CommandResult(1, stderr=[f"help: unknown command '{command}'"])
+        return CommandResult(stdout=self.useage(command))
 
     def sleep(self, ctx: CommandContext) -> CommandResult:
         if ctx.args == ["--help"]:

@@ -28,6 +28,7 @@
 .home-nav { display: flex; align-items: center; justify-content: center; flex: 1; gap: clamp(18px, 3vw, 48px); color: var(--home-muted); font-size: 15px; font-weight: 600; letter-spacing: 0.035em; }
 .home-nav a, .home-footer-links a, .home-footer-links button { transition: color 160ms ease; }
 .home-nav a:hover, .home-footer-links a:hover, .home-footer-links button:hover { color: var(--home-green); }
+.home-nav a[aria-current="page"] { color: var(--home-green); }
 .home-header-action { display: inline-flex; align-items: center; justify-content: center; gap: 26px; min-height: 42px; padding: 0 18px; border: 1px solid var(--home-green) !important; border-radius: 0 !important; background: transparent !important; color: var(--home-green) !important; font-size: 15px !important; font-weight: 700 !important; white-space: nowrap; }
 .home-header-action:hover { background: rgba(185, 239, 112, 0.1) !important; }
 .home-header-action:disabled { cursor: wait; opacity: 0.6; }

@@ -1,39 +1,31 @@
-.session-title {
-  color: #7df9ff;
-  font-family: "Courier New", monospace;
-  letter-spacing: 2px;
-  margin-bottom: 12px;
-  text-shadow: 0 0 8px rgba(125, 249, 255, 0.6);
-}
+.sessions-list { margin-top: 56px; }
+.sessions-list-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+.sessions-list-heading h2 { margin-top: 14px; font-size: clamp(30px, 3vw, 42px); letter-spacing: -0.03em; }
+.sessions-list-heading h2 span { margin-left: 10px; color: var(--home-green); font-family: "Share Tech Mono", monospace; font-size: 16px; font-weight: 400; letter-spacing: 0; }
+.sessions-list-heading button, .sessions-error button { padding: 8px 0; border: 0; border-bottom: 1px solid var(--home-green); border-radius: 0; background: transparent; color: var(--home-green); font-size: 15px; font-weight: 700; cursor: pointer; }
+.sessions-list-heading button:disabled { opacity: 0.5; cursor: wait; }
+.sessions-message, .sessions-empty { padding: 32px; border: 1px solid var(--home-line); background: var(--home-panel); color: var(--home-muted); }
+.sessions-error { color: #ffad9b; }
+.sessions-error button { margin-left: 10px; }
+.sessions-empty { padding: 54px 30px; text-align: center; }
+.sessions-empty > span { color: var(--home-green); font-family: "Share Tech Mono", monospace; font-size: 38px; }
+.sessions-empty h3 { margin: 14px 0 6px; color: var(--home-text); font-size: 25px; }
+.sessions-empty p { margin-bottom: 18px; }
+.sessions-empty a { color: var(--home-green); font-weight: 700; }
+.sessions-table-wrap { overflow-x: auto; border: 1px solid var(--home-line); background: var(--home-panel); }
+.session-table { width: 100%; border-collapse: collapse; text-align: left; }
+.session-table th { padding: 16px 20px; color: #92aa9a; font-family: "Share Tech Mono", monospace; font-size: 11px; font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+.session-table td { padding: 20px; border-top: 1px solid var(--home-line); color: var(--home-muted); font-size: 16px; white-space: nowrap; }
+.session-table td:first-child { min-width: 220px; color: var(--home-text); }
+.session-table td strong { font-size: 18px; }
+.session-id { display: inline-block; margin-right: 15px; color: var(--home-green); font-family: "Share Tech Mono", monospace; font-size: 12px; }
+.session-state { text-transform: capitalize; }
+.session-state-waiting { color: var(--home-green); }
+.session-enter { display: inline-block; padding: 9px 12px; border: 1px solid var(--home-green); color: var(--home-green) !important; font-size: 14px; font-weight: 700; text-decoration: none; }
+.session-enter:hover { background: rgba(185, 239, 112, 0.1); }
+.sessions-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
-.session-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: transparent;
-  font-family: "Courier New", monospace;
-  color: #e6f7ff;
-  background-color: black;
-}
-
-.session-table thead th {
-  text-align: left;
-  padding: 10px 14px;
-  color: #7df9ff;
-  font-size: 0.9rem;
-  letter-spacing: 1.5px;
-  border-bottom: 1px solid rgba(125, 249, 255, 0.25);
-}
-
-.session-table tbody td {
-  padding: 10px 14px;
-  font-size: 0.95rem;
-}
-
-.session-table tbody tr {
-  transition: background 0.2s ease, box-shadow 0.2s ease;
-}
-
-.session-table tbody tr:hover {
-  background: rgba(125, 249, 255, 0.05);
-  box-shadow: inset 0 0 12px rgba(125, 249, 255, 0.15);
+@media (max-width: 760px) {
+  .sessions-list { margin-top: 42px; }
+  .session-table th, .session-table td { padding: 14px 12px; }
 }

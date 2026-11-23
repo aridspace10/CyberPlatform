@@ -2,6 +2,14 @@ import { API_URL } from "./config";
 
 const API = API_URL;
 
+export async function getSessions() {
+    const response = await fetch(`${API}/sessions`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    });
+    if (!response.ok) throw new Error("Could not load sessions. Please try again.");
+    return response.json();
+}
+
 export async function enterTutorial(user_id) {
     const res = await fetch(`${API}/sandbox/${user_id}`, {
         method: "POST",

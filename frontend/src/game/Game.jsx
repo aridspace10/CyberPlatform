@@ -3,7 +3,7 @@ import Gamescreen from "./Gamescreen";
 import WaitingScreen from "./WaitingScreen";
 import Versus from "./Versus";
 import GameDataPanel from "./GameDataPanel";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { SessionContext } from "../components/SessionContext";
 import GeneralTab from "../components/GeneralTab";
@@ -29,12 +29,17 @@ export default function Game() {
     const [sandboxSettings, setSandboxSettings] = useState(() => loadSandboxSettings(user.id));
     const notificationRef = useRef({ activeTab, isSandbox: false, enabled: sandboxSettings.chatNotifications });
     const [cwd, setCwd] = useState("/");
+    const [terminalInteraction, setTerminalInteraction] = useState(null);
     const [access, setAccess] = useState(null);
     const [accessError, setAccessError] = useState("");
     const [connectionConflict, setConnectionConflict] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState("connecting");
     const [joinAttempt, setJoinAttempt] = useState(0);
     const [joinRequests, setJoinRequests] = useState([]);
     const [inviteNotice, setInviteNotice] = useState("");
+    const [resetPending, setResetPending] = useState(false);
+    const [resetError, setResetError] = useState("");
+    const [terminalVersion, setTerminalVersion] = useState(0);
     const isSandbox = gameData?.isSandbox === true;
 
     useEffect(() => {
@@ -60,7 +65,11 @@ export default function Game() {
     useEffect(() => {
         if (!user || wsRef.current) return;
 
+        let disposed = false;
         const socket = new WebSocket(`${WEBSOCKET_URL}/ws/${sessionId}`);
+        const connectionTimeout = window.setTimeout(() => {
+            if (!disposed && socket.readyState !== WebSocket.CLOSED) socket.close();
+        }, 10000);
 
         socket.onopen = () => {
             setConnectionConflict(false);
@@ -86,8 +95,11 @@ export default function Game() {
             }
 
             if (data.type === "lobby_update") {
+                window.clearTimeout(connectionTimeout);
+                setConnectionStatus("connected");
                 setPlayers(data.players);
                 setState(data.state);
+                setAccess(null);
                 if (data.gameData) {
                     notificationRef.current.isSandbox = data.gameData.isSandbox === true;
                     setGameData(data.gameData);
@@ -98,16 +110,37 @@ export default function Game() {
 
             if (data.type === "system") {
                 addCommandLine(`[SYSTEM] ${data.message}`);
+                if (data.message === `${user.username} joined session`) {
+                    addCommandLine("[SYSTEM] Type 'help' to see available commands.");
+                }
+            }
+
+            if (data.type === "sandbox_reset") {
+                setResetPending(false);
+                setResetError("");
+                setCwd(data.cwd || "/");
+                setCommandLog(["[SYSTEM] Sandbox reset to a basic environment."]);
+                setTerminalVersion(version => version + 1);
+            }
+
+            if (data.type === "sandbox_reset_error") {
+                setResetPending(false);
+                setResetError(data.message || "Could not reset Sandbox. Please try again.");
             }
 
             if (data.type === "command_output") {
                 if (data.cwd) setCwd(data.cwd);
+                setTerminalInteraction(data.interaction?.mode === "foreground" ? data.interaction : null);
                 data.stdout.forEach(line => addCommandLine(line));
                 data.stderr.forEach(line => addCommandLine(line));
                 if (data.status !== undefined && data.status !== 0 &&
                     data.stdout.length === 0 && data.stderr.length === 0) {
                     addCommandLine(`[exit status ${data.status}: no output]`);
                 }
+            }
+
+            if (data.type === "terminal_state") {
+                setTerminalInteraction(data.busy ? { mode: data.mode || "foreground", prompt: data.prompt || "" } : null);
             }
 
             if (data.type === "background_job_complete") {
@@ -118,6 +151,15 @@ export default function Game() {
         };
 
         socket.onclose = (event) => {
+            if (disposed) return;
+            window.clearTimeout(connectionTimeout);
+            wsRef.current = null;
+            setState(null);
+            setPlayers([]);
+            setGameData(null);
+            setTerminalInteraction(null);
+            setResetPending(false);
+            setConnectionStatus([4401, 4403, 4404, 4409].includes(event.code) ? "rejected" : "disconnected");
             if (event.code === 4401) logout();
             if (event.code === 4403) {
                 getSessionAccess(sessionId).then(setAccess).catch(error => setAccessError(error.message));
@@ -133,8 +175,10 @@ export default function Game() {
         wsRef.current = socket;
 
         return () => {
+            disposed = true;
+            window.clearTimeout(connectionTimeout);
             socket.close();
-            wsRef.current = null;
+            if (wsRef.current === socket) wsRef.current = null;
         };
     }, [user, sessionId, logout, joinAttempt]);
 
@@ -194,12 +238,46 @@ export default function Game() {
         setSandboxSettings({ ...DEFAULT_SANDBOX_SETTINGS });
     };
 
+    const handleResetSandbox = () => {
+        if (!window.confirm("Reset your Sandbox? This will permanently delete your files and shell changes and restore a basic environment.")) return;
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+            setResetError("Not connected. Please reconnect before resetting your Sandbox.");
+            return;
+        }
+        setResetError("");
+        setResetPending(true);
+        wsRef.current.send(JSON.stringify({ type: "reset_sandbox" }));
+    };
+
+    const handleReconnect = () => {
+        setConnectionStatus("connecting");
+        setConnectionConflict(false);
+        setState(null);
+        setPlayers([]);
+        setGameData(null);
+        setTerminalInteraction(null);
+        setAccess(null);
+        setAccessError("");
+        setResetError("");
+        setJoinAttempt(attempt => attempt + 1);
+    };
+
     return (
         <SessionContext.Provider value={{ sessionId, wsRef, addCommandLine }}>
           <div
             className={`game${isSandbox ? " sandbox" : ""}${isSandbox && !sandboxSettings.wrapLines ? " sandbox-no-wrap" : ""}${isSandbox && sandboxSettings.highContrast ? " sandbox-high-contrast" : ""}${isSandbox && sandboxSettings.reducedMotion ? " sandbox-reduced-motion" : ""}`}
             style={isSandbox ? { "--sandbox-terminal-font-size": `${sandboxSettings.fontSize}px` } : undefined}
           >
+            <header className="game-topbar">
+                <Link className="game-topbar-brand" to="/" aria-label="CyberPlatform home"><span className="game-topbar-mark" aria-hidden="true">&gt;_</span><span>CYBER<span>PLATFORM</span></span></Link>
+                <span className="game-topbar-label">{isSandbox ? "SANDBOX / TERMINAL" : "SESSION / TERMINAL"}</span>
+                <nav className="game-topbar-links" aria-label="Site navigation">
+                    <Link to="/">Home</Link>
+                    <Link to="/sessions">Sessions</Link>
+                    <Link to="/profile">Profile</Link>
+                </nav>
+            </header>
+            <div className="game-workspace">
             <div className="sidebar-page">
                 <div className="sidebar-nav">
                     {["General", "Settings", "Environment", "Chat"].map(tab => (
@@ -216,7 +294,7 @@ export default function Game() {
                         </button>
                     ))}
                 </div>
-                {activeTab === "General" && <GeneralTab />}
+                {activeTab === "General" && <GeneralTab isSandbox={isSandbox} onResetSandbox={handleResetSandbox} resetPending={resetPending} resetError={resetError} />}
                 {activeTab === "Settings" && <SettingsTab isSandbox={isSandbox} settings={sandboxSettings} onChange={handleSandboxSettingChange} onReset={handleResetSandboxSettings} />}
                 {activeTab === "Environment" && <EnvironmentTab />}
                 {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} username={user?.username} />}
@@ -231,16 +309,17 @@ export default function Game() {
                     </>}
                     {access.status === "pending" && <>
                         <p>Your request is waiting for host approval.</p>
-                        <button onClick={() => setJoinAttempt(attempt => attempt + 1)}>Try joining again</button>
+                        <button onClick={handleReconnect}>Try joining again</button>
                     </>}
                     {access.status === "denied" && <p>You cannot join this session.</p>}
                 </div>}
                 {accessError && <p role="alert">{accessError}</p>}
-                {connectionConflict && <button onClick={() => {
-                    setConnectionConflict(false);
-                    setAccessError("");
-                    setJoinAttempt(attempt => attempt + 1);
-                }}>Try joining again</button>}
+                {connectionStatus === "disconnected" && !accessError && !connectionConflict && <div className="session-connection-panel" role="alert">
+                    <p>Connection lost. Your session may have changed while you were away.</p>
+                    <button type="button" onClick={handleReconnect}>Reconnect to session</button>
+                </div>}
+                {connectionStatus === "connecting" && joinAttempt > 0 && <p role="status">Reconnecting to session...</p>}
+                {connectionConflict && <button onClick={handleReconnect}>Try joining again</button>}
                 {inviteNotice && <p role="status">{inviteNotice}</p>}
                 {state === "waiting" && <WaitingScreen players={players} canStart={String(gameData?.creatorID) === String(user?.id)} onGameStart={() => wsRef.current?.send(JSON.stringify({ type: "start_game" }))} />}
                 {state === "waiting" && String(gameData?.creatorID) === String(user?.id) &&
@@ -255,18 +334,21 @@ export default function Game() {
                 </section>}
                 {state === "running" && (
                     <Gamescreen
+                        key={terminalVersion}
                         wsRef={wsRef}
                         commandLog={commandLog}
                         addCommandLine={addCommandLine}
                         username={user?.username}
                         cwd={cwd}
+                        interaction={terminalInteraction}
                     />
                 )}
                 {state === "starting" && <Versus players={players} />}
                 {state === "finished" && <div className="game-finished"><h1>Game complete</h1></div>}
-                {!state && !access && !accessError && <h1>Loading...</h1>}
+                {!state && !access && !accessError && connectionStatus === "connecting" && <h1>Loading...</h1>}
             </main>
             {gameData && <GameDataPanel gameData={gameData} />}
+            </div>
           </div>
         </SessionContext.Provider>
     )

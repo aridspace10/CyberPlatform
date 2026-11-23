@@ -491,6 +491,137 @@ def test_sandbox_is_marked_and_excluded_from_active_sessions():
         client.portal.call(session_manager.remove_session, sandbox_id)
 
 
+def test_saved_sessions_remain_browsable_with_member_and_public_scope():
+    client, _testing_session = make_client()
+    with client:
+        versus_id = str(
+            client.post("/api/session_create", json=creation_payload("Versus"))
+            .json()["session_id"]
+        )
+        solo_id = str(
+            client.post("/api/session_create", json=creation_payload("SinglePlayer"))
+            .json()["session_id"]
+        )
+        private_payload = creation_payload("Versus")
+        private_payload["config"]["visibility"] = "private"
+        private_id = str(
+            client.post("/api/session_create", json=private_payload)
+            .json()["session_id"]
+        )
+        client.portal.call(session_manager.remove_session, versus_id)
+        client.portal.call(session_manager.remove_session, solo_id)
+        client.portal.call(session_manager.remove_session, private_id)
+
+        own = {
+            item["id"]: item for item in client.get("/api/sessions").json()["sessions"]
+        }
+        assert own[versus_id]["member"] is True
+        assert own[solo_id]["member"] is True
+        assert own[private_id]["member"] is True
+        assert own[versus_id]["connected_players"] == 0
+        assert own[versus_id]["joined_players"] == 1
+        assert own[versus_id]["play_type"] == "Versus"
+
+        guest = {
+            item["id"]: item
+            for item in client.get(
+                "/api/sessions", headers=authorization(43, "guest")
+            ).json()["sessions"]
+        }
+        assert guest[versus_id]["member"] is False
+        assert solo_id not in guest
+        assert private_id not in guest
+
+
+def test_session_list_tracks_connected_and_joined_players_across_reconnects():
+    client, _testing_session = make_client()
+    with client:
+        response = client.post("/api/session_create", json=creation_payload("Versus"))
+        assert response.status_code == 201
+        session_id = str(response.json()["session_id"])
+        runtime = session_manager.get_session(session_id)
+        creator_token = authorization(42, "creator")["Authorization"].split(" ", 1)[1]
+        guest_token = authorization(43, "guest")["Authorization"].split(" ", 1)[1]
+
+        def counts():
+            entries = client.get("/api/sessions").json()["sessions"]
+            entry = next(item for item in entries if item["id"] == session_id)
+            return entry["connected_players"], entry["joined_players"]
+
+        assert counts() == (0, 1)
+        with client.websocket_connect(f"/ws/{session_id}") as creator:
+            creator.send_json({"token": creator_token})
+            creator.receive_json()
+            creator.receive_json()
+            assert counts() == (1, 1)
+
+            with client.websocket_connect(f"/ws/{session_id}") as guest:
+                guest.send_json({"token": guest_token})
+                guest.receive_json()
+                guest.receive_json()
+                assert counts() == (2, 2)
+
+            assert len(runtime.players) == 2  # retained for reconnect
+            assert counts() == (1, 2)
+
+        assert counts() == (0, 2)
+        with client.websocket_connect(f"/ws/{session_id}") as guest:
+            guest.send_json({"token": guest_token})
+            guest.receive_json()
+            guest.receive_json()
+            assert counts() == (1, 2)
+
+        assert counts() == (0, 2)
+        client.portal.call(session_manager.remove_session, session_id)
+
+
+def test_sandbox_reset_restores_fresh_live_and_saved_shell():
+    client, testing_session = make_client()
+
+    with client:
+        sandbox_id = str(client.post("/api/sandbox/42").json()["session_id"])
+        db = testing_session()
+        try:
+            original_shell = db.get(SessionShell, (int(sandbox_id), 42)).shell
+        finally:
+            db.close()
+
+        with client.websocket_connect(f"/ws/{sandbox_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()  # join notice
+            websocket.receive_json()  # lobby state
+
+            websocket.send_json({"type": "command", "input": "mkdir scratch"})
+            assert websocket.receive_json()["status"] == 0
+            websocket.send_json({"type": "command", "input": "cd scratch"})
+            assert websocket.receive_json()["cwd"] == "/scratch"
+            assert client.post(f"/api/sessions/{sandbox_id}/save").status_code == 200
+
+            websocket.send_json({"type": "reset_sandbox"})
+            assert websocket.receive_json() == {"type": "sandbox_reset", "cwd": "/"}
+            websocket.send_json({"type": "command", "input": "ls /"})
+            assert "scratch" not in websocket.receive_json()["stdout"]
+
+            db = testing_session()
+            try:
+                assert db.get(SessionShell, (int(sandbox_id), 42)).shell == original_shell
+            finally:
+                db.close()
+
+        client.portal.call(session_manager.remove_session, sandbox_id)
+        with client.websocket_connect(f"/ws/{sandbox_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()
+            assert websocket.receive_json()["cwd"] == "/"
+            websocket.send_json({"type": "command", "input": "ls /"})
+            assert "scratch" not in websocket.receive_json()["stdout"]
+        client.portal.call(session_manager.remove_session, sandbox_id)
+
+
 def assert_no_sandbox_state(testing_session, original_runtimes):
     db = testing_session()
     try:

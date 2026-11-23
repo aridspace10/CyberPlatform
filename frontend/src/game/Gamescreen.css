@@ -17,7 +17,7 @@ html, body, #root {
 /* Root / Page Reset */
 .game {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -25,6 +25,42 @@ html, body, #root {
   color: #c8c8c8;
   font-family: "Courier New", Courier, monospace;
   box-sizing: border-box;
+}
+
+.game-topbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 28px;
+  min-height: 62px;
+  padding: 10px 24px;
+  border-bottom: 1px solid #294238;
+  background: #07120f;
+  color: #eef8ed;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  text-align: left;
+}
+
+.game-topbar-brand { display: inline-flex; align-items: center; gap: 10px; flex: none; color: #eef8ed; font-family: "Share Tech Mono", monospace; font-size: 15px; font-weight: 700; letter-spacing: -0.065em; white-space: nowrap; text-decoration: none; }
+.game-topbar-brand > span:last-child > span { color: #b9ef70; }
+.game-topbar-brand:hover { color: #eef8ed; }
+.game-topbar-mark { display: grid; place-items: center; width: 34px; height: 34px; padding-right: 4px; border: 1px solid #b9ef70; color: #b9ef70; font-size: 16px; letter-spacing: -0.2em; }
+.game-topbar-label { color: #8ea99a; font-family: "Share Tech Mono", monospace; font-size: 10px; letter-spacing: 0.14em; }
+.game-topbar-links { display: flex; gap: 24px; margin-left: auto; }
+.game-topbar-links a { color: #c4d5c8; font-size: 16px; font-weight: 700; text-decoration: none; }
+.game-topbar-links a:hover { color: #b9ef70; }
+.game-topbar a:focus-visible { outline: 2px solid #b9ef70; outline-offset: 4px; }
+.game-workspace { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.game.sandbox-high-contrast .game-topbar { border-color: #89939d; background: #050505; }
+.game.sandbox-high-contrast .game-topbar-links a { color: #f5f7f8; }
+
+@media (max-width: 600px) {
+  .game-topbar { flex-wrap: wrap; gap: 8px 12px; min-height: 56px; padding: 8px 12px; }
+  .game-topbar-brand { gap: 6px; font-size: 12px; }
+  .game-topbar-mark { width: 29px; height: 29px; font-size: 14px; }
+  .game-topbar-label { display: none; }
+  .game-topbar-links { justify-content: flex-end; gap: 12px; width: 100%; }
+  .game-topbar-links a { font-size: 14px; }
 }
 
 .gamescreen {
@@ -35,11 +71,37 @@ html, body, #root {
 }
 
 .game-stage {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
   overflow: hidden;
 }
+
+.session-connection-panel {
+  position: absolute;
+  z-index: 2;
+  top: 1rem;
+  left: 1rem;
+  right: 1rem;
+  max-width: 34rem;
+  padding: 1rem;
+  border: 1px solid #c8f04a;
+  border-radius: 4px;
+  background: #172119;
+  color: #eef8ed;
+}
+
+.session-connection-panel p { margin: 0 0 0.75rem; }
+.session-connection-panel button {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #c8f04a;
+  border-radius: 4px;
+  background: transparent;
+  color: #c8f04a;
+  cursor: pointer;
+}
+.session-connection-panel button:focus-visible { outline: 2px solid #eef8ed; outline-offset: 2px; }
 
 .game-stage-lobby {
   overflow-y: auto;
@@ -132,6 +194,19 @@ html, body, #root {
 .terminal .prompt::placeholder {
   color: #444;
 }
+
+.terminal .prompt:disabled { color: #8ea99a; }
+.terminal .cancel-foreground {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #31523d;
+  border-radius: 4px;
+  background: #142019;
+  color: #d6ebdd;
+  font: inherit;
+  cursor: pointer;
+}
+.terminal .cancel-foreground:focus-visible { outline: 2px solid #00e676; outline-offset: 2px; }
 
 /* ============================================
    Sidebar (RIGHT side)
@@ -246,6 +321,7 @@ html, body, #root {
 .terminal .prompt-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.6rem;
   color: #00e676;
   font-size: var(--sandbox-terminal-font-size, 0.9rem);
@@ -254,7 +330,9 @@ html, body, #root {
 
 .terminal .prompt-label {
   flex: 0 0 auto;
+  max-width: 100%;
   color: #00e676;
+  overflow-wrap: anywhere;
   user-select: none;
 }
 
