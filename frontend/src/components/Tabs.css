@@ -21,7 +21,8 @@
     margin: 0;
 }
 
-.diagnostics-action {
+.diagnostics-action,
+.save-action {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -33,7 +34,8 @@
     line-height: 1.45;
 }
 
-.diagnostics-action [role="alert"] {
+.diagnostics-action [role="alert"],
+.save-action [role="alert"] {
     color: #ff7777;
     font-size: 0.75rem;
 }
