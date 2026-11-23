@@ -18,7 +18,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(username, password);
-      navigate(location.state?.from || "/")
+      navigate(location.state?.from || "/", { replace: true });
     } catch (err) {
       setError(err.status === 401
         ? "ACCESS DENIED — INVALID CREDENTIALS"
@@ -102,7 +102,7 @@ export default function Login() {
           </div>
           
           {/* Signup */}
-          <button className="already-btn" onClick={() => {navigate("/signup")}} disabled={loading}>
+          <button className="already-btn" onClick={() => navigate("/signup", { state: { from: location.state?.from } })} disabled={loading}>
             <span>{"DON'T HAVE AN ACCOUNT?"}</span>
           </button>
 
