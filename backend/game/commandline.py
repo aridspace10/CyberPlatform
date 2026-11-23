@@ -108,6 +108,7 @@ class CommandLine:
             "ps": self.ps,
             "sleep": self.sleep,
             "cut": self.cut,
+            "tar": self.tar
         }
 
     def safe_args_param_pop(self, ctx: CommandContext, param: str) -> str:
@@ -737,6 +738,112 @@ class CommandLine:
         proc.foreground = True
         shell.foreground_pid = proc.pid
         return CommandResult(0, interaction=Interaction(mode="foreground"))
+
+    def tar(self, ctx: CommandContext) -> CommandResult:
+        action: Literal[None, "create", "extract", "list"] = None
+        arch_name = ""
+        status = 0
+        stdout = []
+        stderr = []
+        files = []
+        while (len(ctx.args)):
+            arg = ctx.args.pop(0)
+            if (len(arg) == "-"):
+                if (len(arg) < 2):
+                    pass #do later
+                for val in arg[1:]:
+                    if val == "c":
+                        action = "create"
+                    elif val == "x":
+                        action = "extract"
+                    elif val == "l":
+                        action = "list"
+                    elif val == "f":
+                        if (len(ctx.args)):
+                            return CommandResult(1, stderr=["tar: no file given"])
+                        arch_name = ctx.args.pop(0)
+            else:
+                if not (arch_name):
+                    if (len(ctx.args)):
+                        return CommandResult(1, stderr=["tar: no archive name given"])
+                    arch_name = ctx.args.pop(0)
+                files = ctx.args
+        if action == None:
+            return CommandResult(1, stderr=["tar: no action given"])
+
+        if action == "create":
+            if not files:
+                return CommandResult(1, stderr=["tar: no files given"])
+
+            inode = Inode(NodeType.FILE)
+
+            for file in files:
+                # Get file
+                fn = ctx.system.fs.get_file(file)
+                if isinstance(fn, str) or fn is None:
+                    return CommandResult(1, stderr=[f"tar: {file}: not found"])
+                # Get file contents as bytes
+                content = fn.inode.get_byte_data()
+                # Build TAR header
+                header = bytearray(512)
+                # Filename
+                filename = file.removeprefix("./")
+                name_bytes = filename.encode("utf-8")
+                if len(name_bytes) > 100:
+                    return CommandResult(
+                        1, stderr=[f"tar: {file}: filename too long"]
+                    )
+
+                header[0:100] = name_bytes.ljust(100, b"\0")
+
+                # Permissions
+                header[100:108] = b"0000644\0"
+
+                # User ID
+                header[108:116] = b"0000000\0"
+
+                # Group ID
+                header[116:124] = b"0000000\0"
+
+                # File size (in bytes, octal)
+                header[124:136] = f"{len(content):011o}\0".encode("ascii")
+
+                # Modification time
+                header[136:148] = b"00000000000\0"
+
+                # Checksum placeholder
+                header[148:156] = b"        "
+
+                # Regular file
+                header[156:157] = b"0"
+
+                # USTAR identifier
+                header[257:263] = b"ustar\0"
+                header[263:265] = b"00"
+
+                # Calculate checksum
+                checksum = sum(header)
+                header[148:156] = f"{checksum:06o}\0 ".encode("ascii")
+
+                # Write header
+                inode.append_byte_data(header)
+
+                # Write actual file contents
+                inode.append_byte_data(content)
+
+                # Pad to 512-byte boundary
+                padding = (-len(content)) % 512
+                inode.append_byte_data(b"\0" * padding)
+
+            # End of archive
+            inode.append_byte_data(b"\0" * 1024)
+
+            # Add archive to filesystem
+            ctx.system.fs.current.add_child(arch_name, inode)
+
+            return CommandResult(0)
+
+        return CommandResult(status, stdout=stdout, stderr=stderr)
 
     def cut(self, ctx: CommandContext) -> CommandResult:
         delimiter = "\t"

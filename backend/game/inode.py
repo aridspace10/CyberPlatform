@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import base64
 from datetime import datetime
 from enum import Enum
 
@@ -20,6 +20,7 @@ class Inode:
         self.type: NodeType = type
         self.link_count = 1
         self.data: list[str] = []
+        self.binary_data: bytes | None = None
         self.symlink_target: str | None = None
         self.has_trailing_newline: bool = False
         self.owner = "user"
@@ -52,6 +53,11 @@ class Inode:
             "ctimes": self.ctime.isoformat(),
             "atimes": self.atime.isoformat(),
             "mtimes": self.mtime.isoformat(),
+            "binary_data": (
+                base64.b64encode(self.binary_data).decode("ascii")
+                if self.binary_data is not None
+                else None
+            ),
         }
 
     def from_dict(self, i: dict) -> None:
@@ -74,6 +80,14 @@ class Inode:
         self.ctime = datetime.fromisoformat(i["ctimes"])
         self.atime = datetime.fromisoformat(i["atimes"])
         self.mtime = datetime.fromisoformat(i["mtimes"])
+
+        encoded = i.get("binary_data")
+
+        self.binary_data = (
+            base64.b64decode(encoded)
+            if encoded is not None
+            else None
+        )
 
     @property
     def size(self):
@@ -98,3 +112,20 @@ class Inode:
         else:
             self.data.extend(data)
         self.has_trailing_newline = True
+    
+    def append_byte_data(self, data: bytes) -> None:
+        if self.binary_data is None:
+            self.binary_data = b""
+
+        self.binary_data += data
+        self.mtime = datetime.now()
+
+    def get_byte_data(self) -> bytes:
+        if self.binary_data is not None:
+            return self.binary_data
+
+        text = "\n".join(self.data)
+        if self.has_trailing_newline:
+            text += "\n"
+
+        return text.encode("utf-8")
