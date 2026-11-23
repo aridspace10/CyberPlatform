@@ -33,6 +33,7 @@ export default function Game() {
     const [access, setAccess] = useState(null);
     const [accessError, setAccessError] = useState("");
     const [connectionConflict, setConnectionConflict] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState("connecting");
     const [joinAttempt, setJoinAttempt] = useState(0);
     const [joinRequests, setJoinRequests] = useState([]);
     const [inviteNotice, setInviteNotice] = useState("");
@@ -64,7 +65,11 @@ export default function Game() {
     useEffect(() => {
         if (!user || wsRef.current) return;
 
+        let disposed = false;
         const socket = new WebSocket(`${WEBSOCKET_URL}/ws/${sessionId}`);
+        const connectionTimeout = window.setTimeout(() => {
+            if (!disposed && socket.readyState !== WebSocket.CLOSED) socket.close();
+        }, 10000);
 
         socket.onopen = () => {
             setConnectionConflict(false);
@@ -90,8 +95,11 @@ export default function Game() {
             }
 
             if (data.type === "lobby_update") {
+                window.clearTimeout(connectionTimeout);
+                setConnectionStatus("connected");
                 setPlayers(data.players);
                 setState(data.state);
+                setAccess(null);
                 if (data.gameData) {
                     notificationRef.current.isSandbox = data.gameData.isSandbox === true;
                     setGameData(data.gameData);
@@ -143,7 +151,15 @@ export default function Game() {
         };
 
         socket.onclose = (event) => {
+            if (disposed) return;
+            window.clearTimeout(connectionTimeout);
+            wsRef.current = null;
+            setState(null);
+            setPlayers([]);
+            setGameData(null);
+            setTerminalInteraction(null);
             setResetPending(false);
+            setConnectionStatus([4401, 4403, 4404, 4409].includes(event.code) ? "rejected" : "disconnected");
             if (event.code === 4401) logout();
             if (event.code === 4403) {
                 getSessionAccess(sessionId).then(setAccess).catch(error => setAccessError(error.message));
@@ -159,8 +175,10 @@ export default function Game() {
         wsRef.current = socket;
 
         return () => {
+            disposed = true;
+            window.clearTimeout(connectionTimeout);
             socket.close();
-            wsRef.current = null;
+            if (wsRef.current === socket) wsRef.current = null;
         };
     }, [user, sessionId, logout, joinAttempt]);
 
@@ -231,6 +249,19 @@ export default function Game() {
         wsRef.current.send(JSON.stringify({ type: "reset_sandbox" }));
     };
 
+    const handleReconnect = () => {
+        setConnectionStatus("connecting");
+        setConnectionConflict(false);
+        setState(null);
+        setPlayers([]);
+        setGameData(null);
+        setTerminalInteraction(null);
+        setAccess(null);
+        setAccessError("");
+        setResetError("");
+        setJoinAttempt(attempt => attempt + 1);
+    };
+
     return (
         <SessionContext.Provider value={{ sessionId, wsRef, addCommandLine }}>
           <div
@@ -278,16 +309,17 @@ export default function Game() {
                     </>}
                     {access.status === "pending" && <>
                         <p>Your request is waiting for host approval.</p>
-                        <button onClick={() => setJoinAttempt(attempt => attempt + 1)}>Try joining again</button>
+                        <button onClick={handleReconnect}>Try joining again</button>
                     </>}
                     {access.status === "denied" && <p>You cannot join this session.</p>}
                 </div>}
                 {accessError && <p role="alert">{accessError}</p>}
-                {connectionConflict && <button onClick={() => {
-                    setConnectionConflict(false);
-                    setAccessError("");
-                    setJoinAttempt(attempt => attempt + 1);
-                }}>Try joining again</button>}
+                {connectionStatus === "disconnected" && !accessError && !connectionConflict && <div className="session-connection-panel" role="alert">
+                    <p>Connection lost. Your session may have changed while you were away.</p>
+                    <button type="button" onClick={handleReconnect}>Reconnect to session</button>
+                </div>}
+                {connectionStatus === "connecting" && joinAttempt > 0 && <p role="status">Reconnecting to session...</p>}
+                {connectionConflict && <button onClick={handleReconnect}>Try joining again</button>}
                 {inviteNotice && <p role="status">{inviteNotice}</p>}
                 {state === "waiting" && <WaitingScreen players={players} canStart={String(gameData?.creatorID) === String(user?.id)} onGameStart={() => wsRef.current?.send(JSON.stringify({ type: "start_game" }))} />}
                 {state === "waiting" && String(gameData?.creatorID) === String(user?.id) &&
@@ -313,7 +345,7 @@ export default function Game() {
                 )}
                 {state === "starting" && <Versus players={players} />}
                 {state === "finished" && <div className="game-finished"><h1>Game complete</h1></div>}
-                {!state && !access && !accessError && <h1>Loading...</h1>}
+                {!state && !access && !accessError && connectionStatus === "connecting" && <h1>Loading...</h1>}
             </main>
             {gameData && <GameDataPanel gameData={gameData} />}
             </div>
