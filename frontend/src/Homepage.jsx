@@ -74,6 +74,7 @@ export default function Homepage() {
         <nav className="home-nav" aria-label="Main navigation">
           <a href="#how-it-works">How it works</a>
           <a href="#the-sandbox">The Sandbox</a>
+          <Link to="/contact">Contact us</Link>
           {user ? <Link to="/profile">Profile</Link> : <Link to="/login">Sign in</Link>}
         </nav>
         {user ? (
@@ -133,7 +134,7 @@ export default function Homepage() {
         {import.meta.env.DEV && <section className="home-dev-tools" aria-label="Local development tools"><h2>Local development tools</h2><p>Multiplayer sessions are still under development.</p><Link to="/session-create">Create a session</Link><SessionList /></section>}
       </main>
 
-      <footer className="home-footer"><Link className="home-brand" to="/" aria-label="CyberPlatform home"><span className="home-brand-mark" aria-hidden="true">&gt;_</span><span>CYBER<span>PLATFORM</span></span></Link><p>Practice makes progress.</p><div className="home-footer-links">{user ? <button type="button" onClick={logout}>Sign out</button> : <Link to="/login">Sign in</Link>}<a href="#main-content">Back to top ↑</a></div></footer>
+      <footer className="home-footer"><Link className="home-brand" to="/" aria-label="CyberPlatform home"><span className="home-brand-mark" aria-hidden="true">&gt;_</span><span>CYBER<span>PLATFORM</span></span></Link><p>Practice makes progress.</p><div className="home-footer-links"><Link to="/contact">Contact us</Link>{user ? <button type="button" onClick={logout}>Sign out</button> : <Link to="/login">Sign in</Link>}<a href="#main-content">Back to top ↑</a></div></footer>
     </div>
   );
 }

@@ -35,6 +35,10 @@ export default function GeneralTab() {
         navigate("/")
     }
 
+    const handleReportIssue = () => {
+        navigate("/contact", { state: { page: window.location.pathname } });
+    };
+
     return (
         <div className="general-tab">
             <h1>General</h1>
@@ -47,6 +51,7 @@ export default function GeneralTab() {
                 {diagnosticsError && <p role="alert">{diagnosticsError}</p>}
             </div>
             <button className="tab-button" onClick={handleReset}>Reset</button>
+            <button className="tab-button" onClick={handleReportIssue}>Report an issue</button>
             <button className="tab-button" onClick={handleExit}>Exit</button>
         </div>
     )

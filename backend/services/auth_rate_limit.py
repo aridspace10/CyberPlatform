@@ -16,6 +16,7 @@ LOGIN_ACCOUNT_CLIENT_LIMIT = 5
 LOGIN_ACCOUNT_LIMIT = 30
 LOGIN_CLIENT_LIMIT = 60
 SIGNUP_CLIENT_LIMIT = 10
+CONTACT_CLIENT_LIMIT = 5
 
 
 def enforce_auth_rate_limit(
@@ -38,6 +39,8 @@ def enforce_auth_rate_limit(
         )
     elif action == "signup":
         buckets = ((("signup-client", client), SIGNUP_CLIENT_LIMIT),)
+    elif action == "contact":
+        buckets = ((("contact-client", client), CONTACT_CLIENT_LIMIT),)
     else:
         raise ValueError(f"Unsupported auth action: {action}")
 

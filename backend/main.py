@@ -7,7 +7,7 @@ from db.session import Base, SessionLocal, engine
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from network.WebsocketServer import router as websocket_router
-from routers import users
+from routers import contact, users
 
 
 @asynccontextmanager
@@ -47,6 +47,7 @@ app.add_middleware(
 app.include_router(websocket_router)
 app.include_router(sessions_router)
 app.include_router(users.router)
+app.include_router(contact.router)
 
 
 @app.get("/")
