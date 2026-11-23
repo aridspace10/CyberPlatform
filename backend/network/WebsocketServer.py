@@ -12,6 +12,7 @@ from network.SessionManger import Player, SessionAlreadyConnected, session_manag
 from services.session_service import get_session, get_session_shell, is_sandbox_session
 from services.user_service import get_user_by_id, is_friend
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 router = APIRouter()
 
@@ -412,6 +413,44 @@ async def websocket_endpoint(
                         "cancelled": bool(cancelled),
                     },
                 )
+
+            elif msg_type == "reset_sandbox":
+                player = session.players.get(username)
+                if (
+                    not session.is_sandbox
+                    or database_session is None
+                    or database_session.creatorID != int(user_id)
+                    or player is None
+                ):
+                    await session.send_to(websocket, {
+                        "type": "sandbox_reset_error",
+                        "message": "Only the sandbox owner can reset this environment.",
+                    })
+                    continue
+                saved_shell = get_session_shell(db, session_id, user_id)
+                if saved_shell is None:
+                    await session.send_to(websocket, {
+                        "type": "sandbox_reset_error",
+                        "message": "Sandbox state is unavailable. Please try again.",
+                    })
+                    continue
+                fresh_shell = session.game_manager.get_shell()
+                try:
+                    saved_shell.shell = fresh_shell
+                    flag_modified(saved_shell, "shell")
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                    await session.send_to(websocket, {
+                        "type": "sandbox_reset_error",
+                        "message": "Could not reset Sandbox. Please try again.",
+                    })
+                    continue
+                session.reset_sandbox_player(player, fresh_shell)
+                await session.send_to(websocket, {
+                    "type": "sandbox_reset",
+                    "cwd": "/",
+                })
 
             elif msg_type == "command":
                 player = session.players.get(username)

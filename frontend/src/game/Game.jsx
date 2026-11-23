@@ -36,6 +36,9 @@ export default function Game() {
     const [joinAttempt, setJoinAttempt] = useState(0);
     const [joinRequests, setJoinRequests] = useState([]);
     const [inviteNotice, setInviteNotice] = useState("");
+    const [resetPending, setResetPending] = useState(false);
+    const [resetError, setResetError] = useState("");
+    const [terminalVersion, setTerminalVersion] = useState(0);
     const isSandbox = gameData?.isSandbox === true;
 
     useEffect(() => {
@@ -104,6 +107,19 @@ export default function Game() {
                 }
             }
 
+            if (data.type === "sandbox_reset") {
+                setResetPending(false);
+                setResetError("");
+                setCwd(data.cwd || "/");
+                setCommandLog(["[SYSTEM] Sandbox reset to a basic environment."]);
+                setTerminalVersion(version => version + 1);
+            }
+
+            if (data.type === "sandbox_reset_error") {
+                setResetPending(false);
+                setResetError(data.message || "Could not reset Sandbox. Please try again.");
+            }
+
             if (data.type === "command_output") {
                 if (data.cwd) setCwd(data.cwd);
                 setTerminalInteraction(data.interaction?.mode === "foreground" ? data.interaction : null);
@@ -127,6 +143,7 @@ export default function Game() {
         };
 
         socket.onclose = (event) => {
+            setResetPending(false);
             if (event.code === 4401) logout();
             if (event.code === 4403) {
                 getSessionAccess(sessionId).then(setAccess).catch(error => setAccessError(error.message));
@@ -203,6 +220,17 @@ export default function Game() {
         setSandboxSettings({ ...DEFAULT_SANDBOX_SETTINGS });
     };
 
+    const handleResetSandbox = () => {
+        if (!window.confirm("Reset your Sandbox? This will permanently delete your files and shell changes and restore a basic environment.")) return;
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+            setResetError("Not connected. Please reconnect before resetting your Sandbox.");
+            return;
+        }
+        setResetError("");
+        setResetPending(true);
+        wsRef.current.send(JSON.stringify({ type: "reset_sandbox" }));
+    };
+
     return (
         <SessionContext.Provider value={{ sessionId, wsRef, addCommandLine }}>
           <div
@@ -235,7 +263,7 @@ export default function Game() {
                         </button>
                     ))}
                 </div>
-                {activeTab === "General" && <GeneralTab />}
+                {activeTab === "General" && <GeneralTab isSandbox={isSandbox} onResetSandbox={handleResetSandbox} resetPending={resetPending} resetError={resetError} />}
                 {activeTab === "Settings" && <SettingsTab isSandbox={isSandbox} settings={sandboxSettings} onChange={handleSandboxSettingChange} onReset={handleResetSandboxSettings} />}
                 {activeTab === "Environment" && <EnvironmentTab />}
                 {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} username={user?.username} />}
@@ -274,6 +302,7 @@ export default function Game() {
                 </section>}
                 {state === "running" && (
                     <Gamescreen
+                        key={terminalVersion}
                         wsRef={wsRef}
                         commandLog={commandLog}
                         addCommandLine={addCommandLine}

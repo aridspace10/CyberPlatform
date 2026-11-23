@@ -6,7 +6,7 @@ import { saveSessionRequest } from "../api/saveSession";
 import { API_URL } from "../api/config";
 import "./Tabs.css";
 
-export default function GeneralTab() {
+export default function GeneralTab({ isSandbox, onResetSandbox, resetPending, resetError }) {
     const { sessionId, addCommandLine } = useSession();
     const navigate = useNavigate();
     const [diagnosticsError, setDiagnosticsError] = useState("");
@@ -56,6 +56,12 @@ export default function GeneralTab() {
                 <small>Contains only your activity and errors from this session.</small>
                 {diagnosticsError && <p role="alert">{diagnosticsError}</p>}
             </div>
+            {isSandbox && <>
+                <button className="tab-button" type="button" onClick={onResetSandbox} disabled={resetPending}>
+                    {resetPending ? "Resetting…" : "Reset Sandbox"}
+                </button>
+                {resetError && <p role="alert">{resetError}</p>}
+            </>}
             <button className="tab-button" onClick={handleExit}>Exit</button>
         </div>
     )
