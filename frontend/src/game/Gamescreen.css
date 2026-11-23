@@ -169,6 +169,19 @@ html, body, #root {
   color: #444;
 }
 
+.terminal .prompt:disabled { color: #8ea99a; }
+.terminal .cancel-foreground {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #31523d;
+  border-radius: 4px;
+  background: #142019;
+  color: #d6ebdd;
+  font: inherit;
+  cursor: pointer;
+}
+.terminal .cancel-foreground:focus-visible { outline: 2px solid #00e676; outline-offset: 2px; }
+
 /* ============================================
    Sidebar (RIGHT side)
    ============================================ */
@@ -282,6 +295,7 @@ html, body, #root {
 .terminal .prompt-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.6rem;
   color: #00e676;
   font-size: var(--sandbox-terminal-font-size, 0.9rem);
@@ -290,7 +304,9 @@ html, body, #root {
 
 .terminal .prompt-label {
   flex: 0 0 auto;
+  max-width: 100%;
   color: #00e676;
+  overflow-wrap: anywhere;
   user-select: none;
 }
 
