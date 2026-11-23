@@ -39,3 +39,9 @@
     color: #ff7777;
     font-size: 0.75rem;
 }
+
+.general-tab > [role="alert"] {
+    margin: 0;
+    color: #ff7777;
+    font-size: 0.75rem;
+}

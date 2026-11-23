@@ -575,6 +575,53 @@ def test_session_list_tracks_connected_and_joined_players_across_reconnects():
         client.portal.call(session_manager.remove_session, session_id)
 
 
+def test_sandbox_reset_restores_fresh_live_and_saved_shell():
+    client, testing_session = make_client()
+
+    with client:
+        sandbox_id = str(client.post("/api/sandbox/42").json()["session_id"])
+        db = testing_session()
+        try:
+            original_shell = db.get(SessionShell, (int(sandbox_id), 42)).shell
+        finally:
+            db.close()
+
+        with client.websocket_connect(f"/ws/{sandbox_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()  # join notice
+            websocket.receive_json()  # lobby state
+
+            websocket.send_json({"type": "command", "input": "mkdir scratch"})
+            assert websocket.receive_json()["status"] == 0
+            websocket.send_json({"type": "command", "input": "cd scratch"})
+            assert websocket.receive_json()["cwd"] == "/scratch"
+            assert client.post(f"/api/sessions/{sandbox_id}/save").status_code == 200
+
+            websocket.send_json({"type": "reset_sandbox"})
+            assert websocket.receive_json() == {"type": "sandbox_reset", "cwd": "/"}
+            websocket.send_json({"type": "command", "input": "ls /"})
+            assert "scratch" not in websocket.receive_json()["stdout"]
+
+            db = testing_session()
+            try:
+                assert db.get(SessionShell, (int(sandbox_id), 42)).shell == original_shell
+            finally:
+                db.close()
+
+        client.portal.call(session_manager.remove_session, sandbox_id)
+        with client.websocket_connect(f"/ws/{sandbox_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()
+            assert websocket.receive_json()["cwd"] == "/"
+            websocket.send_json({"type": "command", "input": "ls /"})
+            assert "scratch" not in websocket.receive_json()["stdout"]
+        client.portal.call(session_manager.remove_session, sandbox_id)
+
+
 def assert_no_sandbox_state(testing_session, original_runtimes):
     db = testing_session()
     try:

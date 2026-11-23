@@ -270,6 +270,23 @@ class GameSession:
         self.state = new_state
         await self.broadcast_game_state()
 
+    def reset_sandbox_player(self, player: Player, shell_data: dict) -> None:
+        """Replace the sandbox's live shell and simulated machine with a fresh one."""
+        fresh_shell = Player(player.websocket, player.username, player.user_id).shell
+        fresh_shell.commands = list(shell_data["cmds"])
+        fresh_shell.allow_pipes = shell_data.get("allowPipes", True)
+        fresh_shell.vars = shell_data["vars"].copy()
+        fresh_shell.fs.from_dict(shell_data["fs"])
+        fresh_shell.fs.identity = fresh_shell.identity
+
+        self.process_manager = ProcessManager()
+        self.process_manager.boot()
+        self.scheduler = Scheduler(self.process_manager)
+        self.network_manager = NetworkManager()
+        self.commandline = CommandLine(self.process_manager, self.network_manager)
+        player.shell = fresh_shell
+        player.background_completions.clear()
+
     async def connect(self, websocket: WebSocket, username: str, user_id: str):
         if username in self.players and self.players[username].user_id != user_id:
             raise ValueError("Username belongs to another session player")
