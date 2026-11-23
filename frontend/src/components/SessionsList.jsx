@@ -53,7 +53,7 @@ export default function SessionsList({ user, authLoading }) {
           <td>{session.play_type === "SinglePlayer" ? "Solo" : "Versus"}</td>
           <td>{visibilityLabels[session.visibility] || session.visibility}</td>
           <td><span className={`session-state session-state-${session.state || "unknown"}`}>{session.state || "Unknown"}</span></td>
-          <td>{session.players}</td>
+          <td>{session.connected_players}</td>
           <td><Link className="session-enter" to={user ? `/game/${session.id}` : "/login"} state={user ? undefined : { from: `/game/${session.id}` }}>{user ? session.member ? "Open →" : "Join →" : "Sign in →"}</Link></td>
         </tr>)}</tbody>
       </table>
