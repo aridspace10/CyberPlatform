@@ -48,10 +48,13 @@ export async function loginUser(username, password) {
         body: JSON.stringify({ username, password })
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-        throw new Error(data.detail || "Could not sign in");
+        const error = new Error(data.detail || "Could not sign in");
+        error.status = res.status;
+        throw error;
     }
+    if (!data.access_token) throw new Error("Invalid sign-in response");
     return data;
 }
 
