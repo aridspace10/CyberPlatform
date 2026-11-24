@@ -7,6 +7,37 @@ build, set `VITE_BACKEND_URL` to the backend's public HTTP(S) origin (for exampl
 `https://api.example.com`). Configure the backend's `CYBERPLATFORM_CORS_ORIGINS`
 with the frontend origin so browser downloads and API calls are allowed.
 
+## Contact reports
+
+The public `/contact` page sends issue reports through the backend's SMTP
+connection. Set these **backend** environment variables when an inbox and an
+SMTP account are ready:
+
+```text
+CYBERPLATFORM_SMTP_HOST=smtp.your-provider.example
+CYBERPLATFORM_SMTP_PORT=587
+CYBERPLATFORM_SMTP_SECURITY=starttls
+CYBERPLATFORM_SMTP_USERNAME=your-smtp-username
+CYBERPLATFORM_SMTP_PASSWORD=your-smtp-password
+CYBERPLATFORM_CONTACT_FROM=verified-sender@your-domain.example
+CYBERPLATFORM_CONTACT_TO=your-issues-inbox@example.com
+```
+
+Use `CYBERPLATFORM_SMTP_SECURITY=ssl` and port `465` if your provider requires
+implicit TLS. Username and password may both be omitted for an SMTP relay that
+does not require authentication. Choose a provider with a free plan if desired;
+the app uses only standard SMTP. The sender must be accepted by that provider.
+Until these settings are present, the API returns a clear temporary-unavailable
+error and the form keeps the entered report so users can retry.
+
+Each email has a `[CyberPlatform][category]` subject prefix, a unique reference,
+and labeled fields for the report, reproduction steps, expected and actual
+results, page, and device. Inbox filters can sort by category prefix or the
+`X-CyberPlatform-Category` header. Replying uses the reporter's email address.
+The contact endpoint accepts at most five submissions per client per five-minute
+window. As with account limits, configure trusted proxy headers correctly in
+production so the client address is accurate.
+
 ## Homepage ads
 
 Ads are controlled site-wide through the frontend deployment's environment
