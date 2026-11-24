@@ -26,6 +26,7 @@ export default function Game() {
     const [state, setState] = useState(null);
     const [gameData, setGameData] = useState(null);
     const [activeTab, setActiveTab] = useState("General");
+    const [compactView, setCompactView] = useState("game");
     const [sandboxSettings, setSandboxSettings] = useState(() => loadSandboxSettings(user.id));
     const notificationRef = useRef({ activeTab, isSandbox: false, enabled: sandboxSettings.chatNotifications });
     const [cwd, setCwd] = useState("/");
@@ -41,6 +42,8 @@ export default function Game() {
     const [resetError, setResetError] = useState("");
     const [terminalVersion, setTerminalVersion] = useState(0);
     const isSandbox = gameData?.isSandbox === true;
+    const hasQuestionPanel = Boolean(gameData && !isSandbox && gameData.gameType !== "Tutorial");
+    const visibleCompactView = compactView === "questions" && !hasQuestionPanel ? "game" : compactView;
 
     useEffect(() => {
         notificationRef.current = {
@@ -277,8 +280,13 @@ export default function Game() {
                     <Link to="/profile">Profile</Link>
                 </nav>
             </header>
-            <div className="game-workspace">
-            <div className="sidebar-page">
+            <nav className="game-mobile-nav" aria-label="Game panels">
+                <button type="button" aria-controls="game-stage" aria-pressed={visibleCompactView === "game"} onClick={() => setCompactView("game")}>Game</button>
+                <button type="button" aria-controls="game-sidebar" aria-pressed={visibleCompactView === "sidebar"} onClick={() => setCompactView("sidebar")}>Session tabs</button>
+                {hasQuestionPanel && <button type="button" aria-controls="game-questions" aria-pressed={visibleCompactView === "questions"} onClick={() => setCompactView("questions")}>Questions</button>}
+            </nav>
+            <div className={`game-workspace game-view-${visibleCompactView}`}>
+            <div className="sidebar-page" id="game-sidebar">
                 <div className="sidebar-nav">
                     {["General", "Settings", "Environment", "Chat"].map(tab => (
                         <button
@@ -300,7 +308,7 @@ export default function Game() {
                 {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} username={user?.username} />}
             </div>
 
-            <main className={`game-stage${state === "waiting" || !state ? " game-stage-lobby" : ""}`}>
+            <main id="game-stage" className={`game-stage${state === "waiting" || !state ? " game-stage-lobby" : ""}`}>
                 {access && !state && <div className="session-access-panel">
                     <h1>{access.name}</h1>
                     {access.status === "requestable" && <>
@@ -347,7 +355,7 @@ export default function Game() {
                 {state === "finished" && <div className="game-finished"><h1>Game complete</h1></div>}
                 {!state && !access && !accessError && connectionStatus === "connecting" && <h1>Loading...</h1>}
             </main>
-            {gameData && <GameDataPanel gameData={gameData} />}
+            {gameData && <GameDataPanel id="game-questions" gameData={gameData} />}
             </div>
           </div>
         </SessionContext.Provider>

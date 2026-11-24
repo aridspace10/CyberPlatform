@@ -18,8 +18,9 @@ html, body, #root {
 .game {
   display: flex;
   flex-direction: column;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background-color: #0d0d0d;
   color: #c8c8c8;
@@ -51,6 +52,7 @@ html, body, #root {
 .game-topbar-links a:hover { color: #b9ef70; }
 .game-topbar a:focus-visible { outline: 2px solid #b9ef70; outline-offset: 4px; }
 .game-workspace { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.game-mobile-nav { display: none; }
 .game.sandbox-high-contrast .game-topbar { border-color: #89939d; background: #050505; }
 .game.sandbox-high-contrast .game-topbar-links a { color: #f5f7f8; }
 
@@ -428,4 +430,61 @@ html, body, #root {
   animation-duration: 0.01ms !important;
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
+}
+
+@media (max-width: 900px) {
+  .game-mobile-nav {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 4px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #294238;
+    background: #07120f;
+  }
+
+  .game-mobile-nav button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 4px;
+    border: 1px solid #31523d;
+    border-radius: 4px;
+    background: #142019;
+    color: #c4d5c8;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .game-mobile-nav button[aria-pressed="true"] {
+    border-color: #00e676;
+    color: #00e676;
+    background: #1d3425;
+  }
+
+  .game-mobile-nav button:focus-visible {
+    outline: 2px solid #00e676;
+    outline-offset: 2px;
+  }
+
+  .game-workspace { display: block; }
+  .game-workspace > .sidebar-page,
+  .game-workspace > .game-stage,
+  .game-workspace > .game-data-panel { display: none; }
+
+  .game-view-sidebar > .sidebar-page,
+  .game-view-questions > .game-data-panel { display: flex; }
+  .game-view-game > .game-stage { display: block; }
+
+  .game-workspace > .sidebar-page,
+  .game-workspace > .game-data-panel {
+    width: 100%;
+    height: 100%;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .game-workspace > .game-stage { width: 100%; height: 100%; }
+  .terminal .prompt-row { flex-wrap: wrap; }
+  .terminal .prompt-label { max-width: 100%; overflow-wrap: anywhere; }
+  .terminal .prompt { min-width: 0; }
 }
