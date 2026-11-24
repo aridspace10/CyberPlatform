@@ -1,6 +1,7 @@
 import json
 import time
 
+import pytest
 from db.authentication import create_access_token
 from network.SessionManger import session_manager
 from services.session_logging import SessionLogger
@@ -26,6 +27,59 @@ def test_websocket_rejects_missing_token(client):
             raise AssertionError("Missing token should close the connection")
 
 
+def test_websocket_closes_idle_unauthenticated_connection(client, monkeypatch):
+    monkeypatch.setattr("network.WebsocketServer.AUTH_TIMEOUT_SECONDS", 0.01)
+    before = set(session_manager.sessions)
+
+    with client.websocket_connect("/ws/idle-auth") as websocket:
+        with pytest.raises(WebSocketDisconnect) as error:
+            websocket.receive_json()
+
+    assert error.value.code == 4408
+    assert set(session_manager.sessions) == before
+
+
+def test_websocket_rejects_oversized_join_packet(client):
+    with client.websocket_connect("/ws/oversized-auth") as websocket:
+        websocket.send_json({"token": "x" * 8_192})
+        with pytest.raises(WebSocketDisconnect) as error:
+            websocket.receive_json()
+
+    assert error.value.code == 1009
+
+
+@pytest.mark.parametrize(
+    "message",
+    [None, {}, [], 42, "", "   ", "x" * 2_001],
+    ids=["missing", "object", "array", "number", "empty", "blank", "oversized"],
+)
+def test_chat_rejects_invalid_payload_and_keeps_connection(session, message):
+    payload = {"type": "chat", "user": "forged"}
+    if message is not None:
+        payload["message"] = message
+    session.ws.send_json(payload)
+
+    error = session.receive_until(lambda item: item.get("type") == "system")
+    assert "Chat messages" in error["message"]
+
+    session.ws.send_json({"type": "chat", "user": "forged", "message": " hi "})
+    delivered = session.receive_until(lambda item: item.get("type") == "chat")
+    assert delivered == {"type": "chat", "user": "jackson", "message": "hi"}
+
+
+def test_chat_accepts_maximum_length(session):
+    session.ws.send_json({"type": "chat", "message": "x" * 2_000})
+    delivered = session.receive_until(lambda item: item.get("type") == "chat")
+    assert delivered["message"] == "x" * 2_000
+
+
+def test_websocket_closes_oversized_authenticated_packet(session):
+    session.ws.send_json({"type": "chat", "message": "x" * 32_768})
+    with pytest.raises(WebSocketDisconnect) as error:
+        session.ws.receive_json()
+    assert error.value.code == 1009
+
+
 def test_signed_guest_cannot_claim_host_identity(session, client):
     game = session.game_session
     game.game_manager.set_config({
@@ -48,7 +102,9 @@ def test_signed_guest_cannot_claim_host_identity(session, client):
         assert game.state == "waiting"
 
 
-def test_first_running_command_exception_returns_one_error_and_keeps_socket(session, monkeypatch):
+def test_first_running_command_exception_returns_one_error_and_keeps_socket(
+    session, monkeypatch
+):
     game = session.game_session
     game.state = "running"
     game.game_manager.set_config({
@@ -407,7 +463,8 @@ def test_bad_input_and_unexpected_command_error_keep_websocket_usable(
     errors = [json.loads(line) for line in logger.error_path.read_text().splitlines()]
     assert len(errors) == 1
     assert errors[0]["exception_type"] == "RuntimeError"
-    assert "diagnostic-only failure" in errors[0]["traceback"]
+    assert "diagnostic-only failure" not in errors[0]["traceback"]
+    assert "fail_one_command" in errors[0]["traceback"]
 
     activities = [
         json.loads(line) for line in logger.activity_path.read_text().splitlines()
@@ -415,10 +472,9 @@ def test_bad_input_and_unexpected_command_error_keep_websocket_usable(
     terminal_inputs = [
         record for record in activities if record["event"] == "terminal_input"
     ]
-    assert [record["input"] for record in terminal_inputs] == [
-        "head -n",
-        "explode",
-        "echo recovered",
+    assert [record["input"] for record in terminal_inputs] == ["[redacted]"] * 3
+    assert [record["input_length"] for record in terminal_inputs] == [
+        len("head -n"), len("explode"), len("echo recovered")
     ]
     assert terminal_inputs[0]["outcome"] == "completed"
     assert terminal_inputs[1]["outcome"] == "exception"

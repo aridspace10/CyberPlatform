@@ -1,3 +1,4 @@
+import api.sessions as session_routes
 import pytest
 from api.sessions import router
 from db.authentication import create_access_token
@@ -9,6 +10,7 @@ from db.modals import (
     ScenarioToSession,
     SessionShell,
     User,
+    UserRateLimit,
 )
 from db.session import get_db
 from fastapi import FastAPI
@@ -91,6 +93,72 @@ def authorization(user_id: int, username: str) -> dict:
         "Authorization": "Bearer "
         + create_access_token({"sub": user_id, "username": username})
     }
+
+
+def test_session_creation_caps_active_sessions_per_user(monkeypatch):
+    monkeypatch.setattr(session_routes, "ACTIVE_SESSION_LIMIT", 2)
+    client, testing_session = make_client()
+    created = []
+    with client:
+        for _ in range(2):
+            response = client.post(
+                "/api/session_create", json=creation_payload("Versus")
+            )
+            assert response.status_code == 201
+            created.append(str(response.json()["session_id"]))
+
+        rejected = client.post("/api/session_create", json=creation_payload("Versus"))
+        assert rejected.status_code == 429
+        assert "active sessions" in rejected.json()["detail"]
+
+        db = testing_session()
+        assert db.query(GameSession).filter_by(creatorID=42).count() == 2
+        db.close()
+
+        guest = client.post(
+            "/api/session_create",
+            json=creation_payload("Versus"),
+            headers=authorization(43, "guest"),
+        )
+        assert guest.status_code == 201
+        created.append(str(guest.json()["session_id"]))
+
+        for session_id in created:
+            client.portal.call(session_manager.remove_session, session_id)
+
+
+def test_session_creation_rate_limit_recovers_in_next_window(monkeypatch):
+    monkeypatch.setattr(session_routes, "SESSION_CREATION_RATE_LIMIT", 2)
+    now = [3600.0]
+    monkeypatch.setattr(session_routes.time, "time", lambda: now[0])
+    client, testing_session = make_client()
+    created = []
+    with client:
+        for _ in range(2):
+            response = client.post(
+                "/api/session_create", json=creation_payload("Versus")
+            )
+            assert response.status_code == 201
+            created.append(str(response.json()["session_id"]))
+
+        rejected = client.post("/api/session_create", json=creation_payload("Versus"))
+        assert rejected.status_code == 429
+        assert rejected.headers["Retry-After"] == "3600"
+
+        db = testing_session()
+        assert db.query(GameSession).count() == 2
+        assert db.query(UserRateLimit).filter_by(
+            user_id=42, action="session_create", bucket=1
+        ).one().count == 2
+        db.close()
+
+        now[0] += 3600
+        recovered = client.post("/api/session_create", json=creation_payload("Versus"))
+        assert recovered.status_code == 201
+        created.append(str(recovered.json()["session_id"]))
+
+        for session_id in created:
+            client.portal.call(session_manager.remove_session, session_id)
 
 
 def test_create_session_hands_complete_config_to_game_manager():

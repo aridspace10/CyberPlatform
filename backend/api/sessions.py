@@ -1,15 +1,22 @@
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Dict, Literal
 
 from db.authentication import decode_token, get_current_user
 from db.modals import GameSession as DatabaseGameSession
-from db.modals import JoinRequest, Scenario, ScenarioToSession, SessionShell
+from db.modals import (
+    JoinRequest,
+    Scenario,
+    ScenarioToSession,
+    SessionShell,
+    UserRateLimit,
+)
 from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from game.GameManager import GameManager, QUESTION_MODES
+from game.GameManager import QUESTION_MODES, GameManager
 from jose import JWTError
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,10 +28,61 @@ from services.session_service import (
     update_session_shell,
 )
 from services.user_service import get_user_by_id, is_friend
+from sqlalchemy import text
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
+SESSION_CREATION_WINDOW_SECONDS = 3600
+SESSION_CREATION_RATE_LIMIT = 20
+ACTIVE_SESSION_LIMIT = 10
+
+
+def enforce_session_creation_limits(db: Session, user_id: int) -> None:
+    active_count = (
+        db.query(DatabaseGameSession)
+        .filter(
+            DatabaseGameSession.creatorID == user_id,
+            DatabaseGameSession.state.in_(("waiting", "running")),
+        )
+        .count()
+    )
+    if active_count >= ACTIVE_SESSION_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Too many active sessions. "
+                "Finish a session before creating another."
+            ),
+        )
+
+    now = int(time.time())
+    bucket = now // SESSION_CREATION_WINDOW_SECONDS
+    statement = (
+        sqlite_insert(UserRateLimit)
+        .values(user_id=user_id, action="session_create", bucket=bucket, count=1)
+        .on_conflict_do_update(
+            index_elements=["user_id", "action", "bucket"],
+            set_={"count": UserRateLimit.count + 1},
+        )
+        .returning(UserRateLimit.count)
+    )
+    count = db.execute(statement).scalar_one()
+    if count > SESSION_CREATION_RATE_LIMIT:
+        retry_after = (
+            SESSION_CREATION_WINDOW_SECONDS - now % SESSION_CREATION_WINDOW_SECONDS
+        )
+        raise HTTPException(
+            status_code=429,
+            detail="Session creation limit reached. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    db.query(UserRateLimit).filter(
+        UserRateLimit.user_id == user_id,
+        UserRateLimit.action == "session_create",
+        UserRateLimit.bucket < bucket - 2,
+    ).delete(synchronize_session=False)
 
 
 def friend_scope_allows(db: Session, session: DatabaseGameSession, user_id: int):
@@ -172,6 +230,8 @@ async def session_create(
     db: Session = Depends(get_db),
 ):
     """Persist a session and register its complete config with GameManager."""
+    # Serialize the quota check and allocation across SQLite workers.
+    db.execute(text("BEGIN IMMEDIATE"))
     config = body.config
 
     if get_user_by_id(db, user_id) is None:
@@ -199,6 +259,7 @@ async def session_create(
                 status_code=422,
                 detail=f"Unsupported {command} option: {sorted(unknown_options)[0]}",
             )
+    enforce_session_creation_limits(db, user_id)
 
     initial_state = "running" if config.playType == "SinglePlayer" else "waiting"
     config_data = config.model_dump()
