@@ -1,200 +1,77 @@
-/* ── Page ── */
 .session-create-page {
     min-height: 100vh;
+    box-sizing: border-box;
+    padding: clamp(20px, 4vw, 48px);
     background: #0f1117;
     color: #e8eaf0;
     font-family: 'Courier New', monospace;
-    padding: 48px 40px;
-    box-sizing: border-box;
 }
 
-.page-title {
-    font-size: 1.8rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #c8f04a;
-    margin: 0 0 36px 0;
-    border-bottom: 1px solid #2a2d38;
-    padding-bottom: 16px;
+.session-create-page * { box-sizing: border-box; }
+.session-create-page button, .session-create-page input, .session-create-page select { font: inherit; }
+.session-create-page :is(button, input, select, h2):focus-visible {
+    outline: 2px solid #c8f04a;
+    outline-offset: 3px;
 }
-
-/* ── Layout ── */
-.session-layout {
-    display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: 40px;
-    align-items: start;
-}
-
-@media (max-width: 700px) {
-    .session-layout { grid-template-columns: 1fr; }
-}
-
-/* ── Section titles ── */
-.section-title {
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: #6b7280;
-    margin: 0 0 20px 0;
-}
-
-/* ── Left side ── */
-.create-left-side {
-    background: #16191f;
-    border: 1px solid #2a2d38;
-    border-radius: 8px;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.field-label {
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #6b7280;
-    margin-top: 12px;
-}
-
-.session-field-help {
-    margin: 4px 0 0;
-    color: #9ca3af;
-    font-size: 0.75rem;
-    line-height: 1.4;
-}
-
-/* Allow Pipes label + switch on same row */
-.inline-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 0;
-}
-
-.inline-field .field-label {
-    margin-top: 0;
-}
-
-.inline-field .switch-row {
-    margin-top: 0;
-    height: 36px;
-}
-
-.text-input,
-.select-input {
+.session-page-header { max-width: 72rem; margin: 0 auto 28px; }
+.session-page-header p { color: #aeb5c2; line-height: 1.5; }
+.session-page-header .session-eyebrow { color: #c8f04a; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
+.page-title { margin: 0; font-size: clamp(1.6rem, 3vw, 2.3rem); color: #e8eaf0; }
+.session-create-page form { max-width: 72rem; margin: auto; }
+.session-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 18px; }
+.session-card { min-width: 0; padding: clamp(18px, 2vw, 28px); background: #171b23; border: 1px solid #343a47; border-radius: 10px; }
+.session-card h2 { margin: 0 0 20px; font-size: 1rem; color: #c8f04a; }
+.session-basics { grid-column: 1; }
+.session-rules { grid-column: 2; }
+.session-commands { grid-column: 1 / -1; }
+.session-field { margin-bottom: 20px; }
+.session-field > label, .number-selector .field-label { display: block; margin-bottom: 8px; color: #e8eaf0; font-size: .82rem; font-weight: 700; }
+.session-field > input, .session-field > select {
     width: 100%;
+    min-height: 42px;
+    padding: 9px 12px;
     background: #0f1117;
-    border: 1px solid #2a2d38;
+    border: 1px solid #505866;
     border-radius: 5px;
     color: #e8eaf0;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
-    padding: 9px 12px;
-    box-sizing: border-box;
-    outline: none;
-    transition: border-color 0.15s;
 }
-
-.text-input:focus,
-.select-input:focus {
-    border-color: #c8f04a;
+.session-field-help, .session-fixed-game { margin: 8px 0 0; color: #aeb5c2; font-size: .8rem; line-height: 1.5; }
+.session-fixed-game { border-top: 1px solid #343a47; padding-top: 16px; }
+.session-fixed-game strong { display: block; color: #e8eaf0; font-size: .95rem; }
+.session-create-error { margin: 8px 0; color: #ff9292; font-size: .82rem; line-height: 1.4; }
+.session-create-page [aria-invalid="true"] { border-color: #ff9292; }
+.rules-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; }
+.rules-grid > div { min-width: 0; }
+.rules-grid .number-selector { width: 100%; }
+.pipes-choice { display: flex; align-items: flex-start; gap: 10px; margin-top: 28px; cursor: pointer; }
+.pipes-choice input { width: 18px; height: 18px; accent-color: #c8f04a; }
+.pipes-choice strong, .pipes-choice small { display: block; }
+.pipes-choice small { margin-top: 4px; color: #aeb5c2; font-size: .8rem; }
+.command-section-heading { display: flex; justify-content: space-between; align-items: start; gap: 20px; }
+.command-section-heading h2 { margin-bottom: 6px; }
+.command-section-heading p { margin: 0; color: #aeb5c2; font-size: .82rem; line-height: 1.5; }
+.bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bulk-actions button { padding: 8px 10px; color: #c8f04a; background: transparent; border: 1px solid #667146; border-radius: 5px; cursor: pointer; }
+.bulk-actions button:hover { background: #25301d; }
+.pool-count { margin: 20px 0 0; color: #e8eaf0; font-weight: 700; }
+.commands-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); align-items: start; gap: 12px; margin-top: 20px; }
+.session-summary { margin-top: 18px; }
+.session-summary dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 0; }
+.session-summary dl div { min-width: 0; }
+.session-summary dt { color: #aeb5c2; font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+.session-summary dd { margin: 5px 0 0; overflow-wrap: anywhere; line-height: 1.5; }
+.pool-note { margin: 18px 0 0; padding: 10px 12px; color: #e8eaf0; background: #293021; border-left: 3px solid #c8f04a; font-size: .82rem; line-height: 1.5; }
+.submit-btn { display: block; width: 100%; max-width: 260px; margin-top: 24px; padding: 12px 18px; border: 0; border-radius: 5px; background: #c8f04a; color: #0f1117; font-weight: 700; cursor: pointer; }
+.submit-btn:hover:not(:disabled) { background: #dafa7f; }
+.submit-btn:disabled { opacity: .55; cursor: wait; }
+@media (max-width: 780px) {
+    .session-layout { grid-template-columns: 1fr; }
+    .session-basics, .session-rules, .session-commands { grid-column: 1; }
 }
-
-.select-input {
-    cursor: pointer;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-}
-
-.session-create-error {
-    margin: 14px 0 0;
-    color: #ff7272;
-    font-size: 0.8rem;
-    line-height: 1.4;
-    text-align: left;
-}
-
-/* ── Submit ── */
-.submit-btn {
-    margin-top: 20px;
-    background: #c8f04a;
-    color: #0f1117;
-    border: none;
-    border-radius: 5px;
-    font-family: 'Courier New', monospace;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 11px;
-    cursor: pointer;
-    transition: opacity 0.15s, transform 0.1s;
-}
-
-.submit-btn:hover { opacity: 0.88; transform: translateY(-1px); }
-.submit-btn:active { transform: translateY(0); }
-
-/* ── Right side ── */
-.create-right-side {
-    background: #16191f;
-    border: 1px solid #2a2d38;
-    border-radius: 8px;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-}
-
-.right-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-}
-
-.right-header .section-title { margin: 0; }
-
-/* Divider between sections on the right */
-.section-divider {
-    border: none;
-    border-top: 1px solid #2a2d38;
-    margin: 20px 0;
-}
-
-/* Rules section — compact natural width */
-.rules-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px 32px;
-    align-items: flex-end;
-    margin-bottom: 4px;
-}
-
-.bulk-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.ghost-btn {
-    background: transparent;
-    border: 1px solid #2a2d38;
-    border-radius: 4px;
-    color: #6b7280;
-    font-family: 'Courier New', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.08em;
-    padding: 5px 10px;
-    cursor: pointer;
-    transition: border-color 0.15s, color 0.15s;
-}
-
-.ghost-btn:hover {
-    border-color: #c8f04a;
-    color: #c8f04a;
+@media (max-width: 520px) {
+    .session-create-page { padding: 16px; }
+    .command-section-heading { display: block; }
+    .bulk-actions { margin-top: 14px; }
+    .session-summary dl { grid-template-columns: 1fr; }
+    .submit-btn { max-width: none; }
 }

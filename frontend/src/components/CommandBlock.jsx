@@ -1,61 +1,32 @@
-import './CommandBlock.css'
-import { useState } from 'react';
+import { useState } from "react";
+import "./CommandBlock.css";
 
-export default function CommandBlock({ command, options, commandSelected, onCommandToggle, selectedOptions, onOptionToggle, onToggleAllOptions }) {
-    const [collapsed, setCollapsed] = useState(true);
-    const allOptionsSelected = commandSelected && options.every(opt => selectedOptions.includes(opt));
+export default function CommandBlock({ command, description, groups, options, commandSelected, onCommandToggle, selectedOptions, onOptionToggle, onToggleAllOptions }) {
+    const [expanded, setExpanded] = useState(false);
+    const allSelected = options.every(option => selectedOptions.includes(option));
 
-    const handleCommandToggle = (e) => {
-        e.stopPropagation();
-        onCommandToggle(command, options);
-    };
-
-    return (
-        <div className={`command-block ${!collapsed ? "expanded" : ""} ${commandSelected ? "command-active" : ""}`}>
-            <div className="command-header" onClick={() => setCollapsed(p => !p)}>
-                <div className="command-header-left">
-                    <div
-                        className={`command-checkbox ${commandSelected ? "checked" : ""}`}
-                        onClick={handleCommandToggle}
-                    >
-                        {commandSelected && <span className="checkmark">✓</span>}
-                    </div>
-                    <span className="command-name">{command}</span>
-                </div>
-                <div className="command-header-right">
-                    {commandSelected && (
-                        <span className="command-count">{selectedOptions.length}/{options.length}</span>
-                    )}
-                    <span className={`chevron ${!collapsed ? "open" : ""}`}>▸</span>
-                </div>
-            </div>
-            {!collapsed && (
-                <div className="command-options-list">
-                    <div className="command-options-actions">
-                        <button
-                            type="button"
-                            className="command-options-toggle"
-                            onClick={() => onToggleAllOptions(command, options)}
-                        >
-                            {allOptionsSelected ? "Clear options" : "Select all options"}
-                        </button>
-                    </div>
-                    {options.map(opt => {
-                        const optEnabled = commandSelected && selectedOptions.includes(opt);
-                        return (
-                            <label key={opt} className={`option-row ${!commandSelected ? "option-disabled" : ""}`}>
-                                <input
-                                    type="checkbox"
-                                    checked={optEnabled}
-                                    disabled={!commandSelected}
-                                    onChange={() => commandSelected && onOptionToggle(command, opt)}
-                                />
-                                <span>{opt}</span>
-                            </label>
-                        );
-                    })}
-                </div>
-            )}
+    return <section className={`command-block ${commandSelected ? "command-active" : ""}`} aria-label={`${command} command`}>
+        <div className="command-header">
+            <label className="command-choice">
+                <input type="checkbox" checked={commandSelected} onChange={() => onCommandToggle(command)} />
+                <span><strong>{command.toUpperCase()}</strong><small>{description}</small></span>
+            </label>
+            <button type="button" className="command-expand" aria-expanded={expanded} aria-controls={`${command}-modes`} onClick={() => setExpanded(value => !value)}>
+                {commandSelected ? `${selectedOptions.length}/${options.length} modes` : "Off"} <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+            </button>
         </div>
-    );
+        {expanded && <div id={`${command}-modes`} className="command-options-list">
+            <p className="session-field-help">{commandSelected ? "Choose question modes for this command. No modes selected means basic questions only." : `Select ${command.toUpperCase()} to enable its modes.`}</p>
+            <button type="button" className="command-options-toggle" disabled={!commandSelected} onClick={() => onToggleAllOptions(command, options)}>
+                {allSelected ? `Clear ${command.toUpperCase()} modes` : `Select all ${command.toUpperCase()} modes`}
+            </button>
+            <div className="option-groups">{groups.map(group => <fieldset key={group.name} disabled={!commandSelected}>
+                <legend>{group.name}</legend>
+                {group.options.map(([name, help]) => <label key={name} className="option-row">
+                    <input type="checkbox" checked={commandSelected && selectedOptions.includes(name)} onChange={() => onOptionToggle(command, name)} />
+                    <span><strong>{name}</strong><small>{help}</small></span>
+                </label>)}
+            </fieldset>)}</div>
+        </div>}
+    </section>;
 }

@@ -1,6 +1,6 @@
 import './NumberSelector.css';
 
-export default function NumberSelector({ value, onChange, min = 1, max = 20, label }) {
+export default function NumberSelector({ value, onChange, min = 1, max = 20, label, id, describedBy, invalid }) {
     const decrement = () => { if (value > min) onChange(value - 1); };
     const increment = () => { if (value < max) onChange(value + 1); };
 
@@ -11,14 +11,20 @@ export default function NumberSelector({ value, onChange, min = 1, max = 20, lab
 
     return (
         <div className="number-selector">
-            {label && <span className="field-label">{label}</span>}
+            {label && <label className="field-label" htmlFor={id}>{label}</label>}
             <div className="number-selector-control">
                 <button
+                    type="button"
+                    aria-label={`Decrease ${label}`}
                     className="num-btn"
                     onClick={decrement}
                     disabled={value <= min}
                 >−</button>
                 <input
+                    id={id}
+                    aria-label={label}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid || undefined}
                     type="number"
                     className="num-input"
                     value={value}
@@ -27,6 +33,8 @@ export default function NumberSelector({ value, onChange, min = 1, max = 20, lab
                     max={max}
                 />
                 <button
+                    type="button"
+                    aria-label={`Increase ${label}`}
                     className="num-btn"
                     onClick={increment}
                     disabled={value >= max}
