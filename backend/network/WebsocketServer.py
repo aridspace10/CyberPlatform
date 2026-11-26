@@ -1,3 +1,4 @@
+import asyncio
 import json
 from uuid import uuid4
 
@@ -15,6 +16,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 router = APIRouter()
+AUTH_TIMEOUT_SECONDS = 5
+MAX_JOIN_MESSAGE_LENGTH = 8_192
+MAX_WS_MESSAGE_LENGTH = 32_768
+MAX_CHAT_LENGTH = 2_000
 
 
 def restore_game_state(db: Session, session, session_id: int) -> bool:
@@ -139,10 +144,23 @@ async def websocket_endpoint(
 ):
     await websocket.accept()
     try:
-        join_data = await websocket.receive_json()
+        join_text = await asyncio.wait_for(
+            websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        await websocket.close(code=4408)
+        return
     except WebSocketDisconnect:
         return
     except Exception:
+        await websocket.close(code=1008)
+        return
+    if len(join_text) > MAX_JOIN_MESSAGE_LENGTH:
+        await websocket.close(code=1009)
+        return
+    try:
+        join_data = json.loads(join_text)
+    except (TypeError, ValueError):
         await websocket.close(code=1008)
         return
     if not isinstance(join_data, dict) or not isinstance(join_data.get("token"), str):
@@ -279,7 +297,12 @@ async def websocket_endpoint(
         while True:
             request_id = str(uuid4())
             try:
-                data = await websocket.receive_json()
+                message_text = await websocket.receive_text()
+                if len(message_text) > MAX_WS_MESSAGE_LENGTH:
+                    await websocket.close(code=1009)
+                    await session.disconnect(websocket)
+                    return
+                data = json.loads(message_text)
             except WebSocketDisconnect:
                 raise
             except Exception as error:
@@ -354,11 +377,28 @@ async def websocket_endpoint(
 
             msg_type = data.get("type")
             if msg_type == "chat":
+                message = data.get("message")
+                if not isinstance(message, str):
+                    await session.send_to(websocket, {
+                        "type": "system",
+                        "message": "Chat messages must be text",
+                    })
+                    continue
+                message = message.strip()
+                if not message or len(message) > MAX_CHAT_LENGTH:
+                    await session.send_to(websocket, {
+                        "type": "system",
+                        "message": (
+                            f"Chat messages must contain 1 to {MAX_CHAT_LENGTH} "
+                            "characters"
+                        ),
+                    })
+                    continue
                 await session.broadcast(
                     {
                         "type": "chat",
                         "user": username,
-                        "message": data.get("message", ""),
+                        "message": message,
                     }
                 )
 

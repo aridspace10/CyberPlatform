@@ -7,15 +7,28 @@ import io
 import json
 import os
 import re
+import shutil
+import tempfile
 import threading
 import traceback
-from datetime import datetime, timezone
+from collections import deque
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from services.security_settings import settings
+
 _locks_guard = threading.Lock()
 _session_locks: dict[Path, threading.Lock] = {}
+_prune_guard = threading.Lock()
+_last_root_prune: dict[Path, datetime] = {}
+_last_file_prune: dict[Path, datetime] = {}
+
+PRUNE_INTERVAL = timedelta(days=1)
+MAX_LOG_RECORD_BYTES = 32 * 1024
+REDACTED_INPUT = "[redacted]"
+_SESSION_DIRECTORY = re.compile(r"[A-Za-z0-9_.-]+-[0-9a-f]{64}\Z")
 
 
 def _lock_for(directory: Path) -> threading.Lock:
@@ -37,7 +50,9 @@ class SessionLogger:
         readable_id = re.sub(r"[^A-Za-z0-9_.-]", "_", self.session_id).strip(".")
         readable_id = readable_id[:48] or "session"
         suffix = hashlib.sha256(self.session_id.encode("utf-8")).hexdigest()
-        self.directory = root.resolve() / f"{readable_id}-{suffix}"
+        resolved_root = root.resolve()
+        _prune_expired_directories(resolved_root)
+        self.directory = resolved_root / f"{readable_id}-{suffix}"
         self.activity_path = self.directory / "activity.jsonl"
         self.error_path = self.directory / "errors.jsonl"
         self._lock = _lock_for(self.directory)
@@ -66,11 +81,14 @@ class SessionLogger:
                 "user_id": str(user_id),
                 "username": username,
                 "input_kind": input_kind,
-                "input": input_text,
-                "cwd": cwd,
+                "input": REDACTED_INPUT,
+                "input_length": len(input_text),
+                "cwd": REDACTED_INPUT,
                 "outcome": outcome,
                 "status": status,
-                "interaction": interaction,
+                "interaction": (
+                    None if interaction is None else {"mode": interaction.get("mode")}
+                ),
                 "error_type": error_type,
             },
         )
@@ -107,12 +125,10 @@ class SessionLogger:
                 "user_id": str(user_id),
                 "username": username,
                 "input_kind": input_kind,
-                "input": input_text,
+                "input": REDACTED_INPUT,
+                "input_length": len(input_text),
                 "exception_type": type(error).__name__,
-                "exception_message": str(error),
-                "traceback": "".join(
-                    traceback.format_exception(type(error), error, error.__traceback__)
-                ),
+                "traceback": _stack_locations(error),
             },
         )
 
@@ -122,6 +138,15 @@ class SessionLogger:
         with self._lock:
             with ZipFile(archive_buffer, mode="w", compression=ZIP_DEFLATED) as archive:
                 for path in (self.activity_path, self.error_path):
+                    try:
+                        _prune_file(
+                            path,
+                            datetime.now(timezone.utc),
+                            settings.max_log_file_bytes,
+                        )
+                    except OSError:
+                        # A read-only log may still be safe to export after filtering.
+                        pass
                     records = self._read_user_records(path, str(user_id))
                     archive.writestr(path.name, records)
         return archive_buffer.getvalue()
@@ -129,18 +154,24 @@ class SessionLogger:
     @staticmethod
     def _read_user_records(path: Path, user_id: str) -> str:
         try:
+            cutoff = datetime.now(timezone.utc) - timedelta(
+                days=settings.log_retention_days
+            )
             with path.open("r", encoding="utf-8") as log_file:
                 records = []
                 for line in log_file:
                     try:
                         record = json.loads(line)
-                    except json.JSONDecodeError:
+                        stamp = datetime.fromisoformat(record["timestamp"])
+                    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                         continue
+                    if stamp.tzinfo is None:
+                        stamp = stamp.replace(tzinfo=timezone.utc)
                     belongs_to_user = (
                         isinstance(record, dict)
                         and str(record.get("user_id")) == user_id
                     )
-                    if belongs_to_user:
+                    if belongs_to_user and stamp >= cutoff:
                         records.append(line)
                 return "".join(records)
         except OSError:
@@ -149,9 +180,38 @@ class SessionLogger:
     def _append(self, path: Path, record: dict[str, Any]) -> None:
         try:
             line = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+            encoded = (line + "\n").encode("utf-8")
+            if len(encoded) > MAX_LOG_RECORD_BYTES:
+                return
             with self._lock:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                with path.open("a", encoding="utf-8", newline="\n") as log_file:
+                _restrict_permissions(path.parent, 0o700)
+                now = datetime.now(timezone.utc)
+                last_prune = _last_file_prune.get(path)
+                over_limit = (
+                    path.exists()
+                    and path.stat().st_size + len(encoded) > settings.max_log_file_bytes
+                )
+                if (
+                    last_prune is None
+                    or now - last_prune >= PRUNE_INTERVAL
+                    or over_limit
+                ):
+                    # Leave headroom after rotation so a full log does not
+                    # need a complete rewrite for every following input.
+                    keep_bytes = (
+                        settings.max_log_file_bytes // 2
+                        if over_limit
+                        else settings.max_log_file_bytes - len(encoded)
+                    )
+                    _prune_file(path, now, keep_bytes)
+                    _last_file_prune[path] = now
+                flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+                flags |= getattr(os, "O_NOFOLLOW", 0)
+                with os.fdopen(
+                    os.open(path, flags, 0o600), "a", encoding="utf-8", newline="\n"
+                ) as log_file:
+                    _restrict_permissions(path, 0o600)
                     log_file.write(line + "\n")
                     log_file.flush()
         except (OSError, TypeError, ValueError):
@@ -161,3 +221,87 @@ class SessionLogger:
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _stack_locations(error: Exception) -> str:
+    """Keep useful frame locations without exception text or source lines."""
+    return "".join(
+        f'  File "{frame.filename}", line {frame.lineno}, in {frame.name}\n'
+        for frame in traceback.extract_tb(error.__traceback__)
+    )
+
+
+def _restrict_permissions(path: Path, mode: int) -> None:
+    if os.name == "posix":
+        os.chmod(path, mode)
+
+
+def _prune_expired_directories(root: Path, now: datetime | None = None) -> None:
+    now = now or datetime.now(timezone.utc)
+    with _prune_guard:
+        last_prune = _last_root_prune.get(root)
+        if last_prune is not None and now - last_prune < PRUNE_INTERVAL:
+            return
+        try:
+            children = list(root.iterdir())
+        except OSError:
+            return
+        cutoff = (now - timedelta(days=settings.log_retention_days)).timestamp()
+        for child in children:
+            if not _SESSION_DIRECTORY.fullmatch(child.name):
+                continue
+            try:
+                with _lock_for(child):
+                    if child.is_symlink() or child.is_junction() or not child.is_dir():
+                        continue
+                    resolved_child = child.resolve(strict=True)
+                    if resolved_child.parent != root:
+                        continue
+                    files = [child / "activity.jsonl", child / "errors.jsonl"]
+                    last_modified = max(
+                        [child.stat().st_mtime]
+                        + [path.stat().st_mtime for path in files if path.is_file()]
+                    )
+                    if last_modified < cutoff:
+                        shutil.rmtree(resolved_child)
+            except OSError:
+                continue
+        _last_root_prune[root] = now
+
+
+def _prune_file(path: Path, now: datetime, max_bytes: int) -> None:
+    """Keep only recent valid records, capped by the most recent bytes."""
+    if not path.is_file():
+        return
+    cutoff = now - timedelta(days=settings.log_retention_days)
+    records: deque[bytes] = deque()
+    total = 0
+    with path.open("rb") as source:
+        for line in source:
+            if len(line) > MAX_LOG_RECORD_BYTES:
+                continue
+            try:
+                stamp = datetime.fromisoformat(json.loads(line)["timestamp"])
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=timezone.utc)
+            if stamp < cutoff:
+                continue
+            records.append(line)
+            total += len(line)
+            while total > max_bytes:
+                total -= len(records.popleft())
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", dir=path.parent, delete=False
+        ) as out:
+            temporary = Path(out.name)
+            _restrict_permissions(temporary, 0o600)
+            out.writelines(records)
+        os.replace(temporary, path)
+        _restrict_permissions(path, 0o600)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
