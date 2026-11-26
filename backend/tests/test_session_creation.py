@@ -207,7 +207,9 @@ def test_runtime_retention_depends_on_state_and_connection():
     from network.SessionManger import GameSession
 
     runtime = GameSession("retention")
-    now = runtime.created_at
+    now = 100.0
+    runtime.created_at = now
+    runtime.idle_since = now
     runtime.state = "running"
     assert not runtime.expired(now + RUNNING_IDLE_SECONDS - 1)
     assert runtime.expired(now + RUNNING_IDLE_SECONDS)
