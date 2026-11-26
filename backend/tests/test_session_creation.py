@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from api.sessions import router
 from db.authentication import create_access_token
@@ -14,7 +16,15 @@ from db.session import get_db
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from game.GameManager import GameManager
-from network.SessionManger import session_manager
+from network.SessionManger import (
+    CONNECTED_MAX_AGE,
+    FINISHED_SECONDS,
+    RUNNING_IDLE_SECONDS,
+    SANDBOX_IDLE_SECONDS,
+    WAITING_IDLE_SECONDS,
+    Player,
+    session_manager,
+)
 from network.WebsocketServer import router as websocket_router
 from routers.users import get_db as get_users_db
 from routers.users import router as users_router
@@ -91,6 +101,126 @@ def authorization(user_id: int, username: str) -> dict:
         "Authorization": "Bearer "
         + create_access_token({"sub": user_id, "username": username})
     }
+
+
+def test_repeated_finish_and_host_exit_evict_runtimes_and_hide_active_sessions():
+    client, testing_session = make_client()
+    with client:
+        for _ in range(3):
+            response = client.post(
+                "/api/session_create", json=creation_payload("SinglePlayer")
+            )
+            assert response.status_code == 201
+            session_id = str(response.json()["session_id"])
+            runtime = session_manager.get_session(session_id)
+            task = runtime.scheduler_task
+            runtime.game_manager.deadline = 0
+            runtime.game_manager.num_rounds = 1
+            client.portal.call(runtime.finish_round_if_ready)
+            assert runtime.state == "finished"
+            assert session_id not in {
+                item["id"] for item in client.get("/api/sessions").json()["sessions"]
+            }
+            db = testing_session()
+            assert db.get(GameSession, int(session_id)).state == "finished"
+            db.close()
+            closed = client.post(f"/api/sessions/{session_id}/close")
+            assert closed.status_code == 200
+            assert closed.json()["state"] == "finished"
+            assert session_manager.get_session(session_id) == "404"
+            assert task.done()
+        assert client.get("/api/sessions").json() == {"sessions": []}
+
+
+def test_abandoned_session_expires_and_keeps_saved_shell():
+    client, testing_session = make_client()
+    with client:
+        response = client.post("/api/session_create", json=creation_payload("Versus"))
+        session_id = str(response.json()["session_id"])
+        runtime = session_manager.get_session(session_id)
+        task = runtime.scheduler_task
+        player = Player(None, "creator", "42")
+        player.shell.vars["kept_after_expiry"] = "yes"
+        runtime.players["creator"] = player
+        assert not runtime.expired(runtime.idle_since + WAITING_IDLE_SECONDS - 1)
+        assert runtime.expired(runtime.idle_since + WAITING_IDLE_SECONDS)
+        runtime.idle_since -= WAITING_IDLE_SECONDS
+        assert client.portal.call(session_manager.expire_session, session_id)
+        assert session_manager.get_session(session_id) == "404"
+        assert task.done()
+        assert client.get("/api/sessions").json() == {"sessions": []}
+        db = testing_session()
+        assert db.get(GameSession, int(session_id)).state == "closed"
+        saved_shell = db.get(SessionShell, (int(session_id), 42)).shell
+        assert saved_shell["vars"]["kept_after_expiry"] == "yes"
+        db.close()
+        with client.websocket_connect(f"/ws/{session_id}") as ws:
+            token = authorization(42, "creator")["Authorization"].split(" ", 1)[1]
+            ws.send_json({"token": token})
+            with pytest.raises(WebSocketDisconnect) as rejected:
+                ws.receive_json()
+            assert rejected.value.code == 4404
+
+
+def test_only_host_can_close_game_and_sandbox_cannot_be_closed():
+    client, _testing_session = make_client()
+    with client:
+        response = client.post("/api/session_create", json=creation_payload("Versus"))
+        session_id = str(response.json()["session_id"])
+        guest = client.post(
+            f"/api/sessions/{session_id}/close",
+            headers=authorization(43, "guest"),
+        )
+        assert guest.status_code == 403
+        assert session_manager.get_session(session_id) != "404"
+        client.portal.call(session_manager.remove_session, session_id)
+
+        sandbox_id = str(client.post("/api/sandbox/42").json()["session_id"])
+        assert client.post(f"/api/sessions/{sandbox_id}/close").status_code == 400
+        assert session_manager.get_session(sandbox_id) != "404"
+        client.portal.call(session_manager.remove_session, sandbox_id)
+
+
+def test_scheduler_reaps_idle_session_without_an_api_request():
+    client, testing_session = make_client()
+    with client:
+        session_id = str(client.post(
+            "/api/session_create", json=creation_payload("Versus")
+        ).json()["session_id"])
+        runtime = session_manager.get_session(session_id)
+        runtime.idle_since -= WAITING_IDLE_SECONDS
+
+        async def wait_for_reap():
+            for _ in range(40):
+                if session_manager.get_session(session_id) == "404":
+                    return
+                await asyncio.sleep(0.05)
+            raise AssertionError("Idle scheduler did not evict its session")
+
+        client.portal.call(wait_for_reap)
+        db = testing_session()
+        assert db.get(GameSession, int(session_id)).state == "closed"
+        db.close()
+
+
+def test_runtime_retention_depends_on_state_and_connection():
+    from network.SessionManger import GameSession
+
+    runtime = GameSession("retention")
+    now = runtime.created_at
+    runtime.state = "running"
+    assert not runtime.expired(now + RUNNING_IDLE_SECONDS - 1)
+    assert runtime.expired(now + RUNNING_IDLE_SECONDS)
+    runtime.is_sandbox = True
+    assert runtime.expired(now + SANDBOX_IDLE_SECONDS)
+    runtime.idle_since = None
+    runtime.connections[object()] = "connected"
+    assert not runtime.expired(now + CONNECTED_MAX_AGE - 1)
+    assert runtime.expired(now + CONNECTED_MAX_AGE)
+    runtime.state = "finished"
+    runtime.finished_at = now
+    assert not runtime.expired(now + FINISHED_SECONDS - 1)
+    assert runtime.expired(now + FINISHED_SECONDS)
 
 
 def test_create_session_hands_complete_config_to_game_manager():

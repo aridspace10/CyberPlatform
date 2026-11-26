@@ -1,6 +1,11 @@
 import asyncio
+import logging
+from time import monotonic
 from typing import Dict, Literal, Set
 
+from db.modals import GameSession as SavedGameSession
+from db.modals import SessionShell
+from db.session import SessionLocal
 from fastapi import WebSocket
 from game.commandline import CommandLine, CommandResult
 from game.Events import ProcessTerminatedEvent
@@ -12,6 +17,16 @@ from game.ProcessManager import ProcessManager
 from game.Scheduler import Scheduler
 from game.ShellState import ShellState
 from services.session_logging import SessionLogger
+
+logger = logging.getLogger(__name__)
+
+# Connected games may run for a day. Empty lobbies, abandoned games, and
+# completed scoreboards have shorter retention. Sandbox data remains in the DB.
+CONNECTED_MAX_AGE = 24 * 60 * 60
+WAITING_IDLE_SECONDS = 60 * 60
+RUNNING_IDLE_SECONDS = 30 * 60
+SANDBOX_IDLE_SECONDS = 15 * 60
+FINISHED_SECONDS = 5 * 60
 
 Username = str
 
@@ -49,6 +64,11 @@ class GameSession:
         self.name = "Test"
         self.is_sandbox = False
         self.closed = False
+        self.manager: SessionManager | None = None
+        self.session_factory = SessionLocal
+        self.created_at = monotonic()
+        self.idle_since: float | None = self.created_at
+        self.finished_at: float | None = None
 
         # Player and Connecitons
         self.players: Dict[Username, Player] = {}
@@ -143,7 +163,11 @@ class GameSession:
         else:
             self.game_manager.finished = True
             self.state = "finished"
+            self.finished_at = monotonic()
             await self.broadcast_game_state()
+            if self.manager is not None:
+                self.manager.persist_session(self, state="finished")
+            self.cancel_background_jobs()
 
     async def broadcast_game_state(self) -> None:
         for websocket, username in list(self.connections.items()):
@@ -156,6 +180,21 @@ class GameSession:
 
     async def scheduler_loop(self):
         while True:
+            if self.state == "finished" and self.finished_at is not None:
+                remaining = FINISHED_SECONDS - (monotonic() - self.finished_at)
+                await asyncio.sleep(max(0, remaining))
+                if (
+                    self.manager is not None
+                    and await self.manager.expire_session(self.session_id)
+                ):
+                    return
+                await asyncio.sleep(60)
+                continue
+            if self.manager is not None and self.expired():
+                if await self.manager.expire_session(self.session_id):
+                    return
+                await asyncio.sleep(60)
+                continue
             self.scheduler.tick()
             await self.finish_round_if_ready()
 
@@ -240,6 +279,24 @@ class GameSession:
 
             await asyncio.sleep(1)
 
+    def expired(self, now: float | None = None) -> bool:
+        now = monotonic() if now is None else now
+        if self.state == "finished":
+            return (
+                self.finished_at is not None
+                and now - self.finished_at >= FINISHED_SECONDS
+            )
+        if not self.connections and self.idle_since is None:
+            self.idle_since = now
+        if self.idle_since is not None:
+            limit = (
+                SANDBOX_IDLE_SECONDS if self.is_sandbox else
+                WAITING_IDLE_SECONDS if self.state == "waiting" else
+                RUNNING_IDLE_SECONDS
+            )
+            return now - self.idle_since >= limit
+        return now - self.created_at >= CONNECTED_MAX_AGE
+
     def ensure_scheduler(self) -> asyncio.Task[None]:
         if self.scheduler_task is None or self.scheduler_task.done():
             self.scheduler_task = asyncio.create_task(self.scheduler_loop())
@@ -247,18 +304,12 @@ class GameSession:
 
     async def stop_scheduler(self) -> None:
         self.closed = True
-        for player in self.players.values():
-            for pid in list(player.shell.background_jobs):
-                self.commandline.cancel_background_job(pid, player.shell)
-                for child in player.shell.background_children.pop(pid, []):
-                    self.process_manager.processes.pop(child.pid, None)
-                self.process_manager.processes.pop(pid, None)
-                player.shell.background_jobs.pop(pid, None)
+        self.cancel_background_jobs()
         task = self.scheduler_task
         if task is None:
             return
 
-        if not task.done():
+        if not task.done() and task is not asyncio.current_task():
             task.cancel()
             try:
                 await task
@@ -266,8 +317,18 @@ class GameSession:
                 pass
         self.scheduler_task = None
 
+    def cancel_background_jobs(self) -> None:
+        for player in self.players.values():
+            for pid in list(player.shell.background_jobs):
+                self.commandline.cancel_background_job(pid, player.shell)
+                for child in player.shell.background_children.pop(pid, []):
+                    self.process_manager.processes.pop(child.pid, None)
+                self.process_manager.processes.pop(pid, None)
+                player.shell.background_jobs.pop(pid, None)
+
     async def set_state(self, new_state: str):
         self.state = new_state
+        self.finished_at = monotonic() if new_state == "finished" else None
         await self.broadcast_game_state()
 
     def reset_sandbox_player(self, player: Player, shell_data: dict) -> None:
@@ -293,6 +354,7 @@ class GameSession:
         if username in self.connections.values():
             raise SessionAlreadyConnected
         self.connections[websocket] = username
+        self.idle_since = None
 
         if username not in self.players:
             # First time joining
@@ -332,6 +394,8 @@ class GameSession:
         player = self.players.get(username)
         if player and player.websocket is websocket:
             player.websocket = None
+        if not self.connections:
+            self.idle_since = monotonic()
 
         await self.broadcast({"type": "system", "message": f"{username} disconnected"})
         await self.broadcast_game_state()
@@ -355,15 +419,18 @@ class GameSession:
 class SessionManager:
     def __init__(self):
         self.sessions: Dict[str, GameSession] = {}
+        self.session_factory = SessionLocal
 
     def get_session(self, session_id: str) -> GameSession | Literal["404"]:
         if session_id not in self.sessions:
             return "404"
         return self.sessions[session_id]
 
-    def add_session(self, session_id: str, name: str):
+    def add_session(self, session_id: str, name: str, session_factory=None):
         new_session = GameSession(session_id)
         new_session.name = name
+        new_session.manager = self
+        new_session.session_factory = session_factory or self.session_factory
         new_session.ensure_scheduler()
         self.sessions[session_id] = new_session
         return self.sessions[session_id]
@@ -374,6 +441,56 @@ class SessionManager:
             return False
         await session.stop_scheduler()
         return True
+
+    def persist_session(self, session: GameSession, state: str | None = None,
+                        db=None) -> bool:
+        if not session.session_id.isdecimal():
+            return True
+        owned_db = db is None
+        db = db or session.session_factory()
+        try:
+            saved = db.get(SavedGameSession, int(session.session_id))
+            if saved is None:
+                return False
+            if state is not None:
+                saved.state = state
+            for player in session.players.values():
+                shell = db.get(SessionShell, (saved.id, int(player.user_id)))
+                if shell is not None:
+                    shell.shell = player.serialize()
+            db.commit()
+            return True
+        except Exception:
+            db.rollback()
+            logger.exception("Could not persist session %s", session.session_id)
+            return False
+        finally:
+            if owned_db:
+                db.close()
+
+    async def expire_session(self, session_id: str) -> bool:
+        session = self.sessions.get(session_id)
+        if session is None:
+            return False
+        state = None if session.is_sandbox else (
+            "finished" if session.state == "finished" else "closed"
+        )
+        if not self.persist_session(session, state=state):
+            return False
+        for websocket in list(session.connections):
+            try:
+                await websocket.close(code=1001)
+            except Exception:
+                pass
+        return await self.remove_session(session_id)
+
+    async def close_all(self) -> None:
+        for session_id in list(self.sessions):
+            session = self.sessions[session_id]
+            self.persist_session(
+                session, state="finished" if session.state == "finished" else None
+            )
+            await self.remove_session(session_id)
 
     async def set_session_state(self, session_id: str, new_state: str) -> bool:
         session = self.get_session(session_id)

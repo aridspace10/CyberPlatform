@@ -9,7 +9,7 @@ from db.modals import JoinRequest, Scenario, ScenarioToSession, SessionShell
 from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from game.GameManager import GameManager, QUESTION_MODES
+from game.GameManager import QUESTION_MODES, GameManager
 from jose import JWTError
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,7 +21,7 @@ from services.session_service import (
     update_session_shell,
 )
 from services.user_service import get_user_by_id, is_friend
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -131,6 +131,8 @@ def list_sessions(
             continue
         runtime = session_manager.get_session(str(saved.id))
         state = runtime.state if runtime != "404" else saved.state
+        if state in ("finished", "closed"):
+            continue
         member_count = db.query(SessionShell).filter_by(SessionID=saved.id).count()
         member = (
             user_id is not None
@@ -218,7 +220,8 @@ async def session_create(
         db.flush()
 
         runtime_session = session_manager.add_session(
-            str(database_session.id), config.name
+            str(database_session.id), config.name,
+            sessionmaker(bind=db.get_bind()),
         )
         runtime_session.state = initial_state
         runtime_session.game_manager.set_config(config_data)
@@ -389,7 +392,9 @@ def accept_session_request(
         raise HTTPException(status_code=409, detail="Session configuration unavailable")
     runtime = session_manager.get_session(str(session_id))
     if runtime == "404":
-        runtime = session_manager.add_session(str(session_id), session.name or "")
+        runtime = session_manager.add_session(
+            str(session_id), session.name or "", sessionmaker(bind=db.get_bind())
+        )
         runtime.state = session.state or "waiting"
         runtime.game_manager.set_config(scenario.config)
     db.add(
@@ -471,7 +476,9 @@ async def get_sandbox(
             db.add(database_session)
             db.flush()
             session_id = str(database_session.id)
-            session = session_manager.add_session(session_id, "Sandbox")
+            session = session_manager.add_session(
+                session_id, "Sandbox", sessionmaker(bind=db.get_bind())
+            )
             session.is_sandbox = True
             session.state = "running"
             session.game_manager = game_manager
@@ -499,7 +506,9 @@ async def get_sandbox(
     else:
         # Tutorial Exists in db, bring to session manger if needed (add please)
         if session_manager.get_session(str(tut.id)) == "404":
-            session = session_manager.add_session(str(tut.id), "Sandbox")
+            session = session_manager.add_session(
+                str(tut.id), "Sandbox", sessionmaker(bind=db.get_bind())
+            )
             session.state = "running"
             session.is_sandbox = True
         else:
@@ -536,11 +545,53 @@ async def update_session_state(
         raise HTTPException(
             status_code=403, detail="Only the host can change session state"
         )
+    if body.state not in ("waiting", "running", "finished"):
+        raise HTTPException(status_code=400, detail="Invalid session state")
     success = await session_manager.set_session_state(session_id, body.state)
     if not success:
         raise HTTPException(status_code=400, detail="Invalid session or state")
+    database_session.state = body.state
+    db.commit()
 
     return {"session_id": session_id, "state": body.state}
+
+
+@router.post("/sessions/{session_id}/close")
+async def close_session(
+    session_id: int,
+    user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    saved = get_session(db, session_id)
+    if saved is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if saved.creatorID != user_id:
+        raise HTTPException(status_code=403, detail="Only the host can close a session")
+    sandbox = get_sandbox_session(db, user_id)
+    if sandbox is not None and sandbox.id == saved.id:
+        raise HTTPException(status_code=400, detail="Use Exit to leave Sandbox")
+    runtime = session_manager.get_session(str(session_id))
+    state = (
+        "finished"
+        if (
+            (runtime != "404" and runtime.state == "finished")
+            or saved.state == "finished"
+        )
+        else "closed"
+    )
+    if runtime != "404":
+        if not session_manager.persist_session(runtime, state=state, db=db):
+            raise HTTPException(status_code=500, detail="Could not close session")
+        for websocket in list(runtime.connections):
+            try:
+                await websocket.close(code=1001)
+            except Exception:
+                pass
+        await session_manager.remove_session(str(session_id))
+    else:
+        saved.state = state
+        db.commit()
+    return {"session_id": str(session_id), "state": state}
 
 
 @router.post("/sessions/{session_id}/save")

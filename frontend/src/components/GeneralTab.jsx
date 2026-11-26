@@ -1,17 +1,19 @@
 import { useSession } from "./SessionContext";
 import { useNavigate } from "react-router";
 import { useState } from "react";
-import { downloadSessionDiagnostics } from "../api/sessions";
+import { closeSession, downloadSessionDiagnostics } from "../api/sessions";
 import { saveSessionRequest } from "../api/saveSession";
 import { API_URL } from "../api/config";
 import "./Tabs.css";
 
-export default function GeneralTab({ isSandbox, onResetSandbox, resetPending, resetError }) {
+export default function GeneralTab({ isSandbox, isHost, onResetSandbox, resetPending, resetError }) {
     const { sessionId, addCommandLine } = useSession();
     const navigate = useNavigate();
     const [diagnosticsError, setDiagnosticsError] = useState("");
     const [saveError, setSaveError] = useState("");
     const [saving, setSaving] = useState(false);
+    const [exitError, setExitError] = useState("");
+    const [exiting, setExiting] = useState(false);
 
     const handleSave = async () => {
         if (saving) return;
@@ -36,8 +38,20 @@ export default function GeneralTab({ isSandbox, onResetSandbox, resetPending, re
         }
     };
 
-    const handleExit = () => {
-        navigate("/")
+    const handleExit = async () => {
+        if (exiting) return;
+        if (isHost && !isSandbox) {
+            setExiting(true);
+            setExitError("");
+            try {
+                await closeSession(sessionId);
+            } catch (error) {
+                setExitError(error.message);
+                setExiting(false);
+                return;
+            }
+        }
+        navigate("/");
     }
 
     const handleReportIssue = () => {
@@ -67,7 +81,8 @@ export default function GeneralTab({ isSandbox, onResetSandbox, resetPending, re
                 </button>
                 {resetError && <p role="alert">{resetError}</p>}
             </>}
-            <button className="tab-button" onClick={handleExit}>Exit</button>
+            <button className="tab-button" onClick={handleExit} disabled={exiting}>{exiting ? "Closing..." : "Exit"}</button>
+            {exitError && <p role="alert">{exitError}</p>}
         </div>
     )
 }
