@@ -6,6 +6,7 @@ from db.seed import seed_db
 from db.session import Base, SessionLocal, engine
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from network.SessionManger import session_manager
 from network.WebsocketServer import router as websocket_router
 from routers import contact, users
 
@@ -25,7 +26,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # shutdown
-    pass
+    await session_manager.close_all()
 
 
 app = FastAPI(lifespan=lifespan)

@@ -302,7 +302,7 @@ export default function Game() {
                         </button>
                     ))}
                 </div>
-                {activeTab === "General" && <GeneralTab isSandbox={isSandbox} onResetSandbox={handleResetSandbox} resetPending={resetPending} resetError={resetError} />}
+                {activeTab === "General" && <GeneralTab isSandbox={isSandbox} isHost={String(gameData?.creatorID) === String(user?.id)} onResetSandbox={handleResetSandbox} resetPending={resetPending} resetError={resetError} />}
                 {activeTab === "Settings" && <SettingsTab isSandbox={isSandbox} settings={sandboxSettings} onChange={handleSandboxSettingChange} onReset={handleResetSandboxSettings} />}
                 {activeTab === "Environment" && <EnvironmentTab />}
                 {activeTab === "Chat" && <ChatTab wsRef={wsRef} chatLog={chatLog} username={user?.username} />}

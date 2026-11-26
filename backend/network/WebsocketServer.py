@@ -11,7 +11,7 @@ from jose import JWTError
 from network.SessionManger import Player, SessionAlreadyConnected, session_manager
 from services.session_service import get_session, get_session_shell, is_sandbox_session
 from services.user_service import get_user_by_id, is_friend
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.orm.attributes import flag_modified
 
 router = APIRouter()
@@ -170,6 +170,13 @@ async def websocket_endpoint(
     if database_id is not None and database_session is None:
         await websocket.close(code=4404)
         return
+    if (
+        database_session is not None
+        and database_session.state in ("finished", "closed")
+        and session_manager.get_session(session_id) == "404"
+    ):
+        await websocket.close(code=4404)
+        return
     if database_session is not None:
         user = get_user_by_id(db, int(user_id))
         if user is None or not user.username:
@@ -224,7 +231,9 @@ async def websocket_endpoint(
             await websocket.close()
             return
         session = session_manager.add_session(
-            session_id, ses_db.name if ses_db.name else ""
+            session_id,
+            ses_db.name if ses_db.name else "",
+            sessionmaker(bind=db.get_bind()),
         )
         session.state = ses_db.state or "waiting"
         session.is_sandbox = is_sandbox_session(db, ses_db.id)

@@ -81,6 +81,7 @@ export const requestSessionJoin = sessionId => sessionAction(`/session/${session
 export const getSessionRequests = sessionId => sessionAction(`/session/${sessionId}/requests`);
 export const answerSessionRequest = (sessionId, userId, decision) =>
     sessionAction(`/session/${sessionId}/requests/${userId}/${decision}`, "POST");
+export const closeSession = sessionId => sessionAction(`/sessions/${sessionId}/close`, "POST");
 
 export async function downloadSessionDiagnostics(sessionId) {
     const token = localStorage.getItem("token");

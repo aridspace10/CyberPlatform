@@ -28,7 +28,7 @@ after(async () => {
     dom.window.close();
 });
 
-async function renderSaveButton(fetcher) {
+async function renderSaveButton(fetcher, props = {}) {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -40,7 +40,7 @@ async function renderSaveButton(fetcher) {
         root.render(createElement(MemoryRouter, null,
             createElement(SessionContext.Provider, {
                 value: { sessionId: "7", addCommandLine: line => lines.push(line) },
-            }, createElement(GeneralTab))));
+            }, createElement(GeneralTab, props))));
     });
 
     return {
@@ -119,6 +119,43 @@ test("Save disables repeat clicks while the request is pending", async () => {
         assert.equal(requests, 1);
         await act(async () => resolveRequest({ ok: true }));
         assert.equal(ui.button().disabled, false);
+    } finally {
+        await ui.unmount();
+    }
+});
+
+test("Host Exit closes a game before leaving", async () => {
+    let request;
+    const ui = await renderSaveButton(async (...args) => {
+        request = args;
+        return { ok: true, json: async () => ({ state: "closed" }) };
+    }, { isHost: true, isSandbox: false });
+    try {
+        await act(async () => {
+            [...ui.container.querySelectorAll("button")].find(button => button.textContent === "Exit")
+                .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        assert.deepEqual(request, ["http://localhost:8000/api/sessions/7/close", {
+            method: "POST",
+            headers: { Authorization: "Bearer valid-token" },
+        }]);
+    } finally {
+        await ui.unmount();
+    }
+});
+
+test("Host Exit reports close failure and stays in the game", async () => {
+    const ui = await renderSaveButton(async () => ({
+        ok: false,
+        json: async () => ({ detail: "Could not close session" }),
+    }), { isHost: true, isSandbox: false });
+    try {
+        await act(async () => {
+            [...ui.container.querySelectorAll("button")].find(button => button.textContent === "Exit")
+                .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        assert.match(ui.container.querySelector("[role=alert]").textContent, /Could not close session/);
+        assert.equal([...ui.container.querySelectorAll("button")].find(button => button.textContent === "Exit").disabled, false);
     } finally {
         await ui.unmount();
     }
