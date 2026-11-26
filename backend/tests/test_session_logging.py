@@ -3,6 +3,7 @@
 import io
 import json
 import os
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from zipfile import ZipFile
 
@@ -82,6 +83,31 @@ def test_archive_removes_expired_records_and_filters_users(tmp_path, monkeypatch
     assert len(logger.activity_path.read_text(encoding="utf-8").splitlines()) == 2
 
 
+def test_configured_retention_shortens_export_window(tmp_path, monkeypatch):
+    monkeypatch.setenv("CYBERPLATFORM_LOG_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        session_logging,
+        "settings",
+        replace(session_logging.settings, log_retention_days=7),
+    )
+    logger = session_logging.SessionLogger("short-retention")
+    _activity(logger)
+    fresh = json.loads(logger.activity_path.read_text(encoding="utf-8"))
+    expired = {
+        **fresh,
+        "timestamp": (datetime.now(timezone.utc) - timedelta(days=8)).isoformat(),
+    }
+    with logger.activity_path.open("a", encoding="utf-8") as stream:
+        stream.write(json.dumps(expired) + "\n")
+
+    with ZipFile(io.BytesIO(logger.export_user_archive("42"))) as archive:
+        records = [
+            json.loads(line)
+            for line in archive.read("activity.jsonl").decode("utf-8").splitlines()
+        ]
+    assert records == [fresh]
+
+
 def test_old_session_logs_are_pruned_without_touching_unrelated_paths(
     tmp_path, monkeypatch
 ):
@@ -121,7 +147,11 @@ def test_log_pruning_does_not_follow_a_session_named_symlink(tmp_path):
 
 def test_diagnostic_file_size_is_bounded(tmp_path, monkeypatch):
     monkeypatch.setenv("CYBERPLATFORM_LOG_DIR", str(tmp_path))
-    monkeypatch.setattr(session_logging, "MAX_LOG_FILE_BYTES", 1024)
+    monkeypatch.setattr(
+        session_logging,
+        "settings",
+        replace(session_logging.settings, max_log_file_bytes=1024),
+    )
     logger = session_logging.SessionLogger("session-3")
 
     for index in range(40):

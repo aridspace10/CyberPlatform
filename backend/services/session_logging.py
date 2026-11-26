@@ -17,15 +17,15 @@ from pathlib import Path
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from services.security_settings import settings
+
 _locks_guard = threading.Lock()
 _session_locks: dict[Path, threading.Lock] = {}
 _prune_guard = threading.Lock()
 _last_root_prune: dict[Path, datetime] = {}
 _last_file_prune: dict[Path, datetime] = {}
 
-LOG_RETENTION = timedelta(days=30)
 PRUNE_INTERVAL = timedelta(days=1)
-MAX_LOG_FILE_BYTES = 5 * 1024 * 1024
 MAX_LOG_RECORD_BYTES = 32 * 1024
 REDACTED_INPUT = "[redacted]"
 _SESSION_DIRECTORY = re.compile(r"[A-Za-z0-9_.-]+-[0-9a-f]{64}\Z")
@@ -140,7 +140,9 @@ class SessionLogger:
                 for path in (self.activity_path, self.error_path):
                     try:
                         _prune_file(
-                            path, datetime.now(timezone.utc), MAX_LOG_FILE_BYTES
+                            path,
+                            datetime.now(timezone.utc),
+                            settings.max_log_file_bytes,
                         )
                     except OSError:
                         # A read-only log may still be safe to export after filtering.
@@ -152,7 +154,9 @@ class SessionLogger:
     @staticmethod
     def _read_user_records(path: Path, user_id: str) -> str:
         try:
-            cutoff = datetime.now(timezone.utc) - LOG_RETENTION
+            cutoff = datetime.now(timezone.utc) - timedelta(
+                days=settings.log_retention_days
+            )
             with path.open("r", encoding="utf-8") as log_file:
                 records = []
                 for line in log_file:
@@ -186,7 +190,7 @@ class SessionLogger:
                 last_prune = _last_file_prune.get(path)
                 over_limit = (
                     path.exists()
-                    and path.stat().st_size + len(encoded) > MAX_LOG_FILE_BYTES
+                    and path.stat().st_size + len(encoded) > settings.max_log_file_bytes
                 )
                 if (
                     last_prune is None
@@ -196,9 +200,9 @@ class SessionLogger:
                     # Leave headroom after rotation so a full log does not
                     # need a complete rewrite for every following input.
                     keep_bytes = (
-                        MAX_LOG_FILE_BYTES // 2
+                        settings.max_log_file_bytes // 2
                         if over_limit
-                        else MAX_LOG_FILE_BYTES - len(encoded)
+                        else settings.max_log_file_bytes - len(encoded)
                     )
                     _prune_file(path, now, keep_bytes)
                     _last_file_prune[path] = now
@@ -242,7 +246,7 @@ def _prune_expired_directories(root: Path, now: datetime | None = None) -> None:
             children = list(root.iterdir())
         except OSError:
             return
-        cutoff = (now - LOG_RETENTION).timestamp()
+        cutoff = (now - timedelta(days=settings.log_retention_days)).timestamp()
         for child in children:
             if not _SESSION_DIRECTORY.fullmatch(child.name):
                 continue
@@ -269,7 +273,7 @@ def _prune_file(path: Path, now: datetime, max_bytes: int) -> None:
     """Keep only recent valid records, capped by the most recent bytes."""
     if not path.is_file():
         return
-    cutoff = now - LOG_RETENTION
+    cutoff = now - timedelta(days=settings.log_retention_days)
     records: deque[bytes] = deque()
     total = 0
     with path.open("rb") as source:

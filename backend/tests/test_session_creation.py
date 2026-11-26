@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import api.sessions as session_routes
 import pytest
 from api.sessions import router
@@ -96,7 +98,11 @@ def authorization(user_id: int, username: str) -> dict:
 
 
 def test_session_creation_caps_active_sessions_per_user(monkeypatch):
-    monkeypatch.setattr(session_routes, "ACTIVE_SESSION_LIMIT", 2)
+    monkeypatch.setattr(
+        session_routes,
+        "settings",
+        replace(session_routes.settings, active_session_limit=2),
+    )
     client, testing_session = make_client()
     created = []
     with client:
@@ -128,7 +134,15 @@ def test_session_creation_caps_active_sessions_per_user(monkeypatch):
 
 
 def test_session_creation_rate_limit_recovers_in_next_window(monkeypatch):
-    monkeypatch.setattr(session_routes, "SESSION_CREATION_RATE_LIMIT", 2)
+    monkeypatch.setattr(
+        session_routes,
+        "settings",
+        replace(
+            session_routes.settings,
+            session_creation_rate_limit=2,
+            session_creation_window_seconds=60,
+        ),
+    )
     now = [3600.0]
     monkeypatch.setattr(session_routes.time, "time", lambda: now[0])
     client, testing_session = make_client()
@@ -143,16 +157,16 @@ def test_session_creation_rate_limit_recovers_in_next_window(monkeypatch):
 
         rejected = client.post("/api/session_create", json=creation_payload("Versus"))
         assert rejected.status_code == 429
-        assert rejected.headers["Retry-After"] == "3600"
+        assert rejected.headers["Retry-After"] == "60"
 
         db = testing_session()
         assert db.query(GameSession).count() == 2
         assert db.query(UserRateLimit).filter_by(
-            user_id=42, action="session_create", bucket=1
+            user_id=42, action="session_create", bucket=60
         ).one().count == 2
         db.close()
 
-        now[0] += 3600
+        now[0] += 60
         recovered = client.post("/api/session_create", json=creation_payload("Versus"))
         assert recovered.status_code == 201
         created.append(str(recovered.json()["session_id"]))

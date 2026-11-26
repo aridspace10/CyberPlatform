@@ -20,6 +20,7 @@ from game.GameManager import QUESTION_MODES, GameManager
 from jose import JWTError
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
+from services.security_settings import settings
 from services.session_logging import SessionLogger
 from services.session_service import (
     get_sandbox_session,
@@ -34,9 +35,6 @@ from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
-SESSION_CREATION_WINDOW_SECONDS = 3600
-SESSION_CREATION_RATE_LIMIT = 20
-ACTIVE_SESSION_LIMIT = 10
 
 
 def enforce_session_creation_limits(db: Session, user_id: int) -> None:
@@ -48,7 +46,7 @@ def enforce_session_creation_limits(db: Session, user_id: int) -> None:
         )
         .count()
     )
-    if active_count >= ACTIVE_SESSION_LIMIT:
+    if active_count >= settings.active_session_limit:
         raise HTTPException(
             status_code=429,
             detail=(
@@ -58,7 +56,7 @@ def enforce_session_creation_limits(db: Session, user_id: int) -> None:
         )
 
     now = int(time.time())
-    bucket = now // SESSION_CREATION_WINDOW_SECONDS
+    bucket = now // settings.session_creation_window_seconds
     statement = (
         sqlite_insert(UserRateLimit)
         .values(user_id=user_id, action="session_create", bucket=bucket, count=1)
@@ -69,9 +67,10 @@ def enforce_session_creation_limits(db: Session, user_id: int) -> None:
         .returning(UserRateLimit.count)
     )
     count = db.execute(statement).scalar_one()
-    if count > SESSION_CREATION_RATE_LIMIT:
+    if count > settings.session_creation_rate_limit:
         retry_after = (
-            SESSION_CREATION_WINDOW_SECONDS - now % SESSION_CREATION_WINDOW_SECONDS
+            settings.session_creation_window_seconds
+            - now % settings.session_creation_window_seconds
         )
         raise HTTPException(
             status_code=429,

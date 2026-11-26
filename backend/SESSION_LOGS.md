@@ -35,7 +35,7 @@ token and verifies their session membership; it filters both logs to that user's
 ID so another player's commands and tracebacks are not included. Users can attach
 the downloaded ZIP to a support report.
 
-The retention target is 30 days. Old records in active files are removed on
+The default retention target is 30 days. Old records in active files are removed on
 later writes or downloads, and each JSONL file is capped at 5 MiB. Inactive
 session log directories older than 30 days are removed when a new session
 logger starts; cleanup runs at most once daily per backend process. A dormant
@@ -43,6 +43,9 @@ deployment may retain old files until it next handles a session, so operators
 should also schedule cleanup for strict retention requirements. Backups of the
 log root need their own retention policy. Keep any logs needed to investigate
 an active issue outside the automatic cleanup path.
+
+The retention period and per-file size cap can be set through the validated
+environment overrides in [Security policy settings](SECURITY_SETTINGS.md).
 
 For a hosted frontend, set `VITE_BACKEND_URL` at build time to the backend's
 public HTTP(S) origin. Set `CYBERPLATFORM_CORS_ORIGINS` on the backend to a
