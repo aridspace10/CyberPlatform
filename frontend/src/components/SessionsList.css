@@ -2,6 +2,7 @@
 .sessions-list-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
 .sessions-list-heading h2 { margin-top: 14px; font-size: clamp(30px, 3vw, 42px); letter-spacing: -0.03em; }
 .sessions-list-heading h2 span { margin-left: 10px; color: var(--home-green); font-family: "Share Tech Mono", monospace; font-size: 16px; font-weight: 400; letter-spacing: 0; }
+.sessions-refresh-note { margin: 8px 0 0; color: var(--home-muted); font-size: 13px; }
 .sessions-list-heading button, .sessions-error button { padding: 8px 0; border: 0; border-bottom: 1px solid var(--home-green); border-radius: 0; background: transparent; color: var(--home-green); font-size: 15px; font-weight: 700; cursor: pointer; }
 .sessions-list-heading button:disabled { opacity: 0.5; cursor: wait; }
 .sessions-message, .sessions-empty { padding: 32px; border: 1px solid var(--home-line); background: var(--home-panel); color: var(--home-muted); }
