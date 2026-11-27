@@ -79,12 +79,15 @@ export function AuthProvider({ children }) {
   }, [loadUser]);
 
   const signup = async (username, email, password, cpassword) => {
-    if (!validator.isEmail(email)) {
+    const normalizedUsername = username.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!validator.isEmail(normalizedEmail, { allow_utf8_local_part: false, allow_ip_domain: false })) {
         return "Email given is not valid"
     }
 
-    if (username.length < 4) {
-        return "Username must be at least 4 characters"
+    if (normalizedUsername.length < 4 || normalizedUsername.length > 32 || /\s/.test(normalizedUsername)) {
+        return "Username must be 4–32 characters with no spaces"
     }
 
     if (!schema.validate(password)) {
@@ -94,7 +97,7 @@ export function AuthProvider({ children }) {
     if (password !== cpassword) {
         return "Password and Confirm Password are not the same"
     }
-    return await createUser(username, email, password);
+    return await createUser(normalizedUsername, normalizedEmail, password);
   }
 
 

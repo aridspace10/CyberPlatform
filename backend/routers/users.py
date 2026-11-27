@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta, timezone
 
 from db.authentication import (
@@ -18,7 +19,8 @@ from db.modals import (
 from db.session import SessionLocal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from network.SessionManger import session_manager
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from pydantic_core import PydanticCustomError
 from services.auth_rate_limit import enforce_auth_rate_limit
 from services.user_service import friendship_between
 from sqlalchemy import or_, text
@@ -26,11 +28,62 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+PASSWORD_MESSAGE = (
+    "Password must be 8–100 characters with uppercase and lowercase letters, "
+    "a number, and a symbol (no spaces)"
+)
+EMAIL_PATTERN = re.compile(
+    r"([A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]{1,64})@"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}"
+)
+
 
 class UserCreate(BaseModel):
     username: str
     email: str
     password: str
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str) -> str:
+        username = value.strip()
+        if not 4 <= len(username) <= 32 or any(char.isspace() for char in username):
+            raise PydanticCustomError(
+                "invalid_username", "Username must be 4–32 characters with no spaces"
+            )
+        return username
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_address(cls, value: str) -> str:
+        email = value.strip().lower()
+        match = EMAIL_PATTERN.fullmatch(email)
+        if (
+            len(email) > 254
+            or match is None
+            or match[1].startswith(".")
+            or match[1].endswith(".")
+            or ".." in match[1]
+        ):
+            raise PydanticCustomError("invalid_email", "Email given is not valid")
+        return email
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if not (
+            8 <= len(value) <= 100
+            and re.search(r"[A-Z]", value)
+            and re.search(r"[a-z]", value)
+            and re.search(r"[0-9]", value)
+            and re.search(r"[^A-Za-z0-9\s]", value)
+            and not any(char.isspace() for char in value)
+        ):
+            raise PydanticCustomError(
+                "invalid_password",
+                PASSWORD_MESSAGE,
+            )
+        return value
 
 
 class FriendRequestCreate(BaseModel):

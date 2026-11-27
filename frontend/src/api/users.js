@@ -16,7 +16,8 @@ export async function createUser(username, email, password) {
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(typeof data.detail === "string" ? data.detail : "Could not create account. Please try again.");
+    const detail = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
+    throw new Error(typeof detail === "string" ? detail : "Could not create account. Please try again.");
   }
   return data;
 }
