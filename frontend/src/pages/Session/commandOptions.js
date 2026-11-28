@@ -1,4 +1,8 @@
 export const COMMANDS = {
+    tail: { description: "Read the end of a file", groups: [{ name: "Output", options: [
+        ["Last Lines", "Show a requested number of last lines."],
+        ["Last Bytes", "Show a requested number of last bytes."],
+    ] }] },
     ls: { description: "List files and folders", groups: [{ name: "Listing", options: [
         ["Show Hidden", "Include hidden entries."], ["Long Listing", "Show detailed file information."],
     ] }] },

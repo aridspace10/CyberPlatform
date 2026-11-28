@@ -1,10 +1,76 @@
 import pytest
 from game.filenode import FileNode
 from game.filesystem import FileSystem
+from game.GameManager import GameManager
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import assert_directory_error
 from tests.command_helpers import assert_help
+
+
+@pytest.mark.parametrize(
+    ("options", "mode"),
+    [([], "basic"), (["Last Lines"], "lines"), (["Last Bytes"], "bytes")],
+)
+def test_tail_minigame_requires_source_count_and_output(cl, options, mode):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Tail practice", "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"tail": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1, "seed": 63},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
+    assert question["mode"] == mode
+    assert question["example"] != goal.solution
+    source_path = goal.solution.split()[-1]
+    assert source_path in question["prompt"]
+    assert source_path not in question["example"]
+
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    source = player.fs.resolve(source_path)
+    decoy = "/reports/other.txt"
+    player.fs.add_file(decoy)
+    player.fs.resolve(decoy).set_data(source.get_data())
+    wrong_source = cl.enter_command(goal.solution.replace(source_path, decoy), player)
+    assert wrong_source.status == 0
+    assert tuple(wrong_source.stdout) == goal.expected_stdout
+    assert not manager.record_attempt("1", player, wrong_source.stdout)
+
+    if mode == "basic":
+        wrong_count_command = f"tail -n 9 {source_path}"
+    else:
+        flag = "-c" if mode == "bytes" else "-n"
+        wrong_count_command = f"tail {flag} {goal.count - 1} {source_path}"
+    wrong_count = cl.enter_command(wrong_count_command, player)
+    assert wrong_count.status == 0
+    assert not manager.record_attempt("1", player, wrong_count.stdout)
+
+    correct = cl.enter_command(goal.solution, player)
+    assert correct.status == 0
+    assert tuple(correct.stdout) == goal.expected_stdout
+    assert manager.record_attempt("1", player, correct.stdout)
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
+
+
+def test_tail_minigame_mixed_pool_has_distinct_sources():
+    manager = GameManager()
+    manager.set_config({
+        "name": "Mixed report practice", "gameType": "MiniGames",
+        "commands": {
+            "tail": {"selected": True, "options": ["Last Lines", "Last Bytes"]},
+            "ls": {"selected": True, "options": []},
+        },
+        "options": {"rounds": 1, "questionCount": 4, "seed": 63},
+    })
+    manager.start_round(["1"])
+    questions = [q for q in manager.questions if q["command"] == "tail"]
+    assert len(questions) == 2
+    goals = [manager._challenge_engine.challenges[q["id"]].goal for q in questions]
+    assert len({goal.solution.split()[-1] for goal in goals}) == 2
 
 
 @pytest.mark.parametrize("lines", [[], ["cat", "", "wolf"]])
@@ -339,9 +405,16 @@ def test_tail_missing_n_value(cl, shell_tail):
 
 @pytest.mark.parametrize(
     "command",
-    ["tail -n -1 f1.txt", "tail -c -1 f1.txt", "tail -n +0 f1.txt", "tail -n ++2 f1.txt"],
+    [
+        "tail -n -1 f1.txt",
+        "tail -c -1 f1.txt",
+        "tail -n +0 f1.txt",
+        "tail -n ++2 f1.txt",
+    ],
 )
-def test_tail_rejects_unsupported_negative_and_zero_start_counts(cl, shell_tail, command):
+def test_tail_rejects_unsupported_negative_and_zero_start_counts(
+    cl, shell_tail, command
+):
     result = cl.enter_command(command, shell_tail)
     assert result.status != 0
     assert result.stderr
