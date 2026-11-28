@@ -1,7 +1,75 @@
+import pytest
+from game.GameManager import GameManager
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.command_helpers import assert_help
 from tests.filesystem_helpers import restored_filesystem
+
+
+@pytest.mark.parametrize(
+    ("options", "mode"),
+    [([], "basic"), (["Relative Path"], "relative")],
+)
+def test_cd_minigame_requires_target_and_correct_navigation(cl, options, mode):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Navigation practice", "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"cd": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1, "seed": 57},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
+    assert question["mode"] == mode
+    assert goal.path in question["prompt"]
+    assert goal.path not in question["example"]
+
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    wrong = cl.enter_command("echo visited", player)
+    assert wrong.status == 0
+    assert not manager.record_attempt("1", player, wrong.stdout)
+    other = cl.enter_command("cd /navigation", player)
+    assert other.status == 0
+    assert not manager.record_attempt("1", player, other.stdout)
+
+    if mode == "relative":
+        absolute = cl.enter_command(f"cd {goal.path}", player)
+        assert absolute.status == 0
+        assert not manager.record_attempt("1", player, absolute.stdout)
+        parent = goal.path.rsplit("/", 1)[0]
+        assert cl.enter_command(f"cd {parent}", player).status == 0
+        result = cl.enter_command("cd finish", player)
+    else:
+        result = cl.enter_command(f"cd {goal.path}", player)
+    assert result.status == 0
+    assert manager.record_attempt("1", player, result.stdout)
+    assert player.cwd == goal.path
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
+
+
+def test_cd_minigame_mixed_pool_has_a_solvable_navigation_question(cl):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Mixed navigation practice", "gameType": "MiniGames",
+        "commands": {
+            "cd": {"selected": True, "options": ["Relative Path"]},
+            "ls": {"selected": True, "options": []},
+        },
+        "options": {"rounds": 1, "questionCount": 2, "seed": 57},
+    })
+    manager.start_round(["1"])
+    assert {question["command"] for question in manager.questions} == {"cd", "ls"}
+    question = next(q for q in manager.questions if q["command"] == "cd")
+    goal = manager._challenge_engine.challenges[question["id"]].goal
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    parent = goal.path.rsplit("/", 1)[0]
+    assert cl.enter_command(f"cd {parent}", player).status == 0
+    result = cl.enter_command("cd finish", player)
+    assert result.status == 0
+    assert manager.record_attempt("1", player, result.stdout)
 
 
 def test_cd_help(cl, shell_empty):

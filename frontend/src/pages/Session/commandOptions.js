@@ -1,4 +1,7 @@
 export const COMMANDS = {
+    cd: { description: "Navigate between folders", groups: [{ name: "Navigation", options: [
+        ["Relative Path", "Reach a folder from its parent using a relative path."],
+    ] }] },
     ls: { description: "List files and folders", groups: [{ name: "Listing", options: [
         ["Show Hidden", "Include hidden entries."], ["Long Listing", "Show detailed file information."],
     ] }] },

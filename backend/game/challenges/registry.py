@@ -1,12 +1,14 @@
 """MiniGames command packs and selectable modes."""
 
 from .cat import CatPack
+from .cd import CdPack
 from .grep import GrepPack
 from .ls import LsPack
 from .sed import SedPack
 from .wc import WcPack
 
 PACK_TYPES = {
+    "cd": CdPack,
     "ls": LsPack,
     "cat": CatPack,
     "wc": WcPack,

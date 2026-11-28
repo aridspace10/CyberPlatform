@@ -65,7 +65,7 @@ test("command selection, per-command modes, and pool summary stay in sync", asyn
     try {
         const grep = ui.container.querySelector('[aria-label="grep command"]');
         const sed = ui.container.querySelector('[aria-label="sed command"]');
-        assert.match(ui.container.textContent, /1\/5 commands selected/);
+        assert.match(ui.container.textContent, /1\/6 commands selected/);
         await ui.click(grep.querySelector('input[type="checkbox"]'));
         await ui.click(sed.querySelector('input[type="checkbox"]'));
         assert.equal(grep.querySelector('input[type="checkbox"]').checked, false);
@@ -77,9 +77,29 @@ test("command selection, per-command modes, and pool summary stay in sync", asyn
         await ui.click(ui.button("Clear SED modes"));
         assert.match(ui.container.textContent, /0 selected modes/);
         await ui.click(ui.button("Select all commands"));
-        assert.match(ui.container.textContent, /5\/5 commands selected/);
+        assert.match(ui.container.textContent, /6\/6 commands selected/);
         await ui.click(ui.button("Clear all commands"));
-        assert.match(ui.container.textContent, /0\/5 commands selected/);
+        assert.match(ui.container.textContent, /0\/6 commands selected/);
+    } finally { await ui.unmount(); }
+});
+
+test("cd relative-path mode is sent in session creation", async () => {
+    let payload;
+    const ui = await renderForm(async (_url, options) => {
+        payload = JSON.parse(options.body);
+        return { ok: true, json: async () => ({ session_id: 42 }) };
+    });
+    try {
+        const cd = ui.container.querySelector('[aria-label="cd command"]');
+        const grep = ui.container.querySelector('[aria-label="grep command"]');
+        await ui.click(grep.querySelector('input[type="checkbox"]'));
+        await ui.click(cd.querySelector('input[type="checkbox"]'));
+        await ui.click(cd.querySelector(".command-expand"));
+        await ui.click(cd.querySelector(".option-row input"));
+        await ui.setInput("#session-name", "Navigation practice");
+        await ui.click(ui.button("Create session"));
+        assert.deepEqual(payload.config.commands.cd, { selected: true, options: ["Relative Path"] });
+        assert.match(ui.container.textContent, /Game opened/);
     } finally { await ui.unmount(); }
 });
 
