@@ -180,12 +180,17 @@ async def session_create(
     scenario = get_scenario_byname(db, config.gameType)
     if scenario is None:
         raise HTTPException(status_code=404, detail="Game type not found")
+    if scenario.name != "MiniGames":
+        raise HTTPException(
+            status_code=422,
+            detail="Only MiniGames sessions can be created here; use Sandbox for Tutorial",
+        )
     selected_commands = {
         name for name, selection in config.commands.items() if selection.selected
     }
-    if config.gameType == "MiniGames" and not selected_commands:
+    if not selected_commands:
         raise HTTPException(status_code=422, detail="Select a command for MiniGames")
-    if config.gameType == "MiniGames" and selected_commands - set(QUESTION_MODES):
+    if selected_commands - set(QUESTION_MODES):
         raise HTTPException(
             status_code=422,
             detail="A selected command has no MiniGames questions",
@@ -222,7 +227,7 @@ async def session_create(
         )
         runtime_session.state = initial_state
         runtime_session.game_manager.set_config(config_data)
-        if config.playType == "SinglePlayer" and config.gameType == "MiniGames":
+        if config.playType == "SinglePlayer":
             runtime_session.game_manager.start_round([str(user_id)])
 
         db.add(

@@ -241,19 +241,20 @@ def test_waiting_versus_reopens_with_saved_host_config():
         client.portal.call(session_manager.remove_session, session_id)
 
 
-def test_single_player_tutorial_creation_does_not_generate_minigame_round():
-    client, _testing_session = make_client()
-    payload = creation_payload("SinglePlayer")
+@pytest.mark.parametrize("play_type", ["SinglePlayer", "Versus"])
+def test_tutorial_cannot_be_created_as_normal_session(play_type):
+    client, testing_session = make_client()
+    payload = creation_payload(play_type)
     payload["config"]["gameType"] = "Tutorial"
     payload["config"]["commands"] = {}
+    original_runtimes = set(session_manager.sessions)
     with client:
         response = client.post("/api/session_create", json=payload)
-        assert response.status_code == 201
-        session_id = str(response.json()["session_id"])
-        runtime = session_manager.get_session(session_id)
-        assert runtime.state == "running"
-        assert runtime.game_manager.questions == []
-        client.portal.call(session_manager.remove_session, session_id)
+        assert response.status_code == 422
+        assert "use Sandbox for Tutorial" in response.json()["detail"]
+    with testing_session() as db:
+        assert db.query(GameSession).count() == 0
+    assert set(session_manager.sessions) == original_runtimes
 
 
 def test_selected_sed_configuration_generates_sed_questions():
