@@ -4,6 +4,6 @@ node_modules
 .coverage
 .coveragerc
 app.db
-*.runtime.lock
 /docs
 /backend/logs/
+*.runtime.lock
