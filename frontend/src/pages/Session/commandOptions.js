@@ -1,4 +1,7 @@
 export const COMMANDS = {
+    echo: { description: "Print text in the terminal", groups: [{ name: "Output", options: [
+        ["Phrase", "Print an exact phrase containing spaces."],
+    ] }] },
     ls: { description: "List files and folders", groups: [{ name: "Listing", options: [
         ["Show Hidden", "Include hidden entries."], ["Long Listing", "Show detailed file information."],
     ] }] },

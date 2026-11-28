@@ -1,5 +1,61 @@
+import pytest
 from game.command_contract import COMMAND_CONTRACTS
+from game.GameManager import GameManager
+from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_success
+
+
+@pytest.mark.parametrize(("options", "mode"), [([], "basic"), (["Phrase"], "phrase")])
+def test_echo_minigame_requires_exact_text_from_echo(cl, options, mode):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Message practice", "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"echo": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1, "seed": 64},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
+    assert question["mode"] == mode
+    assert question["example"] != goal.solution
+    assert goal.expected_stdout[0] in question["prompt"]
+    assert goal.expected_stdout[0] not in question["example"]
+
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    player.fs.add_file("/messages/decoy.txt")
+    player.fs.resolve("/messages/decoy.txt").set_data([goal.expected_stdout[0]])
+    unrelated = cl.enter_command("cat /messages/decoy.txt", player)
+    assert unrelated.status == 0
+    assert tuple(unrelated.stdout) == goal.expected_stdout
+    assert not manager.record_attempt("1", player, unrelated.stdout)
+    wrong = cl.enter_command("echo wrong message", player)
+    assert wrong.status == 0
+    assert not manager.record_attempt("1", player, wrong.stdout)
+
+    correct = cl.enter_command(goal.solution, player)
+    assert correct.status == 0
+    assert tuple(correct.stdout) == goal.expected_stdout
+    assert manager.record_attempt("1", player, correct.stdout)
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
+
+
+def test_echo_minigame_mixed_pool_uses_distinct_messages():
+    manager = GameManager()
+    manager.set_config({
+        "name": "Mixed messages", "gameType": "MiniGames",
+        "commands": {
+            "echo": {"selected": True, "options": ["Phrase"]},
+            "ls": {"selected": True, "options": []},
+        },
+        "options": {"rounds": 1, "questionCount": 4, "seed": 64},
+    })
+    manager.start_round(["1"])
+    questions = [q for q in manager.questions if q["command"] == "echo"]
+    assert len(questions) == 2
+    goals = [manager._challenge_engine.challenges[q["id"]].goal for q in questions]
+    assert len({goal.expected_stdout for goal in goals}) == 2
 
 
 def test_echo_dot_paths_are_literal_text(run_dot_command):
