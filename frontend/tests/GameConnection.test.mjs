@@ -107,6 +107,67 @@ test("unexpected closure clears stale state and reconnects with the current toke
     }
 });
 
+test("finished SinglePlayer shows cumulative questions and rounds", async () => {
+    const ui = await renderGame();
+    try {
+        await act(async () => ui.socket().receive({
+            type: "lobby_update", state: "finished", players: ["alice"],
+            gameData: {
+                sessionName: "Grep practice", playType: "SinglePlayer",
+                round: 2, rounds: 2, progress: { completed: 2, total: 5 },
+                leaderboard: [{ playerID: "1", name: "alice", completed: 7 }],
+            },
+        }));
+        const results = ui.container.querySelector(".game-results");
+        assert.deepEqual(
+            [...results.querySelectorAll(".results-stats > div")].map((stat) =>
+                [stat.querySelector("strong").textContent, stat.querySelector("span").textContent]),
+            [["7", "questions completed of 10"], ["2 / 2", "rounds played"]],
+        );
+        assert.ok(results.querySelector('a[href="/sessions"]'));
+        assert.ok(results.querySelector('a[href="/session-create"]'));
+    } finally {
+        await ui.unmount();
+    }
+});
+
+test("finished Versus shows standings, a winner, and ties with partial scores", async () => {
+    const ui = await renderGame();
+    try {
+        const gameData = {
+            sessionName: "Versus grep", playType: "Versus",
+            round: 1, rounds: 1, progress: { completed: 3, total: 5 },
+            leaderboard: [
+                { playerID: "2", name: "bob", completed: 2 },
+                { playerID: "1", name: "alice", completed: 3 },
+            ],
+        };
+        await act(async () => ui.socket().receive({
+            type: "lobby_update", state: "finished", players: ["alice", "bob"], gameData,
+        }));
+        let results = ui.container.querySelector(".game-results");
+        assert.match(results.textContent, /Winner: alice/);
+        assert.deepEqual(
+            [...results.querySelectorAll(".results-player")].map((item) => item.textContent),
+            ["alice", "bob"],
+        );
+        assert.match(results.textContent, /bob2 completed/);
+
+        await act(async () => ui.socket().receive({
+            type: "lobby_update", state: "finished", players: ["alice", "bob"],
+            gameData: { ...gameData, leaderboard: gameData.leaderboard.map((entry) => ({ ...entry, completed: 3 })) },
+        }));
+        results = ui.container.querySelector(".game-results");
+        assert.match(results.textContent, /Tie for first: bob and alice/);
+        assert.deepEqual(
+            [...results.querySelectorAll(".results-rank")].map((item) => item.textContent),
+            ["#1", "#1"],
+        );
+    } finally {
+        await ui.unmount();
+    }
+});
+
 test("initial failure offers retry instead of leaving Loading on screen", async () => {
     const ui = await renderGame();
     try {
