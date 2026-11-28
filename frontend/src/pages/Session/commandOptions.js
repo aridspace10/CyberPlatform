@@ -1,4 +1,7 @@
 export const COMMANDS = {
+    touch: { description: "Create files or update their timestamps", groups: [{ name: "Files", options: [
+        ["Update Modified Time", "Set a file's modification time without changing its access time."],
+    ] }] },
     ls: { description: "List files and folders", groups: [{ name: "Listing", options: [
         ["Show Hidden", "Include hidden entries."], ["Long Listing", "Show detailed file information."],
     ] }] },

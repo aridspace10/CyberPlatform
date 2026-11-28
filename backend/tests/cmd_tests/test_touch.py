@@ -14,6 +14,7 @@ from datetime import datetime
 
 import pytest
 from game.filenode import FileNode
+from game.GameManager import GameManager
 from game.inode import NodeType
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import (
@@ -26,6 +27,69 @@ from tests.cmd_tests.creation_helpers import (
     node_at,
 )
 from tests.cmd_tests.path_helpers import assert_tree
+
+
+@pytest.mark.parametrize(
+    ("options", "mode"),
+    [([], "basic"), (["Update Modified Time"], "mtime")],
+)
+def test_touch_minigame_requires_requested_file_and_real_touch(cl, options, mode):
+    manager = GameManager()
+    manager.set_config({
+        "name": "File practice", "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"touch": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1, "seed": 60},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
+    assert question["mode"] == mode
+    assert goal.path in question["prompt"]
+    assert goal.path not in question["example"]
+
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    wrong = cl.enter_command("echo unrelated", player)
+    assert wrong.status == 0
+    assert not manager.record_attempt("1", player, wrong.stdout)
+
+    if mode == "mtime":
+        wrong_time = cl.enter_command(f"touch -m -t 203101021230 {goal.path}", player)
+        assert wrong_time.status == 0
+        assert not manager.record_attempt("1", player, wrong_time.stdout)
+    else:
+        unrelated = cl.enter_command("touch /workspace/unrelated.txt", player)
+        assert unrelated.status == 0
+        assert not manager.record_attempt("1", player, unrelated.stdout)
+
+    correct = cl.enter_command(goal.solution, player)
+    assert correct.status == 0
+    assert manager.record_attempt("1", player, correct.stdout)
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
+    target = player.fs.resolve(goal.path)
+    assert isinstance(target, FileNode)
+    if mode == "mtime":
+        assert target.inode.mtime == goal.expected_mtime
+        assert target.inode.atime == goal.original_atime
+    assert isinstance(player.fs.resolve(goal.guard_path), FileNode)
+
+
+def test_touch_minigame_mixed_pool_uses_distinct_targets():
+    manager = GameManager()
+    manager.set_config({
+        "name": "Mixed file practice", "gameType": "MiniGames",
+        "commands": {
+            "touch": {"selected": True, "options": ["Update Modified Time"]},
+            "ls": {"selected": True, "options": []},
+        },
+        "options": {"rounds": 1, "questionCount": 4, "seed": 60},
+    })
+    manager.start_round(["1"])
+    questions = [q for q in manager.questions if q["command"] == "touch"]
+    assert len(questions) == 2
+    goals = [manager._challenge_engine.challenges[q["id"]].goal for q in questions]
+    assert len({goal.path for goal in goals}) == 2
 
 
 def test_touch_requires_parent_write_permission(cl, shell_basic):
