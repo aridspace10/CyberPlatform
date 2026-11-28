@@ -1,9 +1,79 @@
 import pytest
+from game.GameManager import GameManager
 from game.Process import ProcessState
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import assert_failure, assert_success
 from tests.cmd_tests.path_helpers import tree_state
 from tests.command_helpers import assert_help
+
+
+@pytest.mark.parametrize(
+    ("options", "mode"),
+    [([], "basic"), (["Remove Tree"], "recursive")],
+)
+def test_rm_minigame_requires_target_deletion_and_preserves_guard(cl, options, mode):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Cleanup practice", "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"rm": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1, "seed": 59},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
+    assert question["mode"] == mode
+    assert question["example"] != goal.solution
+    assert goal.target_path not in question["example"]
+
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    player.fs.add_file("/cleanup/unrelated.txt")
+    unrelated = cl.enter_command("rm /cleanup/unrelated.txt", player)
+    assert unrelated.status == 0
+    assert not manager.record_attempt("1", player, unrelated.stdout)
+    echo = cl.enter_command("echo removed", player)
+    assert echo.status == 0
+    assert not manager.record_attempt("1", player, echo.stdout)
+
+    if mode == "recursive":
+        no_flag = cl.enter_command(f"rm {goal.target_path}", player)
+        assert no_flag.status != 0
+        assert not manager.record_attempt("1", player, no_flag.stdout)
+
+    correct = cl.enter_command(goal.solution, player)
+    assert correct.status == 0
+    assert manager.record_attempt("1", player, correct.stdout)
+    assert isinstance(player.fs.resolve(goal.target_path), str)
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
+
+    damaged = ShellState()
+    damaged.fs.from_dict(manager.get_shell()["fs"])
+    option = "-r " if mode == "recursive" else ""
+    both = cl.enter_command(
+        f"rm {option}{goal.target_path} {goal.guard_path}", damaged
+    )
+    assert both.status == 0
+    assert not manager.record_attempt("2", damaged, both.stdout)
+
+
+def test_rm_minigame_mixed_pool_uses_distinct_disposable_targets():
+    manager = GameManager()
+    manager.set_config({
+        "name": "Mixed cleanup practice", "gameType": "MiniGames",
+        "commands": {
+            "rm": {"selected": True, "options": ["Remove Tree"]},
+            "ls": {"selected": True, "options": []},
+        },
+        "options": {"rounds": 1, "questionCount": 4, "seed": 59},
+    })
+    manager.start_round(["1"])
+    questions = [
+        question for question in manager.questions if question["command"] == "rm"
+    ]
+    assert len(questions) == 2
+    goals = [manager._challenge_engine.challenges[q["id"]].goal for q in questions]
+    assert len({goal.target_path for goal in goals}) == 2
 
 
 def test_rm_dot_paths_remove_only_requested_file(

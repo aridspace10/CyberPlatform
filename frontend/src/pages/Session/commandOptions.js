@@ -1,4 +1,7 @@
 export const COMMANDS = {
+    rm: { description: "Remove disposable files or folders", groups: [{ name: "Deletion", options: [
+        ["Remove Tree", "Remove a folder and its contents recursively."],
+    ] }] },
     ls: { description: "List files and folders", groups: [{ name: "Listing", options: [
         ["Show Hidden", "Include hidden entries."], ["Long Listing", "Show detailed file information."],
     ] }] },
