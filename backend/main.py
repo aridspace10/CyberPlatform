@@ -13,17 +13,27 @@ from services.single_worker import single_game_worker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # startup
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        seed_db(db, local_dev_login=getattr(app.state, "local_dev_login", False))
+    finally:
+        db.close()
+    yield
+
+    # shutdown
+    pass
+
+
+@asynccontextmanager
+async def single_worker_lifespan(app: FastAPI):
     with single_game_worker():
-        Base.metadata.create_all(bind=engine)
-        db = SessionLocal()
-        try:
-            seed_db(db, local_dev_login=getattr(app.state, "local_dev_login", False))
-        finally:
-            db.close()
-        yield
+        async with lifespan(app):
+            yield
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=single_worker_lifespan)
 
 app.add_middleware(
     CORSMiddleware,
