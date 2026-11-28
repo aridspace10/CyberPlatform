@@ -8,24 +8,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from network.WebsocketServer import router as websocket_router
 from routers import contact, users
+from services.single_worker import single_game_worker
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
-    # startup
-    Base.metadata.create_all(bind=engine)
-
-    db = SessionLocal()
-    try:
-        seed_db(db, local_dev_login=getattr(app.state, "local_dev_login", False))
-    finally:
-        db.close()
-
-    yield
-
-    # shutdown
-    pass
+    with single_game_worker():
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_db(db, local_dev_login=getattr(app.state, "local_dev_login", False))
+        finally:
+            db.close()
+        yield
 
 
 app = FastAPI(lifespan=lifespan)
