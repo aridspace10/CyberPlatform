@@ -676,7 +676,21 @@ class CommandLine:
             )
             if command == "ls" and not paths:
                 inode_ids = (sys.fs.current.inode.id,)
+        previous_directory = sys.fs.current if command == "cd" else None
         result = handler(ctx)
+        if (
+            command == "cd"
+            and result.status == 0
+            and sys.fs.current is not previous_directory
+        ):
+            sys.shell.command_runs.append(
+                CommandRun(
+                    command,
+                    observed_args,
+                    (sys.fs.current.inode.id,),
+                    tuple(result.stdout),
+                )
+            )
         if command in {"ls", "cat", "wc"} and result.status == 0:
             sys.shell.command_runs.append(
                 CommandRun(command, observed_args, inode_ids, tuple(result.stdout))

@@ -286,6 +286,25 @@ def test_selected_sed_configuration_generates_sed_questions():
         )
 
 
+def test_selected_cd_configuration_generates_cd_questions():
+    client, _testing_session = make_client()
+    payload = creation_payload("SinglePlayer")
+    payload["config"]["commands"] = {
+        "cd": {"selected": True, "options": ["Relative Path"]},
+    }
+    payload["config"]["options"]["questionCount"] = 1
+
+    with client:
+        response = client.post("/api/session_create", json=payload)
+        assert response.status_code == 201
+        session_id = str(response.json()["session_id"])
+        runtime = session_manager.get_session(session_id)
+        assert runtime.game_manager.questions[0]["command"] == "cd"
+        assert runtime.game_manager.questions[0]["mode"] == "relative"
+        assert runtime.game_manager.get_shell()["cmds"] == ["cd"]
+        client.portal.call(session_manager.remove_session, session_id)
+
+
 def test_selected_commands_share_configured_question_count():
     client, _testing_session = make_client()
     payload = creation_payload("SinglePlayer")
