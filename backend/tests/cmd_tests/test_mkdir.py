@@ -11,6 +11,7 @@ Shared helpers inspect children directly to avoid lookup and cwd side effects.
 from copy import deepcopy
 
 import pytest
+from game.GameManager import GameManager
 from game.inode import NodeType
 from game.ShellState import ShellState
 from tests.cmd_tests.creation_helpers import (
@@ -21,6 +22,65 @@ from tests.cmd_tests.creation_helpers import (
 )
 from tests.cmd_tests.path_helpers import tree_state
 from tests.command_helpers import assert_help
+
+
+@pytest.mark.parametrize(
+    ("options", "expected_mode"),
+    [([], "basic"), (["Create Parents"], "parents")],
+)
+def test_mkdir_minigame_requires_target_tree_and_mkdir_execution(
+    cl, options, expected_mode
+):
+    manager = GameManager()
+    manager.set_config({
+        "name": "Directory practice", "gameType": "MiniGames",
+        "playType": "SinglePlayer",
+        "commands": {"mkdir": {"selected": True, "options": options}},
+        "options": {"rounds": 1, "questionCount": 1, "seed": 56},
+    })
+    manager.start_round(["1"])
+    question = manager.questions[0]
+    goal = manager._challenge_engine.challenges[question["id"]].goal
+    assert question["mode"] == expected_mode
+    assert question["example"] != goal.solution
+    assert goal.path not in question["example"]
+
+    player = ShellState()
+    player.fs.from_dict(manager.get_shell()["fs"])
+    unrelated = cl.enter_command("mkdir /workspaces/unrelated", player)
+    assert unrelated.status == 0
+    assert not manager.record_attempt("1", player, unrelated.stdout)
+    assert isinstance(player.fs.resolve(goal.path), str)
+
+    if expected_mode == "parents":
+        without_flag = cl.enter_command(f"mkdir {goal.path}", player)
+        assert without_flag.status != 0
+        assert not manager.record_attempt("1", player, without_flag.stdout)
+
+    correct = cl.enter_command(goal.solution, player)
+    assert correct.status == 0
+    assert manager.record_attempt("1", player, correct.stdout)
+    assert manager.get_game_data(player_id="1")["progress"]["completed"] == 1
+    assert not manager.record_attempt("1", player, correct.stdout)
+
+
+def test_mkdir_minigame_rotates_with_other_command_and_keeps_distinct_targets():
+    manager = GameManager()
+    manager.set_config({
+        "name": "Mixed directory practice", "gameType": "MiniGames",
+        "commands": {
+            "mkdir": {"selected": True, "options": ["Create Parents"]},
+            "ls": {"selected": True, "options": []},
+        },
+        "options": {"rounds": 1, "questionCount": 4, "seed": 56},
+    })
+    manager.start_round(["1"])
+    assert [question["command"] for question in manager.questions].count("mkdir") == 2
+    mkdir_challenges = [
+        manager._challenge_engine.challenges[question["id"]]
+        for question in manager.questions if question["command"] == "mkdir"
+    ]
+    assert len({challenge.goal.path for challenge in mkdir_challenges}) == 2
 
 
 @pytest.mark.parametrize("command,node_type", [("mkdir", NodeType.DIRECTORY)])
