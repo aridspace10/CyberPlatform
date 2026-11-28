@@ -7,6 +7,7 @@ from game.Events import ProcessTerminatedEvent
 from game.filesystem import FileSystem
 from game.GameManager import GameManager
 from game.identity import EffectiveIdentity
+from game.inode import NodeType
 from game.NetworkManager import NetworkManager
 from game.ProcessManager import ProcessManager
 from game.Scheduler import Scheduler
@@ -37,7 +38,25 @@ class Player:
             "cmds": self.shell.commands,
             "fs": self.shell.fs.to_dict(),
             "allowPipes": self.shell.allow_pipes,
+            "cwd": self.shell.fs.display_path(self.shell.fs.current),
         }
+
+    def load_shell(self, data: dict) -> None:
+        self.shell.commands = list(data["cmds"])
+        self.shell.allow_pipes = data.get("allowPipes", True)
+        self.shell.vars = dict(data["vars"])
+        self.shell.fs.from_dict(data["fs"])
+        self.shell.fs.identity = self.shell.identity
+        cwd = data.get("cwd", "/")
+        current = self.shell.fs.resolve(cwd)
+        if (
+            current is not None
+            and not isinstance(current, str)
+            and current.get_type() == NodeType.DIRECTORY
+        ):
+            self.shell.fs.current = current
+            self.shell.fs.cwd = cwd
+            self.shell.cwd = cwd
 
 
 class GameSession:
@@ -69,6 +88,7 @@ class GameSession:
         self.commandline = CommandLine(self.process_manager, self.network_manager)
 
         self.requests: Set[Username] = set()
+        self.checkpoint = None
 
     def __str__(self) -> str:
         return f"SessionID: {self.session_id}, name: {self.name}, state: {self.state}"
@@ -128,6 +148,8 @@ class GameSession:
             player.shell.fs.from_dict(shell_data["fs"])
             player.shell.fs.identity = player.shell.identity
         self.state = "running"
+        if self.checkpoint is not None:
+            self.checkpoint()
         await self.broadcast_game_state()
 
     async def finish_round_if_ready(self) -> None:
@@ -143,6 +165,8 @@ class GameSession:
         else:
             self.game_manager.finished = True
             self.state = "finished"
+            if self.checkpoint is not None:
+                self.checkpoint()
             await self.broadcast_game_state()
 
     async def broadcast_game_state(self) -> None:

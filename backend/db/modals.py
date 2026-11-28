@@ -43,6 +43,16 @@ class SessionShell(Base):
     shell: Mapped[Optional[dict]] = mapped_column(JSON)
 
 
+class RoundState(Base):
+    """Private, durable MiniGames round and per-player progress."""
+
+    __tablename__ = "round_state"
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("session.id"), primary_key=True
+    )
+    state: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
 class ScenarioToSession(Base):
     __tablename__ = "scenariosToGame"
     scenarioID: Mapped[int] = mapped_column(ForeignKey("scenario.id"), primary_key=True)

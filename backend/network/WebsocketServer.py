@@ -9,41 +9,18 @@ from game.commandline import CommandResult, Interaction
 from game.ProcessManager import ProcessState
 from jose import JWTError
 from network.SessionManger import Player, SessionAlreadyConnected, session_manager
-from services.session_service import get_session, get_session_shell, is_sandbox_session
+from services.game_persistence import attach_checkpoint, persist_checkpoint
+from services.session_service import (
+    get_session,
+    get_session_shell,
+    is_sandbox_session,
+    restore_game_state,
+)
 from services.user_service import get_user_by_id, is_friend
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 router = APIRouter()
-
-
-def restore_game_state(db: Session, session, session_id: int) -> bool:
-    """Restore config; replace an interrupted MiniGames round with a playable one."""
-    scenario = (
-        db.query(ScenarioToSession)
-        .filter(ScenarioToSession.sessionID == session_id)
-        .first()
-    )
-    if scenario is None or not scenario.config:
-        return False
-    config = scenario.config
-    if isinstance(config, str):
-        config = json.loads(config)
-    session.game_manager.set_config(config)
-    if session.state == "running" and session.game_manager.game_type == "MiniGames":
-        shells = (
-            db.query(SessionShell).filter(SessionShell.SessionID == session_id).all()
-        )
-        participants = [str(shell.UserID) for shell in shells]
-        if not participants:
-            return False
-        shell_data = session.game_manager.start_round(participants)
-        for shell in shells:
-            shell.shell = shell_data
-        db.commit()
-    elif session.state == "finished":
-        session.game_manager.finished = True
-    return True
 
 
 def get_current_path(player: Player) -> str:
@@ -230,12 +207,16 @@ async def websocket_endpoint(
         session.is_sandbox = is_sandbox_session(db, ses_db.id)
         try:
             restored = restore_game_state(db, session, ses_db.id)
-        except (ValueError, TypeError, KeyError):
+        except Exception:
             restored = False
         if not restored:
             await session_manager.remove_session(session_id)
             await websocket.close(code=1008)
             return
+    if database_session is not None:
+        attach_checkpoint(session, db)
+    if session.state == "running" and session.game_manager.is_expired():
+        await session.finish_round_if_ready()
     existing_player = next(
         (player for player in session.players.values() if player.user_id == user_id),
         None,
@@ -262,10 +243,7 @@ async def websocket_endpoint(
             if shell_db and shell_db.shell:
                 player = Player(websocket, username, user_id)
                 shell = shell_db.shell
-                player.shell.commands = shell["cmds"]
-                player.shell.allow_pipes = shell.get("allowPipes", True)
-                player.shell.vars = shell["vars"]
-                player.shell.fs.from_dict(shell["fs"])
+                player.load_shell(shell)
                 session.players[username] = player
         try:
             await session.connect(websocket, username, user_id)
@@ -539,13 +517,17 @@ async def websocket_endpoint(
                         status=status,
                         interaction=response["interaction"],
                     )
-                await session.send_to(websocket, response)
+                progressed = False
                 if session.state == "running" and status == 0:
-                    if session.game_manager.record_attempt(
+                    progressed = session.game_manager.record_attempt(
                         str(player.user_id), player.shell, response["stdout"]
-                    ):
-                        await session.broadcast_game_state()
-                        await session.finish_round_if_ready()
+                    )
+                if database_session is not None:
+                    persist_checkpoint(db, session)
+                await session.send_to(websocket, response)
+                if progressed:
+                    await session.broadcast_game_state()
+                    await session.finish_round_if_ready()
 
     except WebSocketDisconnect:
         session.logger.record_session_event(
