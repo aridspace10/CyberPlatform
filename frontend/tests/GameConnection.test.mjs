@@ -163,10 +163,60 @@ test("finished Versus shows standings, a winner, and ties with partial scores", 
             [...results.querySelectorAll(".results-rank")].map((item) => item.textContent),
             ["#1", "#1"],
         );
+
+        await act(async () => ui.socket().receive({
+            type: "lobby_update", state: "finished", players: ["alice", "bob"],
+            gameData: { ...gameData, leaderboard: gameData.leaderboard.map((entry) => ({ ...entry, completed: 0 })) },
+        }));
+        assert.match(ui.container.querySelector(".game-results").textContent, /No winner: no questions were completed/);
+
+        await act(async () => ui.socket().receive({
+            type: "lobby_update", state: "finished", players: ["alice"],
+            gameData: { ...gameData, finishReason: "rounds_exhausted" },
+        }));
+        assert.match(ui.container.querySelector(".game-results").textContent, /Top score: alice/);
+        assert.doesNotMatch(ui.container.querySelector(".game-results").textContent, /Winner:/);
     } finally {
         await ui.unmount();
     }
 });
+
+for (const [reason, expected] of [
+    ["all_questions_completed", /All questions in the final round were completed/],
+    ["time_expired", /The round timer expired/],
+    ["rounds_exhausted", /The final round ended with some questions incomplete/],
+]) {
+    test(`finished screen explains ${reason} without revealing answers`, async () => {
+        const ui = await renderGame();
+        try {
+            await act(async () => ui.socket().receive({
+                type: "lobby_update", state: "finished", players: ["alice"],
+                gameData: {
+                    playType: "SinglePlayer", round: 1, rounds: 1,
+                    finishReason: reason,
+                    progress: { completed: 1, total: 2 },
+                    leaderboard: [{ playerID: "1", completed: 1 }],
+                    questions: [
+                        { id: "q1", status: "completed", prompt: "SECRET_ANSWER_1", example: "SECRET_EXAMPLE_1" },
+                        { id: "q2", status: "active", prompt: "SECRET_ANSWER_2", example: "SECRET_EXAMPLE_2" },
+                    ],
+                },
+            }));
+            const results = ui.container.querySelector(".game-results");
+            assert.match(results.textContent, expected);
+            assert.deepEqual(
+                [...results.querySelectorAll(".results-question-list li")].map((item) => item.textContent),
+                ["Question 1Completed", "Question 2To practice"],
+            );
+            assert.match(results.textContent, /1 completed · 1 to practice/);
+            assert.doesNotMatch(ui.container.textContent, /SECRET_ANSWER|SECRET_EXAMPLE/);
+            assert.equal(document.activeElement?.id, "results-title");
+            assert.ok([...results.querySelectorAll(".results-actions a")].every((link) => link.tabIndex === 0));
+        } finally {
+            await ui.unmount();
+        }
+    });
+}
 
 test("initial failure offers retry instead of leaving Loading on screen", async () => {
     const ui = await renderGame();

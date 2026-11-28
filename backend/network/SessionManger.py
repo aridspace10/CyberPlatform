@@ -141,6 +141,13 @@ class GameSession:
         if self.game_manager.round_number < self.game_manager.num_rounds:
             await self.start_round()
         else:
+            all_player_ids = [str(player.user_id) for player in self.players.values()]
+            if self.game_manager.all_finished(all_player_ids):
+                self.game_manager.finish_reason = "all_questions_completed"
+            elif self.game_manager.is_expired():
+                self.game_manager.finish_reason = "time_expired"
+            else:
+                self.game_manager.finish_reason = "rounds_exhausted"
             self.game_manager.finished = True
             self.state = "finished"
             await self.broadcast_game_state()

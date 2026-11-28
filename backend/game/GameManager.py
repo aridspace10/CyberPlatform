@@ -40,6 +40,7 @@ class GameManager:
         self.round_number = 0
         self.deadline: float | None = None
         self.finished = False
+        self.finish_reason: str | None = None
 
     def set_config(self, config: dict) -> None:
         self.init_config = copy.deepcopy(config)
@@ -77,6 +78,7 @@ class GameManager:
         self.round_number = 0
         self.deadline = None
         self.finished = False
+        self.finish_reason = None
 
     def get_shell(self) -> dict:
         return {
@@ -216,6 +218,7 @@ class GameManager:
             "rounds": self.num_rounds,
             "deadline": self.deadline,
             "finished": self.finished,
+            "finishReason": self.finish_reason,
             "questions": questions,
             "progress": {
                 "completed": len(completed),

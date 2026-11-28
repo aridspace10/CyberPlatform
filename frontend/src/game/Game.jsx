@@ -43,7 +43,7 @@ export default function Game() {
     const [resetError, setResetError] = useState("");
     const [terminalVersion, setTerminalVersion] = useState(0);
     const isSandbox = gameData?.isSandbox === true;
-    const hasQuestionPanel = Boolean(gameData && !isSandbox && gameData.gameType !== "Tutorial");
+    const hasQuestionPanel = Boolean(gameData && state !== "finished" && !isSandbox && gameData.gameType !== "Tutorial");
     const visibleCompactView = compactView === "questions" && !hasQuestionPanel ? "game" : compactView;
 
     useEffect(() => {
@@ -356,7 +356,7 @@ export default function Game() {
                 {state === "finished" && <ResultsScreen gameData={gameData} userId={user?.id} />}
                 {!state && !access && !accessError && connectionStatus === "connecting" && <h1>Loading...</h1>}
             </main>
-            {gameData && <GameDataPanel id="game-questions" gameData={gameData} />}
+            {gameData && state !== "finished" && <GameDataPanel id="game-questions" gameData={gameData} />}
             </div>
           </div>
         </SessionContext.Provider>
