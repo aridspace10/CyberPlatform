@@ -37,6 +37,7 @@ globalThis.WebSocket = FakeWebSocket;
 
 let vite;
 let Game;
+let Login;
 let AuthContext;
 let createRoot;
 
@@ -44,6 +45,7 @@ before(async () => {
     ({ createRoot } = await import("react-dom/client"));
     vite = await createServer({ server: { middlewareMode: true, hmr: false }, appType: "custom" });
     ({ default: Game } = await vite.ssrLoadModule("/src/game/Game.jsx"));
+    ({ default: Login } = await vite.ssrLoadModule("/src/pages/Login/LoginPage.jsx"));
     ({ AuthContext } = await vite.ssrLoadModule("/src/auth/auth-context.js"));
 });
 
@@ -63,7 +65,9 @@ async function renderGame() {
         root.render(createElement(AuthContext.Provider, {
             value: { user: { id: 1, username: "alice" }, logout: () => { logouts += 1; } },
         }, createElement(MemoryRouter, { initialEntries: ["/game/7"] },
-            createElement(Routes, null, createElement(Route, { path: "/game/:sessionId", element: createElement(Game) })))));
+            createElement(Routes, null,
+                createElement(Route, { path: "/game/:sessionId", element: createElement(Game) }),
+                createElement(Route, { path: "/login", element: createElement(Login) })))));
     });
     return {
         container,
@@ -133,6 +137,7 @@ test("intentional missing-session and auth closures do not offer reconnect", asy
         await act(async () => auth.socket().close(4401));
         assert.equal(auth.logouts, 1);
         assert.equal(auth.container.querySelector(".session-connection-panel"), null);
+        assert.match(auth.container.textContent, /Your sign-in is no longer valid. Sign in to reconnect./);
     } finally {
         await auth.unmount();
     }

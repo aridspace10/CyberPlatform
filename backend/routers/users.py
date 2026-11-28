@@ -15,7 +15,7 @@ from db.modals import (
     UserBlock,
     UserRateLimit,
 )
-from db.session import SessionLocal
+from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Request
 from network.SessionManger import session_manager
 from pydantic import BaseModel
@@ -97,14 +97,6 @@ def unavailable_request():
 def begin_write(db: Session):
     # SQLite serializes these read/modify/write paths across API workers.
     db.execute(text("BEGIN IMMEDIATE"))
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.get("/me")

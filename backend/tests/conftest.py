@@ -3,8 +3,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
-from fastapi.testclient import TestClient
 from db.authentication import create_access_token
+from db.modals import User
+from db.session import SessionLocal
+from fastapi.testclient import TestClient
 from game.commandline import CommandLine
 from game.filenode import FileNode, Inode, NodeType
 from game.filesystem import FileSystem
@@ -366,6 +368,22 @@ class WSSession:
 @pytest.fixture
 def session(client):
     """A ready-to-use, isolated WebSocket session fixture."""
+    db = SessionLocal()
+    created_users = []
+    try:
+        for user_id in (1, 2):
+            if db.get(User, user_id) is None:
+                db.add(User(
+                    id=user_id,
+                    username=f"ws-test-{user_id}-{uuid.uuid4().hex}",
+                    email=f"ws-test-{user_id}@example.com",
+                    password="x",
+                ))
+                created_users.append(user_id)
+        db.commit()
+    finally:
+        db.close()
+
     session_id = f"test-{uuid.uuid4().hex}"
     game_session = GameSession(session_id)
     session_manager.sessions[session_id] = game_session
@@ -382,6 +400,15 @@ def session(client):
             yield WSSession(ws, game_session)
     finally:
         client.portal.call(session_manager.remove_session, session_id)
+        db = SessionLocal()
+        try:
+            for user_id in created_users:
+                user = db.get(User, user_id)
+                if user is not None:
+                    db.delete(user)
+            db.commit()
+        finally:
+            db.close()
 
 
 @pytest.fixture(params=["root", "nested"])

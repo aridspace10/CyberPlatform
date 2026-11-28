@@ -1,4 +1,6 @@
+import asyncio
 import json
+import time
 from uuid import uuid4
 
 from db.authentication import decode_token
@@ -15,6 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 router = APIRouter()
+ACCOUNT_RECHECK_SECONDS = 30
 
 
 def restore_game_state(db: Session, session, session_id: int) -> bool:
@@ -151,16 +154,17 @@ async def websocket_endpoint(
     try:
         identity = decode_token(join_data["token"])
         user_id = str(int(identity["sub"]))
+        expires_at = int(identity["exp"])
     except (JWTError, KeyError, TypeError, ValueError):
+        await websocket.close(code=4401)
+        return
+    user = get_user_by_id(db, int(user_id))
+    if user is None or not user.username:
         await websocket.close(code=4401)
         return
     username = identity.get("username")
     if not isinstance(username, str) or not username.strip():
-        user = get_user_by_id(db, int(user_id))
-        username = user.username if user else None
-    if not isinstance(username, str) or not username.strip():
-        await websocket.close(code=4401)
-        return
+        username = user.username
 
     try:
         database_id = int(session_id)
@@ -278,8 +282,18 @@ async def websocket_endpoint(
 
         while True:
             request_id = str(uuid4())
+            remaining = expires_at - time.time()
+            if remaining <= 0:
+                await websocket.close(code=4401)
+                await session.disconnect(websocket)
+                return
             try:
-                data = await websocket.receive_json()
+                data = await asyncio.wait_for(
+                    websocket.receive_json(),
+                    timeout=min(remaining, ACCOUNT_RECHECK_SECONDS),
+                )
+            except asyncio.TimeoutError:
+                data = None
             except WebSocketDisconnect:
                 raise
             except Exception as error:
@@ -316,6 +330,14 @@ async def websocket_endpoint(
                         "interaction": None,
                     },
                 )
+                continue
+
+            db.expire_all()
+            if time.time() >= expires_at or get_user_by_id(db, int(user_id)) is None:
+                await websocket.close(code=4401)
+                await session.disconnect(websocket)
+                return
+            if data is None:
                 continue
 
             if (
