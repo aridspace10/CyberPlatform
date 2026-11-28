@@ -9,10 +9,11 @@ from db.modals import JoinRequest, Scenario, ScenarioToSession, SessionShell
 from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from game.GameManager import GameManager, QUESTION_MODES
+from game.GameManager import QUESTION_MODES, GameManager
 from jose import JWTError
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
+from services.game_state import transition_and_persist
 from services.session_logging import SessionLogger
 from services.session_service import (
     get_sandbox_session,
@@ -50,7 +51,7 @@ def require_session_member(db: Session, session_id: int, user_id: int):
 
 
 class StateUpdate(BaseModel):
-    state: str
+    state: Literal["running", "finished"]
 
 
 class CommandSelection(BaseModel):
@@ -536,9 +537,13 @@ async def update_session_state(
         raise HTTPException(
             status_code=403, detail="Only the host can change session state"
         )
-    success = await session_manager.set_session_state(session_id, body.state)
-    if not success:
-        raise HTTPException(status_code=400, detail="Invalid session or state")
+    runtime = session_manager.get_session(session_id)
+    if runtime == "404":
+        raise HTTPException(status_code=404, detail="Session runtime not found")
+    try:
+        await transition_and_persist(db, database_session, runtime, body.state)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
     return {"session_id": session_id, "state": body.state}
 
