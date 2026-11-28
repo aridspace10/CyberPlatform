@@ -6,3 +6,5 @@ node_modules
 app.db
 /docs
 /backend/logs/
+/frontend/playwright-report/
+/frontend/test-results/

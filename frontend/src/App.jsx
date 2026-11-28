@@ -1,6 +1,6 @@
 import Homepage from "./Homepage";
 import Game from "./game/Game";
-import "./app.css"
+import "./App.css"
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import ProtectedRoute from "./auth/ProtectedRoute";
 import { AuthProvider } from "./auth/AuthContext";

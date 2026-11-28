@@ -1,5 +1,24 @@
 # React + Vite
 
+## Verification
+
+From `frontend/`, run `npm ci`, then `npm run lint`, `npm test`, and
+`npm run build`. The Node test runner exercises authentication, forms, loading,
+errors, and game connection behavior in a simulated DOM.
+
+Run `npm run test:e2e` for the small Playwright browser journey suite. Local
+requirements are Python with `backend/requirements.txt` installed and Google
+Chrome. The suite starts its own API and Vite server, creates a temporary SQLite
+database outside the checkout, and removes it on exit. It never uses
+`backend/app.db`. It covers signup/login, Sandbox play and save, friend requests,
+and private session access. CI installs Playwright Chromium, runs the same suite,
+retries a failure once with a trace, and uploads its report and screenshots when
+the job fails.
+
+For a quick manual check, use a narrow viewport and keyboard only: move through
+signup and Profile, create a session, open the terminal, Save, and Exit. Confirm
+focus is visible, error messages remain readable, and no controls overflow.
+
 ## Backend URL
 
 The frontend uses `http://localhost:8000` for local development. For a hosted
