@@ -9,7 +9,7 @@ from db.modals import JoinRequest, Scenario, ScenarioToSession, SessionShell
 from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from game.GameManager import GameManager, QUESTION_MODES
+from game.GameManager import QUESTION_MODES, GameManager
 from jose import JWTError
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,6 +18,7 @@ from services.session_service import (
     get_sandbox_session,
     get_scenario_byname,
     get_session,
+    restore_game_state,
     update_session_shell,
 )
 from services.user_service import get_user_by_id, is_friend
@@ -497,13 +498,23 @@ async def get_sandbox(
             ) from None
         return {"session_id": database_session.id}
     else:
-        # Tutorial Exists in db, bring to session manger if needed (add please)
-        if session_manager.get_session(str(tut.id)) == "404":
-            session = session_manager.add_session(str(tut.id), "Sandbox")
-            session.state = "running"
+        session_id = str(tut.id)
+        session = session_manager.get_session(session_id)
+        if session == "404":
+            session = session_manager.add_session(session_id, "Sandbox")
+            session.state = tut.state or "running"
             session.is_sandbox = True
-        else:
-            session_manager.get_session(str(tut.id)).is_sandbox = True
+            try:
+                restored = restore_game_state(db, session, tut.id)
+            except (ValueError, TypeError, KeyError, AttributeError):
+                restored = False
+            if not restored:
+                await session_manager.remove_session(session_id)
+                raise HTTPException(
+                    status_code=503,
+                    detail="Sandbox is unavailable: saved configuration is invalid",
+                )
+        session.is_sandbox = True
         return {"session_id": tut.id}
 
 

@@ -491,6 +491,48 @@ def test_sandbox_is_marked_and_excluded_from_active_sessions():
         client.portal.call(session_manager.remove_session, sandbox_id)
 
 
+def test_reopened_sandbox_restores_config_before_websocket_join():
+    client, testing_session = make_client()
+    config = {
+        "name": "Tutorial",
+        "gameType": "Tutorial",
+        "commands": {"echo": {"selected": True, "options": []}},
+        "options": {"allowPipes": True},
+    }
+    db = testing_session()
+    try:
+        db.get(Scenario, 8).config = config
+        db.commit()
+    finally:
+        db.close()
+
+    with client:
+        session_id = str(client.post("/api/sandbox/42").json()["session_id"])
+        client.portal.call(session_manager.remove_session, session_id)
+
+        reopened = client.post("/api/sandbox/42")
+        assert reopened.status_code == 200
+        assert str(reopened.json()["session_id"]) == session_id
+        runtime = session_manager.get_session(session_id)
+        assert runtime.is_sandbox is True
+        assert runtime.game_manager.game_type == "Tutorial"
+        assert runtime.game_manager.init_config == config
+        assert runtime.game_manager.commands == ["echo"]
+        assert runtime.game_manager.allow_pipes is True
+
+        with client.websocket_connect(f"/ws/{session_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()  # join notice
+            websocket.receive_json()  # lobby state
+            websocket.send_json({"type": "command", "input": "echo restored"})
+            output = websocket.receive_json()
+            assert output["status"] == 0
+            assert output["stdout"] == ["restored"]
+        client.portal.call(session_manager.remove_session, session_id)
+
+
 def test_saved_sessions_remain_browsable_with_member_and_public_scope():
     client, _testing_session = make_client()
     with client:

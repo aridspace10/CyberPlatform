@@ -9,41 +9,17 @@ from game.commandline import CommandResult, Interaction
 from game.ProcessManager import ProcessState
 from jose import JWTError
 from network.SessionManger import Player, SessionAlreadyConnected, session_manager
-from services.session_service import get_session, get_session_shell, is_sandbox_session
+from services.session_service import (
+    get_session,
+    get_session_shell,
+    is_sandbox_session,
+    restore_game_state,
+)
 from services.user_service import get_user_by_id, is_friend
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 router = APIRouter()
-
-
-def restore_game_state(db: Session, session, session_id: int) -> bool:
-    """Restore config; replace an interrupted MiniGames round with a playable one."""
-    scenario = (
-        db.query(ScenarioToSession)
-        .filter(ScenarioToSession.sessionID == session_id)
-        .first()
-    )
-    if scenario is None or not scenario.config:
-        return False
-    config = scenario.config
-    if isinstance(config, str):
-        config = json.loads(config)
-    session.game_manager.set_config(config)
-    if session.state == "running" and session.game_manager.game_type == "MiniGames":
-        shells = (
-            db.query(SessionShell).filter(SessionShell.SessionID == session_id).all()
-        )
-        participants = [str(shell.UserID) for shell in shells]
-        if not participants:
-            return False
-        shell_data = session.game_manager.start_round(participants)
-        for shell in shells:
-            shell.shell = shell_data
-        db.commit()
-    elif session.state == "finished":
-        session.game_manager.finished = True
-    return True
 
 
 def get_current_path(player: Player) -> str:
