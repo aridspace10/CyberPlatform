@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import "./Homepage.css";
+import { PUBLIC_SANDBOX_ONLY } from "./publicLaunch";
 
 export function SiteBrand() {
   return <Link className="home-brand" to="/" aria-label="CyberPlatform home"><span className="home-brand-mark" aria-hidden="true">&gt;_</span><span>CYBER<span>PLATFORM</span></span></Link>;
@@ -14,7 +15,7 @@ export function SiteHeader({ user, loading, enteringSandbox, onEnterSandbox }) {
     <nav className="home-nav" aria-label="Main navigation">
       {!isHome && <Link to="/">Home</Link>}
       {isHome ? <><a href="#how-it-works">How it works</a><a href="#the-sandbox">The Sandbox</a></> : null}
-      <Link to="/sessions" aria-current={pathname === "/sessions" ? "page" : undefined}>Sessions</Link>
+      {!PUBLIC_SANDBOX_ONLY && <Link to="/sessions" aria-current={pathname === "/sessions" ? "page" : undefined}>Sessions</Link>}
       <Link to="/contact" aria-current={pathname === "/contact" ? "page" : undefined}>Contact us</Link>
       {user ? <Link to="/profile" aria-current={pathname === "/profile" ? "page" : undefined}>Profile</Link> : <Link to="/login">Sign in</Link>}
     </nav>

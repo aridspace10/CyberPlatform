@@ -7,6 +7,15 @@ build, set `VITE_BACKEND_URL` to the backend's public HTTP(S) origin (for exampl
 `https://api.example.com`). Configure the backend's `CYBERPLATFORM_CORS_ORIGINS`
 with the frontend origin so browser downloads and API calls are allowed.
 
+## Public Sandbox launch
+
+For the initial public release, build the frontend with `VITE_PUBLIC_SANDBOX_ONLY=true`
+and run the API with `CYBERPLATFORM_PUBLIC_SANDBOX_ONLY=true`. These two settings
+represent the same launch flag across the separately deployed frontend and API.
+The frontend hides session routes and controls; the API returns 404 for multiplayer
+actions and only accepts the authenticated owner's Sandbox session. Development
+defaults to the full feature set when the flag is unset.
+
 ## Contact reports
 
 The public `/contact` page sends issue reports through the backend's SMTP

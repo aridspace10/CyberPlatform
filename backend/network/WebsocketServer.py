@@ -9,6 +9,7 @@ from game.commandline import CommandResult, Interaction
 from game.ProcessManager import ProcessState
 from jose import JWTError
 from network.SessionManger import Player, SessionAlreadyConnected, session_manager
+from services.public_launch import public_sandbox_only
 from services.session_service import get_session, get_session_shell, is_sandbox_session
 from services.user_service import get_user_by_id, is_friend
 from sqlalchemy.orm import Session
@@ -167,6 +168,14 @@ async def websocket_endpoint(
     except ValueError:
         database_id = None
     database_session = get_session(db, database_id) if database_id is not None else None
+
+    if public_sandbox_only() and (
+        database_session is None
+        or database_session.creatorID != int(user_id)
+        or not is_sandbox_session(db, database_session.id)
+    ):
+        await websocket.close(code=4404)
+        return
     if database_id is not None and database_session is None:
         await websocket.close(code=4404)
         return
@@ -353,6 +362,12 @@ async def websocket_endpoint(
                 continue
 
             msg_type = data.get("type")
+            if public_sandbox_only() and msg_type in {"chat", "start_game", "reset_sandbox"}:
+                await session.send_to(
+                    websocket,
+                    {"type": "system", "message": "This feature is unavailable"},
+                )
+                continue
             if msg_type == "chat":
                 await session.broadcast(
                     {
