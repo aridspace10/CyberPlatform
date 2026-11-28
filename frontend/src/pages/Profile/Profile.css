@@ -26,6 +26,12 @@
 .profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .profile-card { min-width: 0; padding: 30px; border: 1px solid var(--home-line); background: var(--home-panel); }
 .profile-card h2 { margin: 0 0 25px; font-size: 27px; font-weight: 700; line-height: 1.1; }
+.profile-account { grid-column: 1 / -1; }
+.profile-account-details { display: flex; flex-wrap: wrap; gap: 20px 60px; margin: 0 0 24px; }
+.profile-account-details div { min-width: min(100%, 240px); }
+.profile-account-details dt { margin-bottom: 8px; color: var(--home-muted); font-family: "Share Tech Mono", monospace; font-size: 13px; }
+.profile-account-details dd { margin: 0; overflow-wrap: anywhere; font-size: 18px; }
+.profile-search-empty { margin-top: 20px; }
 .profile-count { margin-left: 6px; font-family: "Share Tech Mono", monospace; font-size: 14px; font-weight: 400; }
 .profile-search label { display: block; margin-bottom: 10px; color: var(--home-muted); font-family: "Share Tech Mono", monospace; font-size: 12px; letter-spacing: 0.04em; }
 .profile-search-row { display: flex; gap: 8px; }

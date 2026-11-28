@@ -33,6 +33,12 @@ class UserCreate(BaseModel):
     password: str
 
 
+class AccountProfile(BaseModel):
+    id: int
+    username: str
+    email: str
+
+
 class FriendRequestCreate(BaseModel):
     user_id: int
 
@@ -107,13 +113,13 @@ def get_db():
         db.close()
 
 
-@router.get("/me")
+@router.get("/me", response_model=AccountProfile)
 def get_me(user_id=Depends(get_current_user), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        return
+        raise HTTPException(status_code=404, detail="Account not found")
 
-    return {"id": user.id, "username": user.username}
+    return user
 
 
 def public_user(user: User) -> dict:
