@@ -53,6 +53,26 @@ def auth(user_id):
     return {"Authorization": f"Bearer {create_access_token({'sub': user_id})}"}
 
 
+def test_account_profile_is_private_and_excludes_password():
+    client, _ = make_client()
+    with client:
+        assert client.get("/users/me").status_code == 401
+        assert client.get("/users/me", headers=auth(1)).json() == {
+            "id": 1,
+            "username": "Alice",
+            "email": "alice@example.com",
+        }
+        assert client.get("/users/me", headers=auth(2)).json() == {
+            "id": 2,
+            "username": "Bob",
+            "email": "bob@example.com",
+        }
+        assert client.get("/users/me", headers=auth(999)).status_code == 404
+        assert client.get("/users/search?query=bo", headers=auth(1)).json() == [
+            {"id": 2, "username": "Bob"}
+        ]
+
+
 def test_friend_request_lifecycle_and_public_responses():
     client, factory = make_client()
     with client:

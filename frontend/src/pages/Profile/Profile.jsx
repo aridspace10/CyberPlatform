@@ -19,6 +19,7 @@ export default function Profile() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -63,9 +64,11 @@ export default function Profile() {
     setError("");
     setMessage("");
     const term = query.trim();
-    if (!term) { setResults([]); return; }
+    setResults([]);
+    setSearched(false);
+    if (!term) return;
     setSearching(true);
-    try { setResults(await searchUsers(term)); }
+    try { setResults(await searchUsers(term)); setSearched(true); }
     catch (err) { setError(err.message); }
     finally { setSearching(false); }
   };
@@ -86,6 +89,7 @@ export default function Profile() {
   const incomingIds = new Set(requests.incoming.map((request) => request.user.id));
   const outgoingIds = new Set(requests.outgoing.map((request) => request.user.id));
   const blockedIds = new Set(blocked.map((blockedUser) => blockedUser.id));
+  const visibleResults = results.filter((result) => result.id !== user?.id && !blockedIds.has(result.id));
 
   return (
     <div className="homepage profile-page">
@@ -102,6 +106,15 @@ export default function Profile() {
       {message && <p className="profile-notice profile-success" role="status">{message}</p>}
 
       <div className="profile-grid">
+        <section className="profile-card profile-account" aria-labelledby="account-title">
+          <h2 id="account-title">Account details</h2>
+          <dl className="profile-account-details">
+            <div><dt>Username</dt><dd>{user?.username}</dd></div>
+            <div><dt>Email</dt><dd>{user?.email}</dd></div>
+          </dl>
+          <p className="profile-empty">Account details are read-only for now.</p>
+        </section>
+
         <section className="profile-card" aria-labelledby="find-friends-title">
           <h2 id="find-friends-title">Find friends</h2>
           <form className="profile-search" onSubmit={handleSearch}>
@@ -111,8 +124,9 @@ export default function Profile() {
               <button type="submit" disabled={searching}>{searching ? "Searching..." : "Search"}</button>
             </div>
           </form>
-          {results.length > 0 && <ul className="profile-list" aria-label="Search results">
-            {results.filter((result) => result.id !== user?.id && !blockedIds.has(result.id)).map((result) => {
+          {searched && visibleResults.length === 0 && <p className="profile-empty profile-search-empty">No matching accounts found.</p>}
+          {visibleResults.length > 0 && <ul className="profile-list" aria-label="Search results">
+            {visibleResults.map((result) => {
               const status = friendIds.has(result.id) ? "Friends"
                 : outgoingIds.has(result.id) ? "Request sent"
                 : incomingIds.has(result.id) ? "Request received" : null;
