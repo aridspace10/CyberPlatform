@@ -1,4 +1,8 @@
 export const COMMANDS = {
+    head: { description: "Read the beginning of a file", groups: [{ name: "Output", options: [
+        ["First Lines", "Show a requested number of first lines."],
+        ["First Bytes", "Show a requested number of first bytes."],
+    ] }] },
     ls: { description: "List files and folders", groups: [{ name: "Listing", options: [
         ["Show Hidden", "Include hidden entries."], ["Long Listing", "Show detailed file information."],
     ] }] },

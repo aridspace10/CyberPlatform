@@ -2,6 +2,7 @@
 
 from .cat import CatPack
 from .grep import GrepPack
+from .head import HeadPack
 from .ls import LsPack
 from .sed import SedPack
 from .wc import WcPack
@@ -11,6 +12,7 @@ PACK_TYPES = {
     "cat": CatPack,
     "wc": WcPack,
     "grep": GrepPack,
+    "head": HeadPack,
     "sed": SedPack,
 }
 
