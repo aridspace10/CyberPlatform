@@ -1,4 +1,7 @@
 export const COMMANDS = {
+    mkdir: { description: "Create directories", groups: [{ name: "Directories", options: [
+        ["Create Parents", "Create missing parent directories along the path."],
+    ] }] },
     ls: { description: "List files and folders", groups: [{ name: "Listing", options: [
         ["Show Hidden", "Include hidden entries."], ["Long Listing", "Show detailed file information."],
     ] }] },
