@@ -677,7 +677,9 @@ class CommandLine:
             if command == "ls" and not paths:
                 inode_ids = (sys.fs.current.inode.id,)
         result = handler(ctx)
-        if command in {"ls", "cat", "wc"} and result.status == 0:
+        if command == "echo" and result.status == 0:
+            inode_ids = ()
+        if command in {"ls", "cat", "wc", "echo"} and result.status == 0:
             sys.shell.command_runs.append(
                 CommandRun(command, observed_args, inode_ids, tuple(result.stdout))
             )
