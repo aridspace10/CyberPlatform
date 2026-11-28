@@ -1,3 +1,6 @@
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 from api.sessions import router
 from db.authentication import create_access_token
@@ -14,10 +17,12 @@ from db.session import get_db
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from game.GameManager import GameManager
-from network.SessionManger import session_manager
+from network.SessionManger import GameSession as RuntimeGameSession
+from network.SessionManger import Player, session_manager
 from network.WebsocketServer import router as websocket_router
 from routers.users import get_db as get_users_db
 from routers.users import router as users_router
+from services.game_state import transition_and_persist
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -1023,3 +1028,140 @@ def test_friends_only_requires_accepted_friendship_and_single_player_stays_solo(
             else:
                 raise AssertionError("Guest entered single-player session")
         client.portal.call(session_manager.remove_session, str(solo_id))
+
+
+def _next_lobby_state(websocket, expected_state):
+    for _ in range(6):
+        message = websocket.receive_json()
+        if (
+            message.get("type") == "lobby_update"
+            and message.get("state") == expected_state
+        ):
+            return message
+    raise AssertionError(f"No {expected_state} lobby update received")
+
+
+def test_host_state_api_rejects_invalid_and_premature_transitions():
+    client, testing_session = make_client()
+    payload = creation_payload("Versus")
+    payload["config"]["options"]["rounds"] = 1
+    with client:
+        response = client.post("/api/session_create", json=payload)
+        assert response.status_code == 201
+        session_id = response.json()["session_id"]
+        state_path = f"/api/sessions/{session_id}/state"
+        runtime = session_manager.get_session(str(session_id))
+
+        assert client.post(state_path, json={"state": "broken"}).status_code == 422
+        assert client.post(state_path, json={"state": "finished"}).status_code == 409
+        assert client.post(state_path, json={"state": "running"}).status_code == 409
+        assert runtime.state == "waiting"
+        assert runtime.game_manager.round_number == 0
+
+        creator_token = authorization(42, "creator")["Authorization"].split()[1]
+        guest_token = authorization(43, "guest")["Authorization"].split()[1]
+        with client.websocket_connect(f"/ws/{session_id}") as host:
+            host.send_json({"token": creator_token})
+            _next_lobby_state(host, "waiting")
+            with client.websocket_connect(f"/ws/{session_id}") as guest:
+                guest.send_json({"token": guest_token})
+                _next_lobby_state(guest, "waiting")
+                started = client.post(state_path, json={"state": "running"})
+                assert started.status_code == 200
+                lobby = _next_lobby_state(host, "running")
+                assert lobby["gameData"]["round"] == 1
+                assert runtime.game_manager.round_number == 1
+                assert runtime.game_manager.questions
+                db = testing_session()
+                assert db.get(GameSession, session_id).state == "running"
+                db.close()
+
+                assert (
+                    client.post(state_path, json={"state": "running"}).status_code
+                    == 409
+                )
+                assert (
+                    client.post(state_path, json={"state": "finished"}).status_code
+                    == 409
+                )
+                assert runtime.state == "running"
+                assert runtime.game_manager.finished is False
+
+                question_ids = {item["id"] for item in runtime.game_manager.questions}
+                runtime.game_manager._completed = {
+                    "42": question_ids.copy(), "43": question_ids.copy()
+                }
+                finished = client.post(state_path, json={"state": "finished"})
+                assert finished.status_code == 200
+                assert _next_lobby_state(host, "finished")["gameData"]["finished"]
+                assert runtime.state == "finished"
+                assert runtime.game_manager.finished is True
+                db = testing_session()
+                assert db.get(GameSession, session_id).state == "finished"
+                db.close()
+                assert (
+                    client.post(state_path, json={"state": "running"}).status_code
+                    == 409
+                )
+
+        client.portal.call(session_manager.remove_session, str(session_id))
+
+
+def test_websocket_start_uses_same_transition_and_persists_state():
+    client, testing_session = make_client()
+    with client:
+        response = client.post("/api/session_create", json=creation_payload("Versus"))
+        session_id = response.json()["session_id"]
+        creator_token = authorization(42, "creator")["Authorization"].split()[1]
+        guest_token = authorization(43, "guest")["Authorization"].split()[1]
+        with client.websocket_connect(f"/ws/{session_id}") as host:
+            host.send_json({"token": creator_token})
+            _next_lobby_state(host, "waiting")
+            with client.websocket_connect(f"/ws/{session_id}") as guest:
+                guest.send_json({"token": guest_token})
+                _next_lobby_state(guest, "waiting")
+                host.send_json({"type": "start_game"})
+                lobby = _next_lobby_state(host, "running")
+                assert lobby["gameData"]["round"] == 1
+                runtime = session_manager.get_session(str(session_id))
+                assert runtime.game_manager.round_number == 1
+                db = testing_session()
+                assert db.get(GameSession, session_id).state == "running"
+                db.close()
+        client.portal.call(session_manager.remove_session, str(session_id))
+
+
+def test_failed_state_commit_restores_runtime_round_and_player_shells():
+    runtime = RuntimeGameSession("rollback")
+    runtime.game_manager.set_config(creation_payload("Versus")["config"])
+    for name, user_id in (("creator", "42"), ("guest", "43")):
+        socket = object()
+        runtime.players[name] = Player(socket, name, user_id)
+        runtime.connections[socket] = name
+    original_shells = {
+        name: player.serialize() for name, player in runtime.players.items()
+    }
+    saved = SimpleNamespace(state="waiting")
+
+    class FailingDatabase:
+        rolled_back = False
+
+        def commit(self):
+            raise RuntimeError("database unavailable")
+
+        def rollback(self):
+            self.rolled_back = True
+
+    db = FailingDatabase()
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        asyncio.run(transition_and_persist(db, saved, runtime, "running"))
+
+    assert db.rolled_back
+    assert saved.state == "waiting"
+    assert runtime.state == "waiting"
+    assert runtime.game_manager.round_number == 0
+    assert runtime.game_manager.questions == []
+    restored_shells = {
+        name: player.serialize() for name, player in runtime.players.items()
+    }
+    assert restored_shells == original_shells

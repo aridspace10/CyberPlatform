@@ -113,7 +113,7 @@ class GameSession:
             ),
         }
 
-    async def start_round(self) -> None:
+    async def start_round(self, *, broadcast: bool = True) -> None:
         shell_data = self.game_manager.start_round(
             [str(player.user_id) for player in self.players.values()]
         )
@@ -128,7 +128,8 @@ class GameSession:
             player.shell.fs.from_dict(shell_data["fs"])
             player.shell.fs.identity = player.shell.identity
         self.state = "running"
-        await self.broadcast_game_state()
+        if broadcast:
+            await self.broadcast_game_state()
 
     async def finish_round_if_ready(self) -> None:
         if self.state != "running" or not self.game_manager.questions:
@@ -141,9 +142,7 @@ class GameSession:
         if self.game_manager.round_number < self.game_manager.num_rounds:
             await self.start_round()
         else:
-            self.game_manager.finished = True
-            self.state = "finished"
-            await self.broadcast_game_state()
+            await self.set_state("finished")
 
     async def broadcast_game_state(self) -> None:
         for websocket, username in list(self.connections.items()):
@@ -266,9 +265,33 @@ class GameSession:
                 pass
         self.scheduler_task = None
 
-    async def set_state(self, new_state: str):
-        self.state = new_state
-        await self.broadcast_game_state()
+    async def set_state(self, new_state: str, *, broadcast: bool = True) -> None:
+        """Apply a legal gameplay transition, including its game-manager effects."""
+        if new_state == "running" and self.state == "waiting":
+            if (
+                self.game_manager.play_type != "Versus"
+                or self.game_manager.game_type != "MiniGames"
+            ):
+                raise ValueError("Only a Versus MiniGame lobby can be started")
+            if len(self.connected_players()) < 2:
+                raise ValueError("Two connected players are needed to start Versus")
+            await self.start_round(broadcast=broadcast)
+            return
+        if new_state == "finished" and self.state == "running":
+            manager = self.game_manager
+            if not manager.questions or manager.round_number != manager.num_rounds:
+                raise ValueError("The final round has not started")
+            player_ids = [str(player.user_id) for player in self.connected_players()]
+            if not manager.is_expired() and not manager.all_finished(player_ids):
+                raise ValueError("The final round is still in progress")
+            manager.finished = True
+            self.state = "finished"
+            if broadcast:
+                await self.broadcast_game_state()
+            return
+        raise ValueError(
+            f"Cannot change session state from {self.state} to {new_state}"
+        )
 
     def reset_sandbox_player(self, player: Player, shell_data: dict) -> None:
         """Replace the sandbox's live shell and simulated machine with a fresh one."""
@@ -375,12 +398,14 @@ class SessionManager:
         await session.stop_scheduler()
         return True
 
-    async def set_session_state(self, session_id: str, new_state: str) -> bool:
+    async def set_session_state(
+        self, session_id: str, new_state: str, *, broadcast: bool = True
+    ) -> bool:
         session = self.get_session(session_id)
         if not session or session == "404":
             return False
 
-        await session.set_state(new_state)
+        await session.set_state(new_state, broadcast=broadcast)
         return True
 
 

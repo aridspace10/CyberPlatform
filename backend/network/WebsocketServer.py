@@ -9,6 +9,7 @@ from game.commandline import CommandResult, Interaction
 from game.ProcessManager import ProcessState
 from jose import JWTError
 from network.SessionManger import Player, SessionAlreadyConnected, session_manager
+from services.game_state import transition_and_persist
 from services.session_service import get_session, get_session_shell, is_sandbox_session
 from services.user_service import get_user_by_id, is_friend
 from sqlalchemy.orm import Session
@@ -392,10 +393,17 @@ async def websocket_endpoint(
                         },
                     )
                 else:
-                    await session.start_round()
-                    if database_session is not None:
-                        database_session.state = session.state
-                        db.commit()
+                    try:
+                        if database_session is None:
+                            await session.set_state("running")
+                        else:
+                            await transition_and_persist(
+                                db, database_session, session, "running"
+                            )
+                    except ValueError as error:
+                        await session.send_to(
+                            websocket, {"type": "system", "message": str(error)}
+                        )
 
             elif msg_type == "cancel_background_job":
                 player = session.players.get(username)
