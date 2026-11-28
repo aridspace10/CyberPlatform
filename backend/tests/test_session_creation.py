@@ -1,6 +1,9 @@
+import time
+from uuid import uuid4
+
 import pytest
 from api.sessions import router
-from db.authentication import create_access_token
+from db.authentication import ALGORITHM, SECRET_KEY, create_access_token
 from db.modals import (
     Base,
     Friendship,
@@ -14,6 +17,8 @@ from db.session import get_db
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from game.GameManager import GameManager
+from jose import jwt
+from network.SessionManger import GameSession as RuntimeGameSession
 from network.SessionManger import session_manager
 from network.WebsocketServer import router as websocket_router
 from routers.users import get_db as get_users_db
@@ -91,6 +96,61 @@ def authorization(user_id: int, username: str) -> dict:
         "Authorization": "Bearer "
         + create_access_token({"sub": user_id, "username": username})
     }
+
+
+def test_websocket_closes_when_token_expires_without_running_later_commands():
+    client, _testing_session = make_client()
+    session_id = f"expiry-{uuid4().hex}"
+    runtime = RuntimeGameSession(session_id)
+    session_manager.sessions[session_id] = runtime
+    token = jwt.encode(
+        {"sub": "42", "username": "creator", "exp": int(time.time()) + 2},
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
+
+    try:
+        with client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            websocket.send_json({"token": token})
+            websocket.receive_json()  # join notice
+            websocket.receive_json()  # lobby state
+            time.sleep(2.1)
+            websocket.send_json({"type": "command", "input": "echo too late"})
+            with pytest.raises(WebSocketDisconnect) as closed:
+                websocket.receive_json()
+            assert closed.value.code == 4401
+            assert runtime.connected_players() == []
+    finally:
+        session_manager.sessions.pop(session_id, None)
+
+
+def test_deleted_account_token_cannot_use_http_or_active_websocket():
+    client, _testing_session = make_client()
+    session_id = f"deleted-{uuid4().hex}"
+    runtime = RuntimeGameSession(session_id)
+    session_manager.sessions[session_id] = runtime
+    token = create_access_token({"sub": 42, "username": "creator"})
+
+    try:
+        with client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            websocket.send_json({"token": token})
+            websocket.receive_json()  # join notice
+            websocket.receive_json()  # lobby state
+            assert client.delete("/users/42").status_code == 200
+            assert client.get("/users/me").status_code == 401
+            websocket.send_json({"type": "command", "input": "echo too late"})
+            with pytest.raises(WebSocketDisconnect) as closed:
+                websocket.receive_json()
+            assert closed.value.code == 4401
+            assert runtime.connected_players() == []
+
+            with client.websocket_connect(f"/ws/{session_id}") as reused:
+                reused.send_json({"token": token})
+                with pytest.raises(WebSocketDisconnect) as rejected:
+                    reused.receive_json()
+                assert rejected.value.code == 4401
+    finally:
+        session_manager.sessions.pop(session_id, None)
 
 
 def test_create_session_hands_complete_config_to_game_manager():
@@ -445,7 +505,10 @@ def test_sandbox_is_marked_and_excluded_from_active_sessions():
         assert sandbox.game_manager.game_type == "Tutorial"
         db = testing_session()
         assert db.get(GameSession, int(sandbox_id)) is not None
-        assert db.query(ScenarioToSession).filter_by(sessionID=int(sandbox_id)).count() == 1
+        assert (
+            db.query(ScenarioToSession).filter_by(sessionID=int(sandbox_id)).count()
+            == 1
+        )
         assert db.query(SessionShell).filter_by(SessionID=int(sandbox_id)).count() == 1
         db.close()
 
@@ -606,7 +669,10 @@ def test_sandbox_reset_restores_fresh_live_and_saved_shell():
 
             db = testing_session()
             try:
-                assert db.get(SessionShell, (int(sandbox_id), 42)).shell == original_shell
+                assert (
+                    db.get(SessionShell, (int(sandbox_id), 42)).shell
+                    == original_shell
+                )
             finally:
                 db.close()
 
@@ -650,7 +716,9 @@ def test_sandbox_missing_scenario_returns_error_without_partial_state():
         assert_no_sandbox_state(testing_session, original_runtimes)
 
 
-@pytest.mark.parametrize("config", ["{bad json", {"name": "Tutorial", "options": {"rounds": "bad"}}])
+@pytest.mark.parametrize(
+    "config", ["{bad json", {"name": "Tutorial", "options": {"rounds": "bad"}}]
+)
 def test_sandbox_malformed_scenario_returns_error_without_partial_state(config):
     client, testing_session = make_client()
     db = testing_session()

@@ -3,7 +3,7 @@ import Gamescreen from "./Gamescreen";
 import WaitingScreen from "./WaitingScreen";
 import Versus from "./Versus";
 import GameDataPanel from "./GameDataPanel";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { SessionContext } from "../components/SessionContext";
 import GeneralTab from "../components/GeneralTab";
@@ -17,6 +17,7 @@ import "./Gamescreen.css"
 
 export default function Game() {
     const { sessionId } = useParams();
+    const navigate = useNavigate();
     const { user, logout } = useAuth()
     const [players, setPlayers] = useState([]);
     const wsRef = useRef(null);
@@ -163,7 +164,13 @@ export default function Game() {
             setTerminalInteraction(null);
             setResetPending(false);
             setConnectionStatus([4401, 4403, 4404, 4409].includes(event.code) ? "rejected" : "disconnected");
-            if (event.code === 4401) logout();
+            if (event.code === 4401) {
+                logout();
+                navigate("/login", {
+                    replace: true,
+                    state: { from: `/game/${sessionId}`, authExpired: true },
+                });
+            }
             if (event.code === 4403) {
                 getSessionAccess(sessionId).then(setAccess).catch(error => setAccessError(error.message));
             }
@@ -183,7 +190,7 @@ export default function Game() {
             socket.close();
             if (wsRef.current === socket) wsRef.current = null;
         };
-    }, [user, sessionId, logout, joinAttempt]);
+    }, [user, sessionId, logout, navigate, joinAttempt]);
 
     useEffect(() => {
         if (state !== "waiting" || String(gameData?.creatorID) !== String(user?.id)) return;

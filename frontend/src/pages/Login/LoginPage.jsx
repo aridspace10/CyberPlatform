@@ -113,7 +113,9 @@ export default function Login() {
 
           {/* Error */}
           <div className={error ? "login-error" : "login-success"} role="status">
-            {error || authError || (location.state?.accountCreated ? "Account created. Sign in to continue." : "")}
+            {error || authError || (location.state?.authExpired
+              ? "Your sign-in is no longer valid. Sign in to reconnect."
+              : location.state?.accountCreated ? "Account created. Sign in to continue." : "")}
           </div>
           {authError && <button type="button" onClick={() => retryUser().then(() => navigate(location.state?.from || "/")).catch(() => {})} disabled={loading}>Retry sign-in check</button>}
         </div>

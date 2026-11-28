@@ -2,13 +2,17 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
+from db.modals import User
+from db.session import get_db
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer
 from jose import jwt
+from jose.exceptions import JWTError
 from passlib.context import CryptContext
 
 ### Schemas ####
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 
 class LoginRequest(BaseModel):
@@ -52,10 +56,12 @@ def verify_password(plain, hashed):
 security = HTTPBearer()
 
 
-def get_current_user(token=Depends(security)):
+def get_current_user(token=Depends(security), db: Session = Depends(get_db)):
     try:
         payload = decode_token(token.credentials)
-        return int(payload["sub"])  # <-- convert back to int for DB query
-    except Exception as e:
-        print(f"Token error: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token") from e
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError, TypeError, ValueError) as error:
+        raise HTTPException(status_code=401, detail="Invalid token") from error
+    if db.get(User, user_id) is None:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return user_id
