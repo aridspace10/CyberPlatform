@@ -9,16 +9,17 @@ from db.modals import JoinRequest, Scenario, ScenarioToSession, SessionShell
 from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from game.GameManager import GameManager, QUESTION_MODES
+from game.GameManager import QUESTION_MODES, GameManager
 from jose import JWTError
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
+from services.game_persistence import attach_checkpoint, persist_checkpoint
 from services.session_logging import SessionLogger
 from services.session_service import (
     get_sandbox_session,
     get_scenario_byname,
     get_session,
-    update_session_shell,
+    restore_game_state,
 )
 from services.user_service import get_user_by_id, is_friend
 from sqlalchemy.orm import Session
@@ -239,7 +240,9 @@ async def session_create(
                 shell=runtime_session.game_manager.get_shell(),
             )
         )
+        persist_checkpoint(db, runtime_session, commit=False)
         db.commit()
+        attach_checkpoint(runtime_session, db)
     except Exception:
         db.rollback()
         if runtime_session is not None:
@@ -500,8 +503,14 @@ async def get_sandbox(
         # Tutorial Exists in db, bring to session manger if needed (add please)
         if session_manager.get_session(str(tut.id)) == "404":
             session = session_manager.add_session(str(tut.id), "Sandbox")
-            session.state = "running"
+            session.state = tut.state or "running"
             session.is_sandbox = True
+            if not restore_game_state(db, session, tut.id):
+                await session_manager.remove_session(str(tut.id))
+                raise HTTPException(
+                    status_code=503, detail="Sandbox state is unavailable"
+                )
+            attach_checkpoint(session, db)
         else:
             session_manager.get_session(str(tut.id)).is_sandbox = True
         return {"session_id": tut.id}
@@ -558,7 +567,7 @@ async def save_session_state(
         None,
     )
     if player is not None:
-        update_session_shell(db, int(session_id), user_id, player.serialize())
+        persist_checkpoint(db, ses)
     return {"status": "saved"}
 
 

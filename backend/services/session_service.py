@@ -1,14 +1,52 @@
+import json
 from datetime import datetime
 from typing import List
 
 from db.modals import (
     GameSession,
     JoinRequest,
+    RoundState,
     Scenario,
     ScenarioToSession,
     SessionShell,
 )
+from network.SessionManger import Player
+from services.user_service import get_user_by_id
 from sqlalchemy.orm import Session
+
+
+def restore_game_state(db: Session, session, session_id: int) -> bool:
+    """Restore exact private round state and saved shells for all participants."""
+    scenario = (
+        db.query(ScenarioToSession)
+        .filter(ScenarioToSession.sessionID == session_id)
+        .first()
+    )
+    if scenario is None or not scenario.config:
+        return False
+    config = scenario.config
+    if isinstance(config, str):
+        config = json.loads(config)
+    session.game_manager.set_config(config)
+    if session.game_manager.game_type == "MiniGames":
+        saved_round = db.get(RoundState, session_id)
+        if saved_round is None:
+            # Old running games have no answers or scores to recover safely.
+            return False
+        session.game_manager.import_state(saved_round.state)
+    elif session.state == "finished":
+        session.game_manager.finished = True
+    shells = db.query(SessionShell).filter(SessionShell.SessionID == session_id).all()
+    if not shells:
+        return False
+    for saved_shell in shells:
+        user = get_user_by_id(db, saved_shell.UserID)
+        if user is None or not user.username or not saved_shell.shell:
+            return False
+        player = Player(None, user.username, str(user.id))
+        player.load_shell(saved_shell.shell)
+        session.players[user.username] = player
+    return True
 
 
 ############# GETTERS #############

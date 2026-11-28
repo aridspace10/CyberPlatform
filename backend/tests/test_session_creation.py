@@ -1,3 +1,5 @@
+import time
+
 import pytest
 from api.sessions import router
 from db.authentication import create_access_token
@@ -5,6 +7,7 @@ from db.modals import (
     Base,
     Friendship,
     GameSession,
+    RoundState,
     Scenario,
     ScenarioToSession,
     SessionShell,
@@ -14,7 +17,7 @@ from db.session import get_db
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from game.GameManager import GameManager
-from network.SessionManger import session_manager
+from network.SessionManger import Player, session_manager
 from network.WebsocketServer import router as websocket_router
 from routers.users import get_db as get_users_db
 from routers.users import router as users_router
@@ -158,7 +161,7 @@ def test_single_player_session_starts_running():
         client.portal.call(session_manager.remove_session, str(result["session_id"]))
 
 
-def test_running_minigame_reopens_with_a_fresh_playable_round():
+def test_running_minigame_reopens_with_the_same_playable_round():
     client, testing_session = make_client()
     with client:
         response = client.post(
@@ -186,11 +189,14 @@ def test_running_minigame_reopens_with_a_fresh_playable_round():
             assert lobby["players"] == ["creator"]
             assert lobby["gameData"]["creatorID"] == 42
             assert len(lobby["gameData"]["questions"]) == 6
-            assert [q["prompt"] for q in lobby["gameData"]["questions"]] != old_prompts
+            assert [q["prompt"] for q in lobby["gameData"]["questions"]] == old_prompts
             assert (
                 session_manager.get_session(session_id).players["creator"].user_id
                 == "42"
             )
+
+            websocket.send_json({"type": "command", "input": "cd /logs"})
+            assert websocket.receive_json()["cwd"] == "/logs"
 
             prompt = next(
                 q["prompt"]
@@ -203,14 +209,40 @@ def test_running_minigame_reopens_with_a_fresh_playable_round():
             assert output["type"] == "command_output"
             assert output["status"] == 0
             assert marker in output["stdout"][0]
+            progress = websocket.receive_json()["gameData"]
+            assert progress["progress"] == {"completed": 1, "total": 6}
 
         db = testing_session()
         saved = db.query(SessionShell).one()
-        assert (
-            saved.shell["fs"]
-            == session_manager.get_session(session_id).game_manager.get_shell()["fs"]
-        )
+        assert saved.shell == session_manager.get_session(session_id).players[
+            "creator"
+        ].serialize()
         db.close()
+        client.portal.call(session_manager.remove_session, session_id)
+
+        with client.websocket_connect(f"/ws/{session_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()
+            lobby = websocket.receive_json()
+            assert lobby["cwd"] == "/logs"
+            assert lobby["gameData"]["progress"] == {"completed": 1, "total": 6}
+            assert [q["prompt"] for q in lobby["gameData"]["questions"]] == old_prompts
+            assert sum(
+                q["status"] == "completed" for q in lobby["gameData"]["questions"]
+            ) == 1
+            runtime = session_manager.get_session(session_id)
+            next_id = next(
+                q["id"] for q in runtime.game_manager.questions
+                if q["id"] not in runtime.game_manager._completed["42"]
+            )
+            solution = runtime.game_manager._challenge_engine.challenges[
+                next_id
+            ].goal.answer["solution"]
+            websocket.send_json({"type": "command", "input": solution})
+            assert websocket.receive_json()["status"] == 0
+            assert websocket.receive_json()["gameData"]["progress"]["completed"] == 2
         client.portal.call(session_manager.remove_session, session_id)
 
 
@@ -238,6 +270,102 @@ def test_waiting_versus_reopens_with_saved_host_config():
             assert warning["type"] == "system"
             assert "Two players" in warning["message"]
 
+        client.portal.call(session_manager.remove_session, session_id)
+
+
+def test_versus_restart_keeps_progress_shells_and_expires_a_downtime_round():
+    client, testing_session = make_client()
+    with client:
+        session_id = str(
+            client.post("/api/session_create", json=creation_payload("Versus"))
+            .json()["session_id"]
+        )
+        runtime = session_manager.get_session(session_id)
+        db = testing_session()
+        db.add(
+            SessionShell(
+                SessionID=int(session_id),
+                UserID=43,
+                shell=runtime.game_manager.get_shell(),
+            )
+        )
+        db.commit()
+        db.close()
+        runtime.players["creator"] = Player(None, "creator", "42")
+        runtime.players["guest"] = Player(None, "guest", "43")
+        client.portal.call(runtime.start_round)
+        first_questions = list(runtime.game_manager.questions)
+        first_deadline = runtime.game_manager.deadline
+        first_solution = runtime.game_manager._challenge_engine.challenges[
+            first_questions[0]["id"]
+        ].goal.answer["solution"]
+
+        with client.websocket_connect(f"/ws/{session_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()
+            websocket.receive_json()
+            websocket.send_json({"type": "command", "input": "cd /logs"})
+            assert websocket.receive_json()["cwd"] == "/logs"
+            websocket.send_json({"type": "command", "input": first_solution})
+            assert websocket.receive_json()["status"] == 0
+            assert websocket.receive_json()["gameData"]["progress"]["completed"] == 1
+
+        db = testing_session()
+        assert db.get(SessionShell, (int(session_id), 42)).shell["cwd"] == "/logs"
+        assert db.get(SessionShell, (int(session_id), 43)).shell["cwd"] == "/"
+        assert db.get(RoundState, int(session_id)).state["deadline"] == first_deadline
+        db.close()
+        client.portal.call(session_manager.remove_session, session_id)
+
+        with client.websocket_connect(f"/ws/{session_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()
+            lobby = websocket.receive_json()
+            assert lobby["cwd"] == "/logs"
+            assert lobby["gameData"]["round"] == 1
+            assert lobby["gameData"]["questions"] == [
+                {**question, "status": "completed" if index == 0 else "active"}
+                for index, question in enumerate(first_questions)
+            ]
+            assert lobby["gameData"]["deadline"] == first_deadline
+            standings = {
+                entry["playerID"]: entry["completed"]
+                for entry in lobby["gameData"]["leaderboard"]
+            }
+            assert standings == {
+                "42": 1,
+                "43": 0,
+            }
+            assert set(session_manager.get_session(session_id).players) == {
+                "creator", "guest"
+            }
+        client.portal.call(session_manager.remove_session, session_id)
+
+        # A timed round that expired while offline ends at the next restore;
+        # the following round gets a fresh deadline and retains scores.
+        db = testing_session()
+        saved_round = db.get(RoundState, int(session_id))
+        saved_round.state = {**saved_round.state, "deadline": time.time() - 1}
+        db.commit()
+        db.close()
+        with client.websocket_connect(f"/ws/{session_id}") as websocket:
+            websocket.send_json({
+                "token": create_access_token({"sub": 42, "username": "creator"}),
+            })
+            websocket.receive_json()
+            lobby = websocket.receive_json()
+            assert lobby["gameData"]["round"] == 2
+            assert lobby["gameData"]["deadline"] > time.time()
+            standings = {
+                entry["playerID"]: entry["completed"]
+                for entry in lobby["gameData"]["leaderboard"]
+            }
+            assert standings["42"] == 1
+            assert lobby["cwd"] == "/"
         client.portal.call(session_manager.remove_session, session_id)
 
 
@@ -606,7 +734,9 @@ def test_sandbox_reset_restores_fresh_live_and_saved_shell():
 
             db = testing_session()
             try:
-                assert db.get(SessionShell, (int(sandbox_id), 42)).shell == original_shell
+                assert db.get(SessionShell, (int(sandbox_id), 42)).shell == {
+                    **original_shell, "cwd": "/"
+                }
             finally:
                 db.close()
 

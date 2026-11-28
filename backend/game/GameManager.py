@@ -4,14 +4,44 @@ import copy
 import random
 import secrets
 import time
+from dataclasses import asdict
 
 from .ChallengeEngine import ChallengeEngine
-from .challenges.core import Observation
+from .challenges.core import Challenge, FileContentGoal, Observation, OutputGoal
+from .challenges.grep import GrepGoal
 from .challenges.planner import RoundPlanner
 from .challenges.registry import QUESTION_MODES
+from .challenges.sed import SedGoal
 from .ShellState import CommandRun, GrepMatch, SedChange, ShellState
 
 DEFAULT_QUESTION_COUNT = 10
+GOAL_TYPES = {
+    goal.__name__: goal for goal in (OutputGoal, FileContentGoal, GrepGoal, SedGoal)
+}
+
+
+def _encode(value):
+    if isinstance(value, tuple):
+        return {"__tuple__": [_encode(item) for item in value]}
+    if isinstance(value, (set, frozenset)):
+        return {"__set__": [_encode(item) for item in value]}
+    if isinstance(value, dict):
+        return {key: _encode(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_encode(item) for item in value]
+    return value
+
+
+def _decode(value):
+    if isinstance(value, dict):
+        if set(value) == {"__tuple__"}:
+            return tuple(_decode(item) for item in value["__tuple__"])
+        if set(value) == {"__set__"}:
+            return frozenset(_decode(item) for item in value["__set__"])
+        return {key: _decode(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_decode(item) for item in value]
+    return value
 
 
 class GameManager:
@@ -85,6 +115,75 @@ class GameManager:
             "fs": self.shell.fs.to_dict(),
             "allowPipes": self.allow_pipes,
         }
+
+    def export_state(self) -> dict:
+        """Capture exact generated goals and progress; never expose this to clients."""
+        challenges = self._challenge_engine.challenges if self._challenge_engine else {}
+        return {
+            "version": 1,
+            "seed": self.seed,
+            "round": self.round_number,
+            "deadline": self.deadline,
+            "finished": self.finished,
+            "shell": self.get_shell(),
+            "questions": list(self.questions),
+            "answers": _encode(self._answers),
+            "completed": {pid: sorted(ids) for pid, ids in self._completed.items()},
+            "scores": dict(self._scores),
+            "challenges": [
+                {
+                    "id": challenge.id,
+                    "command": challenge.command,
+                    "mode": challenge.mode,
+                    "variant": challenge.variant,
+                    "prompt": challenge.prompt,
+                    "example": challenge.example,
+                    "goal_type": type(challenge.goal).__name__,
+                    "goal": _encode(asdict(challenge.goal)),
+                }
+                for challenge in challenges.values()
+            ],
+        }
+
+    def import_state(self, state: dict) -> None:
+        """Rebuild active goals without regenerating a different round."""
+        if state.get("version") != 1:
+            raise ValueError("Unsupported saved round state")
+        self.seed = int(state["seed"])
+        self.round_number = int(state["round"])
+        self.deadline = state["deadline"]
+        self.finished = bool(state["finished"])
+        self.questions = list(state["questions"])
+        self._answers = _decode(state["answers"])
+        self._completed = {
+            pid: set(ids) for pid, ids in state["completed"].items()
+        }
+        self._scores = {pid: int(score) for pid, score in state["scores"].items()}
+        shell = state["shell"]
+        self.shell = ShellState()
+        self.shell.commands = list(shell["cmds"])
+        self.shell.allow_pipes = bool(shell["allowPipes"])
+        self.shell.vars = dict(shell["vars"])
+        self.shell.fs.from_dict(shell["fs"])
+        self._challenge_engine = ChallengeEngine(
+            self.shell, self.round_number, random.Random(self.seed + self.round_number)
+        )
+        for item in state["challenges"]:
+            goal = GOAL_TYPES[item["goal_type"]](**_decode(item["goal"]))
+            challenge = Challenge(
+                id=item["id"],
+                command=item["command"],
+                mode=item["mode"],
+                variant=item["variant"],
+                prompt=item["prompt"],
+                example=item["example"],
+                goal=goal,
+            )
+            self._challenge_engine.challenges[challenge.id] = challenge
+        if {item["id"] for item in self.questions} != set(
+            self._challenge_engine.challenges
+        ):
+            raise ValueError("Saved questions do not match their goals")
 
     def start_round(self, player_ids: list[str]) -> dict:
         """Generate the configured mix of tasks for every player."""
