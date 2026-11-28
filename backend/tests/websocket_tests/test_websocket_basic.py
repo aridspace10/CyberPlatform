@@ -146,6 +146,7 @@ def test_versus_round_starts_for_both_players_and_expires(session, client):
             and message.get("state") == "finished"
         )
         assert ended["gameData"]["finished"] is True
+        assert ended["gameData"]["finishReason"] == "time_expired"
 
 
 def test_disconnected_guest_does_not_satisfy_versus_start_quorum(session, client):
@@ -209,6 +210,7 @@ def test_disconnected_guest_does_not_block_versus_round_completion(session, clie
         and item.get("state") == "finished"
     )
     assert finished["gameData"]["progress"] == {"completed": 1, "total": 1}
+    assert finished["gameData"]["finishReason"] == "rounds_exhausted"
 
 
 def test_ten_grep_answers_advance_to_fresh_round(session):
@@ -289,6 +291,7 @@ def test_mixed_grep_and_sed_round_finishes_from_terminal_commands(session):
         and message["state"] == "finished"
     )
     assert finished["gameData"]["leaderboard"][0]["completed"] == 2
+    assert finished["gameData"]["finishReason"] == "all_questions_completed"
 
 
 def test_background_job_keeps_prompt_available_and_streams_completion(session):
