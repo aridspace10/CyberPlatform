@@ -7,11 +7,12 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[2] / "backend"
 sys.path.insert(0, str(BACKEND))
 
+os.environ["CYBERPLATFORM_CORS_ORIGINS"] = "http://127.0.0.1:5174"
+os.environ["CYBERPLATFORM_JWT_SECRET"] = "e2e-only-local-secret-not-for-deployment"
+
 from db import seed  # noqa: E402
 
 seed.CONFIG_FOLDER = str(BACKEND / "game" / "configs")
-os.environ["CYBERPLATFORM_CORS_ORIGINS"] = "http://127.0.0.1:5174"
-os.environ["CYBERPLATFORM_JWT_SECRET"] = "e2e-only-local-secret-not-for-deployment"
 
 from main import app  # noqa: E402
 
