@@ -41,7 +41,7 @@ def test_mkdir_creation_places_basename_under_correct_parent(
     result = run_creation(f"{command} {operand}")
 
     node = assert_created(creation_shell, expected_path, node_type)
-    assert node.inode.data == []
+    assert node.get_data() == []
     assert node.items == []
     assert_success(result)
 

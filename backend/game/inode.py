@@ -1,4 +1,6 @@
+
 from __future__ import annotations
+
 import base64
 from datetime import datetime
 from enum import Enum
@@ -19,10 +21,8 @@ class Inode:
 
         self.type: NodeType = type
         self.link_count = 1
-        self.data: list[str] = []
-        self.binary_data: bytes | None = None
+        self.data: bytes = b""
         self.symlink_target: str | None = None
-        self.has_trailing_newline: bool = False
         self.owner = "user"
         self.group = "user"
 
@@ -38,11 +38,16 @@ class Inode:
         self.atime = now
         self.mtime = now
 
+    # --------------------------------------------------
+    # Serialization
+    # --------------------------------------------------
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "type": self.type.value,
-            "data": self.data,
+            "data": base64.b64encode(self.data).decode("ascii"),
+            "data_encoding": "base64",
             "symlink_target": self.symlink_target,
             "has_trailing_newline": self.has_trailing_newline,
             "link_count": self.link_count,
@@ -53,79 +58,122 @@ class Inode:
             "ctimes": self.ctime.isoformat(),
             "atimes": self.atime.isoformat(),
             "mtimes": self.mtime.isoformat(),
-            "binary_data": (
-                base64.b64encode(self.binary_data).decode("ascii")
-                if self.binary_data is not None
-                else None
-            ),
         }
 
     def from_dict(self, i: dict) -> None:
         self.id = i["id"]
         Inode._next_id = max(Inode._next_id, self.id + 1)
         self.type = NodeType(i["type"])
-        self.data = i["data"]
+
+        # New byte-based serialization format
+        if i.get("data_encoding") == "base64":
+            self.data = base64.b64decode(i["data"])
+
+        # Legacy binary storage format
+        elif i.get("binary_data") is not None:
+            self.data = base64.b64decode(i["binary_data"])
+
+        # Legacy list[str] storage format
+        else:
+            text = "\n".join(i.get("data", []))
+
+            if i.get("has_trailing_newline", False):
+                text += "\n"
+
+            self.data = text.encode("utf-8")
+
         self.symlink_target = i.get("symlink_target")
+
+        # Legacy symlink compatibility
         if self.type == NodeType.SYMLINK and self.symlink_target is None:
-            legacy_data = self.data
-            self.symlink_target = legacy_data[0] if legacy_data else None
-        # Older saves have neither field. Their restored newline state was
-        # false; keep that behavior because the original value is unknowable.
-        self.has_trailing_newline = i.get("has_trailing_newline", False)
+            legacy_data = i.get("data", [])
+
+            if isinstance(legacy_data, list) and legacy_data:
+                self.symlink_target = legacy_data[0]
+
         self.link_count = i.get("link_count", 1)
         self.owner = i.get("owner", "user")
         self.group = i.get("group", "user")
         self.permissions = i["permissions"]
+
         self.btime = datetime.fromisoformat(i["btimes"])
         self.ctime = datetime.fromisoformat(i["ctimes"])
         self.atime = datetime.fromisoformat(i["atimes"])
         self.mtime = datetime.fromisoformat(i["mtimes"])
 
-        encoded = i.get("binary_data")
-
-        self.binary_data = (
-            base64.b64decode(encoded)
-            if encoded is not None
-            else None
-        )
+    # --------------------------------------------------
+    # Properties
+    # --------------------------------------------------
 
     @property
-    def size(self):
-        return sum(len(line) for line in self.data)
+    def size(self) -> int:
+        return len(self.data)
 
-    def get_data(self) -> list[str]:
+    @property
+    def has_trailing_newline(self) -> bool:
+        return self.data.endswith(b"\n")
+
+    @has_trailing_newline.setter
+    def has_trailing_newline(self, value: bool) -> None:
+        if value and not self.data.endswith(b"\n"):
+            self.append_byte_data(b"\n")
+
+        elif not value and self.data.endswith(b"\n"):
+            self.set_byte_data(self.data[:-1])
+
+    # --------------------------------------------------
+    # Binary interface
+    # --------------------------------------------------
+
+    def get_byte_data(self) -> bytes:
         self.atime = datetime.now()
         return self.data
 
-    def set_data(self, data: list[str]) -> None:
+    def set_byte_data(self, data: bytes) -> None:
+        self.data = bytes(data)
         self.mtime = datetime.now()
-        self.data = data
-        self.has_trailing_newline = bool(data)
+
+    def append_byte_data(self, data: bytes) -> None:
+        if not data:
+            return
+
+        self.data += bytes(data)
+        self.mtime = datetime.now()
+
+    # --------------------------------------------------
+    # Text interface
+    # --------------------------------------------------
+
+    def get_data(self) -> list[str]:
+        data = self.get_byte_data()
+
+        if not data:
+            return []
+
+        text = data.decode("utf-8", errors="surrogateescape")
+        lines = text.split("\n")
+
+        if text.endswith("\n"):
+            lines.pop()
+
+        return lines
+
+    def set_data(self, data: list[str]) -> None:
+        text = "\n".join(data)
+
+        if data:
+            text += "\n"
+
+        self.set_byte_data(
+            text.encode("utf-8", errors="surrogateescape")
+        )
 
     def append_data(self, data: list[str]) -> None:
         if not data:
             return
-        self.mtime = datetime.now()
-        if self.data and not self.has_trailing_newline:
-            self.data[-1] += data[0]
-            self.data.extend(data[1:])
-        else:
-            self.data.extend(data)
-        self.has_trailing_newline = True
-    
-    def append_byte_data(self, data: bytes) -> None:
-        if self.binary_data is None:
-            self.binary_data = b""
 
-        self.binary_data += data
-        self.mtime = datetime.now()
+        text = "\n".join(data) + "\n"
 
-    def get_byte_data(self) -> bytes:
-        if self.binary_data is not None:
-            return self.binary_data
-
-        text = "\n".join(self.data)
-        if self.has_trailing_newline:
-            text += "\n"
-
-        return text.encode("utf-8")
+        self.append_byte_data(
+            text.encode("utf-8", errors="surrogateescape")
+        )

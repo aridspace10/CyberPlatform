@@ -53,7 +53,7 @@ def test_touch_creation_places_basename_under_correct_parent(
     result = run_creation(f"{command} {operand}")
 
     node = assert_created(creation_shell, expected_path, node_type)
-    assert node.inode.data == []
+    assert node.get_data() == []
     assert node.items == []
     assert_success(result)
 
@@ -163,13 +163,13 @@ def test_touch_supported_dates_apply_to_existing_and_new_files(
 ):
     original = node_at(creation_shell, "work/existing.txt")
     inode = original.inode
-    data = list(inode.data)
+    data = inode.data
     birth = inode.btime
 
     result = run_creation(f"touch {date_option} existing.txt new.txt")
 
     new = assert_created(creation_shell, "work/new.txt", NodeType.FILE)
-    assert new.inode.data == []
+    assert new.inode.data == b""
     assert node_at(creation_shell, "work/existing.txt") is original
     assert original.inode is inode
     assert inode.data == data
@@ -198,7 +198,7 @@ def test_touch_updates_selected_timestamps_and_preserves_content(
     node = node_at(creation_shell, "work/existing.txt")
     inode = node.inode
     parent = node.parent
-    data = list(inode.data)
+    data = inode.data
     birth = inode.btime
 
     result = run_creation(f"touch {selection} -d 2024-02-29 existing.txt")
@@ -224,10 +224,10 @@ def test_touch_default_uses_current_time_for_both_timestamps(
         node = assert_created(creation_shell, path, NodeType.FILE)
         assert before <= node.inode.atime <= after
         assert before <= node.inode.mtime <= after
-    assert node_at(creation_shell, "work/existing.txt").inode.data == [
+    assert node_at(creation_shell, "work/existing.txt").inode.get_data() == [
         "keep existing content"
     ]
-    assert node_at(creation_shell, "work/new.txt").inode.data == []
+    assert node_at(creation_shell, "work/new.txt").inode.data == b""
     assert_success(result)
 
 
@@ -277,7 +277,7 @@ def test_touch_no_create_skips_missing_paths_and_updates_existing_operand(
     assert node_at(creation_shell, "work/existing.txt") is existing
     assert existing.inode.atime == (REQUESTED_TIME if change_access else OLD_ATIME)
     assert existing.inode.mtime == (REQUESTED_TIME if change_modified else OLD_MTIME)
-    assert existing.inode.data == ["keep existing content"]
+    assert existing.get_data() == ["keep existing content"]
     assert_success(result)
 
 

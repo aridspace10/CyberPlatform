@@ -275,7 +275,7 @@ class FileSystem:
                 target_path = child.inode.symlink_target
                 if target_path is None and child.inode.data:
                     # Older callers and save files stored the target in data.
-                    target_path = child.inode.data[0]
+                    target_path = child.inode.get_data()[0]
                 if target_path is None:
                     return PathResolutionError(
                         path, f"Invalid symbolic link: {child.name}", "invalid_symlink"

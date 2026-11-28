@@ -31,6 +31,7 @@ COMMAND_CONTRACTS = {
     "ps": ("List processes managed by this shell.", "none", "none", "-e/-A -l -C NAME -p PID -q PID --help", "Returns 0 for a valid listing.", "Shows simulated shell processes only; output selection is limited."),
     "sleep": ("Wait for the sum of one or more nonnegative decimal durations.", "NUMBER[SUFFIX]...", "none", "--help", "Returns 1 when an interval is missing or invalid.", "Each duration may use s, m, h, or d; decimal intervals are supported and the total rounds up to whole one-second scheduler ticks."),
     "cut": ("Select delimiter-separated fields from lines.", "-f LIST [-d CHAR] [-s] [FILE...]; '-' means stdin", "yes", "-d CHAR -f N[,N...] -s -- --help", "Returns 1 for invalid options or input errors.", "Field numbers are positive comma-separated integers; ranges, character selection, and long/attached options are unsupported."),
+    "tar": ("Create an archive of regular files.", "-cf ARCHIVE FILE...", "none", "-c -f ARCHIVE -v --help", "Returns 1 for invalid arguments or missing files.", "Extraction, listing, compression, and directory archiving are not implemented."),
 }
 
 COMMAND_EXAMPLES = {
@@ -59,6 +60,7 @@ COMMAND_EXAMPLES = {
     "ps": "ps",
     "sleep": "sleep 1",
     "cut": "cut -f 1",
+    "tar": "tar -cf archive.tar note.txt",
 }
 
 

@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Literal, Tuple
+import struct
+import zlib
 
 from game.Context import CommandContext, ExecutionContext, SystemContext
 from game.filenode import FileNode
@@ -740,17 +742,19 @@ class CommandLine:
         return CommandResult(0, interaction=Interaction(mode="foreground"))
 
     def tar(self, ctx: CommandContext) -> CommandResult:
+        if ctx.args == ["--help"]:
+            return CommandResult(stdout=format_command_help("tar"))
         action: Literal[None, "create", "extract", "list"] = None
         arch_name = ""
         status = 0
+        gzip = False
+        verbose = False
         stdout = []
         stderr = []
         files = []
-        while (len(ctx.args)):
+        while ctx.args:
             arg = ctx.args.pop(0)
-            if (len(arg) == "-"):
-                if (len(arg) < 2):
-                    pass #do later
+            if len(arg) > 1 and arg[0] == "-":
                 for val in arg[1:]:
                     if val == "c":
                         action = "create"
@@ -758,18 +762,27 @@ class CommandLine:
                         action = "extract"
                     elif val == "l":
                         action = "list"
+                    elif val == "z":
+                        gzip = True
+                    elif val == "v":
+                        verbose = True
                     elif val == "f":
-                        if (len(ctx.args)):
+                        if (not len(ctx.args)):
                             return CommandResult(1, stderr=["tar: no file given"])
                         arch_name = ctx.args.pop(0)
+                    else:
+                        return CommandResult(1, stderr=["tar: unknown argument given"])
             else:
-                if not (arch_name):
-                    if (len(ctx.args)):
-                        return CommandResult(1, stderr=["tar: no archive name given"])
-                    arch_name = ctx.args.pop(0)
-                files = ctx.args
+                if not arch_name:
+                    arch_name = arg
+                else:
+                    files.append(arg)
         if action == None:
             return CommandResult(1, stderr=["tar: no action given"])
+        if not arch_name:
+            return CommandResult(1, stderr=["tar: no archive name given"])
+        if action != "create":
+            return CommandResult(1, stderr=["tar: option not implemented"])
 
         if action == "create":
             if not files:
@@ -780,15 +793,27 @@ class CommandLine:
             for file in files:
                 # Get file
                 fn = ctx.system.fs.get_file(file)
+
                 if isinstance(fn, str) or fn is None:
-                    return CommandResult(1, stderr=[f"tar: {file}: not found"])
+                    return CommandResult(
+                        1, stderr=[f"tar: {file}: not found"]
+                    )
+
+                if fn.get_type() != NodeType.FILE:
+                    return CommandResult(
+                        1, stderr=[f"tar: {file}: not a regular file"]
+                    )
+
                 # Get file contents as bytes
                 content = fn.inode.get_byte_data()
+
                 # Build TAR header
                 header = bytearray(512)
+
                 # Filename
                 filename = file.removeprefix("./")
                 name_bytes = filename.encode("utf-8")
+
                 if len(name_bytes) > 100:
                     return CommandResult(
                         1, stderr=[f"tar: {file}: filename too long"]
@@ -805,7 +830,7 @@ class CommandLine:
                 # Group ID
                 header[116:124] = b"0000000\0"
 
-                # File size (in bytes, octal)
+                # File size
                 header[124:136] = f"{len(content):011o}\0".encode("ascii")
 
                 # Modification time
@@ -825,23 +850,69 @@ class CommandLine:
                 checksum = sum(header)
                 header[148:156] = f"{checksum:06o}\0 ".encode("ascii")
 
-                # Write header
+                # Write TAR header
                 inode.append_byte_data(header)
 
-                # Write actual file contents
+                # Write file contents
                 inode.append_byte_data(content)
 
                 # Pad to 512-byte boundary
                 padding = (-len(content)) % 512
                 inode.append_byte_data(b"\0" * padding)
 
-            # End of archive
+                if verbose:
+                    stdout.append(filename)
+
+            # End of TAR archive (outside the loop)
             inode.append_byte_data(b"\0" * 1024)
 
-            # Add archive to filesystem
-            ctx.system.fs.current.add_child(arch_name, inode)
+            # Compress the entire TAR archive if requested
+            if gzip:
+                content = inode.get_byte_data()
 
-            return CommandResult(0)
+                # Build GZIP header
+                header = bytearray(10)
+
+                header[0:2] = b"\x1f\x8b"
+                header[2] = 8
+                header[3] = 0
+                header[4:8] = struct.pack("<I", 0)
+                header[8] = 0
+                header[9] = 3
+
+                # Compress using raw DEFLATE
+                compressor = zlib.compressobj(
+                    level=6,
+                    wbits=-15
+                )
+
+                compressed = compressor.compress(content)
+                compressed += compressor.flush()
+
+                # Build GZIP trailer
+                crc = zlib.crc32(content)
+                size = len(content) % (2 ** 32)
+
+                trailer = struct.pack("<II", crc, size)
+
+                # Replace uncompressed TAR with compressed TAR
+                inode.set_byte_data(
+                    bytes(header) + compressed + trailer
+                )
+
+            # Add archive to filesystem
+            error = ctx.system.fs.create_child(
+                ctx.system.fs.current,
+                arch_name,
+                inode
+            )
+
+            if error:
+                return CommandResult(
+                    1, stderr=[f"tar: {arch_name}: {error}"]
+                )
+
+            return CommandResult(0, stdout=stdout)
 
         return CommandResult(status, stdout=stdout, stderr=stderr)
 
@@ -1419,9 +1490,8 @@ class CommandLine:
 
         def clone_inode(source_inode: Inode) -> Inode:
             inode = Inode(source_inode.type)
-            inode.data = copy.deepcopy(source_inode.data)
+            inode.set_byte_data(source_inode.data)
             inode.symlink_target = source_inode.symlink_target
-            inode.has_trailing_newline = source_inode.has_trailing_newline
             inode.permissions = copy.deepcopy(source_inode.permissions)
             return inode
 
@@ -1461,8 +1531,7 @@ class CommandLine:
             elif target_exists and target_type == NodeType.FILE:
                 if source_type != NodeType.FILE:
                     continue
-                target.inode.set_data(copy.deepcopy(source.inode.data))
-                target.inode.has_trailing_newline = source.inode.has_trailing_newline
+                target.inode.set_byte_data(source.inode.data)
             else:
                 if target_parent is None or target_name is None:
                     return CommandResult(

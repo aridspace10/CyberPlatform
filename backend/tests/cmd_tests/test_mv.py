@@ -17,7 +17,7 @@ def test_mv_dot_paths_source_and_destination(run_dot_command, dot_shell, dot_pre
     assert moved is not None
     assert moved.inode is inode
     assert moved.parent is current
-    assert moved.inode.data == ["beta:2", "alpha:1", "alpha:1"]
+    assert moved.get_data() == ["beta:2", "alpha:1", "alpha:1"]
     assert_success(result)
 
 
@@ -101,7 +101,7 @@ def test_mv_extensionless_rename_and_nested_destination_preserve_tree(
     assert result.status == 0
     assert fs.current.access("source") is None
     assert moved is source
-    assert moved.inode.data == ["payload"]
+    assert moved.get_data() == ["payload"]
     assert moved.parent is fs.current.access("nested")
     assert len([item for item in moved.parent.items if item.name == "renamed"]) == 1
 

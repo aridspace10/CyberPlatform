@@ -204,8 +204,8 @@ def test_sort_dot_paths_output_file(run_dot_command, dot_shell, dot_prefix):
     )
     output = current.access("sorted.txt")
     assert output is not None
-    assert output.inode.data == ["alpha:1", "alpha:1", "beta:2"]
-    assert source.inode.data == ["beta:2", "alpha:1", "alpha:1"]
+    assert output.get_data() == ["alpha:1", "alpha:1", "beta:2"]
+    assert source.get_data() == ["beta:2", "alpha:1", "alpha:1"]
     assert_success(result)
 
 
@@ -223,6 +223,6 @@ def test_sort_dot_paths_reject_invalid_output(run_dot_command, invalid_dot_path)
 def test_sort_dot_paths_read_parent_file(run_dot_command, dot_shell):
     current = dot_shell.fs.current
     parent = current.parent if current.parent is not None else current
-    lines = list(parent.access("data.txt").inode.data)
+    lines = parent.access("data.txt").get_data()
     result = run_dot_command("sort ../data.txt")
     assert_success(result, sorted(lines))

@@ -3,7 +3,7 @@
 import pytest
 from game.commandline import CommandResult
 from game.inode import Inode, NodeType
-from tests.cmd_tests.creation_helpers import child
+from tests.cmd_tests.creation_helpers import OLD_MTIME, child
 from tests.cmd_tests.path_helpers import tree_state
 
 
@@ -13,9 +13,14 @@ def creation_shell(shell_empty):
     work = child(root, "work", NodeType.DIRECTORY)
     parent = child(work, "parent", NodeType.DIRECTORY)
     child(root, "other", NodeType.DIRECTORY)
-    child(parent, "keep.txt", NodeType.FILE).inode.data = ["keep nested content"]
-    child(work, "existing.txt", NodeType.FILE).inode.data = ["keep existing content"]
-    child(work, "blocker", NodeType.FILE).inode.data = ["not a directory"]
+    for directory, name, content in (
+        (parent, "keep.txt", "keep nested content"),
+        (work, "existing.txt", "keep existing content"),
+        (work, "blocker", "not a directory"),
+    ):
+        inode = child(directory, name, NodeType.FILE).inode
+        inode.set_data([content])
+        inode.mtime = OLD_MTIME
     shell_empty.fs.current = work
     shell_empty.fs.cwd = "/work"
     shell_empty.cwd = "/work"

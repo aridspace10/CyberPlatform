@@ -206,7 +206,7 @@ def test_sed_invalid_regex_does_not_create_backup_or_mutate_file(cl, shell_basic
 
 def test_sed_output_only_preserves_source_data_and_mtime(cl, shell_sed):
     source = shell_sed.fs.current.access("f1.txt")
-    before_data = list(source.inode.data)
+    before_data = source.inode.data
     before_mtime = source.inode.mtime
     before_newline = source.inode.has_trailing_newline
 
@@ -221,7 +221,7 @@ def test_sed_output_only_preserves_source_data_and_mtime(cl, shell_sed):
 
 def test_sed_output_only_multiple_expressions_leave_source_unchanged(cl, shell_sed):
     source = shell_sed.fs.current.access("f1.txt")
-    before_data = list(source.inode.data)
+    before_data = source.inode.data
     before_mtime = source.inode.mtime
 
     result = cl.enter_command(
@@ -236,7 +236,7 @@ def test_sed_output_only_multiple_expressions_leave_source_unchanged(cl, shell_s
 
 def test_sed_rejects_unreadable_input_without_output(cl, shell_basic):
     source = shell_basic.fs.filehead.access("f1.txt")
-    original_data = list(source.inode.data)
+    original_data = source.inode.data
     source.inode.permissions["user"]["r"] = False
 
     result = cl.enter_command("sed 's/ERROR/notice/' f1.txt", shell_basic)
@@ -249,7 +249,7 @@ def test_sed_rejects_unreadable_input_without_output(cl, shell_basic):
 
 def test_sed_in_place_rejects_unwritable_file_without_mutation(cl, shell_basic):
     source = shell_basic.fs.filehead.access("f1.txt")
-    original_data = list(source.inode.data)
+    original_data = source.inode.data
     source.inode.permissions["user"]["w"] = False
 
     result = cl.enter_command("sed -i 's/ERROR/notice/' f1.txt", shell_basic)
@@ -263,7 +263,7 @@ def test_sed_in_place_rejects_unwritable_file_without_mutation(cl, shell_basic):
 def test_sed_backup_requires_writable_parent_without_mutation(cl, shell_basic):
     source = shell_basic.fs.filehead.access("f1.txt")
     root = shell_basic.fs.filehead
-    original_data = list(source.inode.data)
+    original_data = source.inode.data
     root.inode.permissions["user"]["w"] = False
 
     result = cl.enter_command("sed -i.bak 's/ERROR/notice/' f1.txt", shell_basic)
@@ -283,7 +283,7 @@ def test_sed_in_place_backup_preserves_original_newline_metadata(
 ):
     shell = request.getfixturevalue(fixture_name)
     source = shell.fs.current.access("t.txt")
-    original_data = list(source.inode.data)
+    original_data = source.inode.data
     source.inode.has_trailing_newline = has_trailing_newline
 
     result = cl.enter_command("sed -i.bak 's/a/A/' t.txt", shell)
@@ -292,7 +292,7 @@ def test_sed_in_place_backup_preserves_original_newline_metadata(
     assert result.status == 0
     assert result.stdout == []
     assert result.stderr == []
-    assert source.inode.data == ["A", "b"]
+    assert source.get_data() == ["A", "b"]
     assert backup.inode.data == original_data
     assert backup.inode.has_trailing_newline is has_trailing_newline
     assert source.inode.has_trailing_newline is has_trailing_newline
@@ -305,13 +305,13 @@ def test_sed_in_place_without_suffix_only_updates_source(cl, shell_sed):
 
     assert result.status == 0
     assert result.stdout == []
-    assert source.inode.data == ["dog wolf dog", "hi dog"]
+    assert source.get_data() == ["dog wolf dog", "hi dog"]
     assert shell_sed.fs.current.access("f1.txt.bak") is None
 
 
 def test_sed_late_expression_error_leaves_source_and_backup_unchanged(cl, shell_sed):
     source = shell_sed.fs.current.access("f1.txt")
-    original_data = list(source.inode.data)
+    original_data = source.inode.data
     original_mtime = source.inode.mtime
 
     result = cl.enter_command(
@@ -639,7 +639,7 @@ def test_sed_dot_paths_in_place_edit(run_dot_command, dot_shell, dot_prefix):
     result = run_dot_command(
         f"sed -i 's/beta/BETA/' {dot_prefix}data.txt", unchanged=False
     )
-    assert source.inode.data == ["BETA:2", "alpha:1", "alpha:1"]
+    assert source.get_data() == ["BETA:2", "alpha:1", "alpha:1"]
     assert result.status == 0
     assert result.stderr == []
 
@@ -647,6 +647,6 @@ def test_sed_dot_paths_in_place_edit(run_dot_command, dot_shell, dot_prefix):
 def test_sed_dot_paths_read_parent_file(run_dot_command, dot_shell):
     current = dot_shell.fs.current
     parent = current.parent if current.parent is not None else current
-    lines = list(parent.access("data.txt").inode.data)
+    lines = parent.access("data.txt").get_data()
     result = run_dot_command("sed -n p ../data.txt")
     assert_success(result, lines)

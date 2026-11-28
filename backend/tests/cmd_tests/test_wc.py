@@ -307,6 +307,6 @@ def test_wc_dot_paths_preserve_literal_dot_names(run_dot_command):
 def test_wc_dot_paths_read_parent_file(run_dot_command, dot_shell):
     current = dot_shell.fs.current
     parent = current.parent if current.parent is not None else current
-    lines = list(parent.access("data.txt").inode.data)
+    lines = parent.access("data.txt").get_data()
     result = run_dot_command("wc -l ../data.txt")
     assert_success(result, [str(len(lines))])

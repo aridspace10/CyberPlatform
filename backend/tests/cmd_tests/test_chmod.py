@@ -120,7 +120,7 @@ def test_chmod_applies_one_numeric_mode_to_every_target(cl, shell_basic):
     original_current = shell_basic.fs.current
     original_cwd = shell_basic.cwd
     original_fs_cwd = shell_basic.fs.cwd
-    before_data = [list(node.inode.data) for node in (first, second)]
+    before_data = [node.inode.data for node in (first, second)]
     before_mtime = [node.inode.mtime for node in (first, second)]
     untouched_permissions = deepcopy(untouched.inode.permissions)
 
@@ -215,7 +215,7 @@ def test_chmod_updates_shared_inode_ctime_without_changing_content_or_mtime(
     old_ctime = datetime(2000, 1, 1)
     source.inode.ctime = old_ctime
     before_mtime = source.inode.mtime
-    before_data = list(source.inode.data)
+    before_data = source.inode.data
 
     result = cl.enter_command("chmod 600 linked.txt", shell_basic)
 
@@ -232,7 +232,7 @@ def test_chmod_recursive_updates_descendant_inode_ctimes(cl, shell_basic):
     directory = shell_basic.fs.filehead.access("d1")
     descendants_before = list(descendants(directory))
     old_ctime = datetime(2000, 1, 1)
-    original_data = [list(node.inode.data) for node in descendants_before]
+    original_data = [node.inode.data for node in descendants_before]
     original_mtime = [node.inode.mtime for node in descendants_before]
     for node in descendants_before:
         node.inode.ctime = old_ctime

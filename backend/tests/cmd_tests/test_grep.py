@@ -632,7 +632,7 @@ def test_grep_dot_paths_preserve_literal_dot_names(run_dot_command):
 
 def test_grep_dot_paths_recursive_search(run_dot_command, dot_directory):
     operand, target = dot_directory
-    expected = [line for node in descendants(target) for line in node.inode.data]
+    expected = [line for node in descendants(target) for line in node.get_data()]
     result = run_dot_command(f"grep -r : {operand}")
     assert result.status == 0
     assert result.stderr == []
@@ -646,6 +646,6 @@ def test_grep_dot_paths_recursive_search(run_dot_command, dot_directory):
 def test_grep_dot_paths_read_parent_file(run_dot_command, dot_shell):
     current = dot_shell.fs.current
     parent = current.parent if current.parent is not None else current
-    lines = list(parent.access("data.txt").inode.data)
+    lines = parent.access("data.txt").get_data()
     result = run_dot_command("grep : ../data.txt")
     assert_success(result, lines)

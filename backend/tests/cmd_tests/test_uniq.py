@@ -74,7 +74,7 @@ def test_uniq_comparison_options_preserve_original_lines(cl, shell_empty):
 
     assert result.status == 0
     assert result.stdout == ["Cat", "DOG"]
-    assert shell_empty.fs.current.access("input.txt").inode.data == source_lines
+    assert shell_empty.fs.current.access("input.txt").get_data() == source_lines
 
 
 def test_uniq_skips_fields_before_characters(cl, shell_empty):
@@ -181,7 +181,7 @@ def test_uniq_dot_paths_preserve_literal_dot_names(run_dot_command):
 def test_uniq_dot_paths_read_parent_file(run_dot_command, dot_shell):
     current = dot_shell.fs.current
     parent = current.parent if current.parent is not None else current
-    lines = list(parent.access("data.txt").inode.data)
+    lines = parent.access("data.txt").get_data()
     result = run_dot_command("uniq ../data.txt")
     assert_success(
         result, [line for i, line in enumerate(lines) if i == 0 or line != lines[i - 1]]

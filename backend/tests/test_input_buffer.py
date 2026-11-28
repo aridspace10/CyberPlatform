@@ -8,7 +8,7 @@ from game.InputBuffer import InputBuffer
 def test_file_input_is_an_immutable_snapshot(shell_basic, has_trailing_newline):
     source = shell_basic.fs.resolve("f1.txt")
     source.inode.has_trailing_newline = has_trailing_newline
-    original = tuple(source.inode.data)
+    original = tuple(source.get_data())
     buffer = InputBuffer.from_file(source)
 
     assert buffer.lines == original
@@ -19,9 +19,9 @@ def test_file_input_is_an_immutable_snapshot(shell_basic, has_trailing_newline):
         buffer.has_trailing_newline = not has_trailing_newline
     with pytest.raises(TypeError):
         buffer.lines[0] = "changed"
-    assert tuple(source.inode.data) == original
+    assert tuple(source.get_data()) == original
 
-    source.inode.data[0] = "changed after reading"
+    source.set_data(["changed after reading"])
     source.inode.has_trailing_newline = not has_trailing_newline
     assert buffer.lines == original
     assert buffer.has_trailing_newline is has_trailing_newline

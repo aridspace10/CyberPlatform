@@ -155,7 +155,7 @@ def test_failed_input_redirection_never_invokes_handler_or_creates_file(
 @pytest.mark.parametrize("redirect", [">", ">>"])
 def test_redirection_checks_existing_file_write_permission(cl, shell_basic, redirect):
     target = shell_basic.fs.filehead.access("f1.txt")
-    original = list(target.inode.data)
+    original = target.inode.data
     target.inode.permissions["user"]["w"] = False
 
     result = cl.enter_command(f"echo changed {redirect} f1.txt", shell_basic)
@@ -216,7 +216,7 @@ def test_shell_dot_paths_redirection_resolves_file(
     run_dot_command, dot_shell, dot_prefix, operator
 ):
     source = dot_shell.fs.current.access("data.txt")
-    before = list(source.inode.data)
+    before = source.get_data()
     if operator == "<":
         result = run_dot_command(f"cat < {dot_prefix}data.txt")
         assert_success(result, before)
@@ -226,7 +226,7 @@ def test_shell_dot_paths_redirection_resolves_file(
         )
         assert_success(result)
         expected = before + ["changed"] if operator == ">>" else ["changed"]
-        assert source.inode.data == expected
+        assert source.get_data() == expected
 
 
 @pytest.mark.integration
@@ -280,9 +280,9 @@ def test_input_redirection_after_output_redirect_is_isolated(cl, shell_basic):
 
     result = cl.enter_command("echo first > out.txt && cat < f1.txt", shell_basic)
 
-    assert_success(result, list(source.inode.data))
+    assert_success(result, source.get_data())
     output = shell_basic.fs.resolve("out.txt")
-    assert output.inode.data == ["first"]
+    assert output.get_data() == ["first"]
     assert output.inode.has_trailing_newline
 
 
@@ -291,7 +291,7 @@ def test_input_redirection_does_not_leak_to_next_command(cl, shell_basic):
 
     result = cl.enter_command("cat < f1.txt && cat -", shell_basic)
 
-    assert_success(result, list(source.inode.data))
+    assert_success(result, source.get_data())
 
 
 @pytest.mark.parametrize("target", ["d1", ".", "d1/", "missing/file", "f1.txt/file"])
@@ -329,11 +329,11 @@ def test_output_redirection_follows_regular_file_symlink(cl, shell_basic):
 
     assert_success(cl.enter_command("echo replacement > filelink", shell_basic))
 
-    assert target.inode.data == ["replacement"]
+    assert target.get_data() == ["replacement"]
     assert target.inode.has_trailing_newline is True
     link = shell_basic.fs.get_file("filelink")
     assert link.inode.symlink_target == "f1.txt"
-    assert link.inode.data == []
+    assert link.get_data() == []
 
 
 def test_multiple_output_redirects_apply_in_order(cl, shell_basic):
@@ -342,22 +342,22 @@ def test_multiple_output_redirects_apply_in_order(cl, shell_basic):
     result = cl.enter_command("echo final > f1.txt > second.txt", shell_basic)
 
     assert_success(result)
-    assert first.inode.data == []
+    assert first.get_data() == []
     assert first.inode.has_trailing_newline is False
     second = shell_basic.fs.resolve("second.txt")
-    assert second.inode.data == ["final"]
+    assert second.get_data() == ["final"]
     assert second.inode.has_trailing_newline is True
 
 
 def test_mixed_redirections_use_final_input_and_output(cl, shell_basic):
     source = shell_basic.fs.resolve("f1.txt")
-    expected = list(source.inode.data)
+    expected = source.get_data()
 
     result = cl.enter_command("cat < f2.txt < f1.txt > out.txt", shell_basic)
 
     assert_success(result)
     output = shell_basic.fs.resolve("out.txt")
-    assert output.inode.data == expected
+    assert output.get_data() == expected
     assert output.inode.has_trailing_newline is True
 
 
@@ -365,13 +365,13 @@ def test_truncate_and_append_empty_output_preserve_correct_newline_state(cl, she
     target = shell_basic.fs.resolve("f1.txt")
 
     assert_success(cl.enter_command("cat - > f1.txt", shell_basic))
-    assert target.inode.data == []
+    assert target.get_data() == []
     assert target.inode.has_trailing_newline is False
 
     target.set_data(["unfinished"])
     target.inode.has_trailing_newline = False
     assert_success(cl.enter_command("cat - >> f1.txt", shell_basic))
-    assert target.inode.data == ["unfinished"]
+    assert target.get_data() == ["unfinished"]
     assert target.inode.has_trailing_newline is False
 
 
@@ -381,7 +381,7 @@ def test_append_updates_newline_state_and_joins_unterminated_line(cl, shell_basi
     target.inode.has_trailing_newline = False
 
     assert_success(cl.enter_command("echo tail >> f1.txt", shell_basic))
-    assert target.inode.data == ["unfinishedtail"]
+    assert target.get_data() == ["unfinishedtail"]
     assert target.inode.has_trailing_newline is True
 
     assert_success(cl.enter_command("echo abc >> new.txt", shell_basic))
@@ -390,7 +390,7 @@ def test_append_updates_newline_state_and_joins_unterminated_line(cl, shell_basi
 
 def test_subshell_inherits_redirected_and_pipeline_input(cl, shell_basic):
     source = shell_basic.fs.resolve("f1.txt")
-    expected = list(source.inode.data)
+    expected = source.get_data()
 
     assert_success(cl.enter_command("(cat -) < f1.txt", shell_basic), expected)
     assert_success(cl.enter_command("cat f1.txt | (cat -)", shell_basic), expected)
@@ -428,7 +428,7 @@ def test_semicolon_basic(cl, shell_basic: ShellState):
 def test_shell_copy_then_write_preserves_source_and_rereads_copy(cl, shell_fouritems):
     source = shell_fouritems.fs.resolve("f1.txt")
     source_inode = source.inode
-    original = list(source.inode.data)
+    original = source.get_data()
 
     result = cl.enter_command(
         "cp f1.txt copy.txt; echo independent > copy.txt; cat copy.txt; cat f1.txt",
@@ -440,8 +440,8 @@ def test_shell_copy_then_write_preserves_source_and_rereads_copy(cl, shell_fouri
     assert result.stderr == []
     assert result.stdout == ["independent", *original]
     assert copied.inode is not source_inode
-    assert copied.inode.data == ["independent"]
-    assert source.inode.data == original
+    assert copied.get_data() == ["independent"]
+    assert source.get_data() == original
 
 
 @pytest.mark.integration
@@ -470,13 +470,13 @@ def test_shell_sed_then_sort_and_cat_reread_persisted_contents(cl, shell_empty):
     assert result.status == 0
     assert result.stderr == []
     assert result.stdout == ["alpha", "omega", "omega", "alpha"]
-    assert source.inode.data == ["omega", "alpha"]
+    assert source.get_data() == ["omega", "alpha"]
 
 
 @pytest.mark.integration
 def test_shell_copy_and_edit_state_survives_filesystem_roundtrip(cl, shell_fouritems):
     source = shell_fouritems.fs.resolve("f1.txt")
-    original = list(source.inode.data)
+    original = source.get_data()
     result = cl.enter_command(
         "cp f1.txt copy.txt; echo persisted > copy.txt", shell_fouritems
     )
@@ -487,8 +487,8 @@ def test_shell_copy_and_edit_state_survives_filesystem_roundtrip(cl, shell_fouri
     restored = restored_filesystem(shell_fouritems.fs)
     restored_source = restored.resolve("f1.txt")
     restored_copy = restored.resolve("copy.txt")
-    assert restored_source.inode.data == original
-    assert restored_copy.inode.data == ["persisted"]
+    assert restored_source.get_data() == original
+    assert restored_copy.inode.get_data() == ["persisted"]
     assert restored_source.inode is not restored_copy.inode
 
 
@@ -796,7 +796,7 @@ def test_redirections_can_be_interleaved_with_arguments(cl, shell_empty):
     assert result.stdout == []
     output = shell_empty.fs.current.access("out.txt")
     assert output is not None
-    assert output.inode.data == ["hello second"]
+    assert output.get_data() == ["hello second"]
 
 
 def test_conditional_operator_applies_to_whole_following_pipeline(cl, shell_empty):

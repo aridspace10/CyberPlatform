@@ -20,7 +20,6 @@ def test_cp_dot_paths_copy_source_and_destination(
     assert copied is not source
     assert copied.inode is not source.inode
     assert copied.inode.data == source.inode.data
-    assert copied.inode.data is not source.inode.data
     assert_success(result)
 
 
@@ -87,7 +86,7 @@ def test_cp_dot_paths_destination_directory(run_dot_command, dot_shell, dot_dire
     assert copied.parent is destination
     assert copied is not source
     assert copied.inode is not source.inode
-    assert copied.inode.data == ["leaf:3"]
+    assert copied.get_data() == ["leaf:3"]
     assert_success(result)
 
 

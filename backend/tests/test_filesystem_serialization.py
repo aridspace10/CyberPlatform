@@ -1,3 +1,4 @@
+import base64
 import json
 from copy import deepcopy
 
@@ -35,6 +36,8 @@ def test_legacy_save_restores_shared_links_with_documented_newline_default():
 
     legacy = json.loads(json.dumps(fs.to_dict()))
     for child in legacy["nodes"]["items"]:
+        child["inode"]["data"] = ["first", "second"]
+        child["inode"].pop("data_encoding")
         child["inode"].pop("has_trailing_newline")
         child["inode"].pop("link_count")
 
@@ -122,9 +125,31 @@ def test_symlink_target_round_trips_and_migrates_from_legacy_data():
     legacy = deepcopy(saved)
     inode_data = legacy["nodes"]["items"][0]["inode"]
     inode_data.pop("symlink_target")
+    inode_data.pop("data_encoding")
     inode_data["data"] = ["legacy-target"]
     restored.from_dict(legacy)
     assert restored.filehead.access("link").inode.symlink_target == "legacy-target"
+
+
+def test_binary_inode_round_trip_and_legacy_binary_data():
+    fs = FileSystem()
+    fs.add_file("archive.tar")
+    source = fs.filehead.access("archive.tar")
+    payload = b"\x00\xff\n\x00"
+    source.inode.set_byte_data(payload)
+
+    saved = json.loads(json.dumps(fs.to_dict()))
+    restored = FileSystem()
+    restored.from_dict(saved)
+    assert restored.filehead.access("archive.tar").inode.data == payload
+
+    legacy = deepcopy(saved)
+    inode_data = legacy["nodes"]["items"][0]["inode"]
+    inode_data.pop("data_encoding")
+    inode_data["data"] = []
+    inode_data["binary_data"] = base64.b64encode(payload).decode("ascii")
+    restored.from_dict(legacy)
+    assert restored.filehead.access("archive.tar").inode.data == payload
 
 
 def test_get_file_returns_error_for_missing_parent_path():
