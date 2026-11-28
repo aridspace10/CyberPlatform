@@ -3,6 +3,7 @@ import Gamescreen from "./Gamescreen";
 import WaitingScreen from "./WaitingScreen";
 import Versus from "./Versus";
 import GameDataPanel from "./GameDataPanel";
+import ResultsScreen from "./ResultsScreen";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { SessionContext } from "../components/SessionContext";
@@ -352,7 +353,7 @@ export default function Game() {
                     />
                 )}
                 {state === "starting" && <Versus players={players} />}
-                {state === "finished" && <div className="game-finished"><h1>Game complete</h1></div>}
+                {state === "finished" && <ResultsScreen gameData={gameData} userId={user?.id} />}
                 {!state && !access && !accessError && connectionStatus === "connecting" && <h1>Loading...</h1>}
             </main>
             {gameData && <GameDataPanel id="game-questions" gameData={gameData} />}
