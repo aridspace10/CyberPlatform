@@ -1,4 +1,7 @@
 export const COMMANDS = {
+    pwd: { description: "Print the current directory after navigating to it", groups: [{ name: "Navigation", options: [
+        ["Current Path", "Move to a target folder, then print its exact path."],
+    ] }] },
     ls: { description: "List files and folders", groups: [{ name: "Listing", options: [
         ["Show Hidden", "Include hidden entries."], ["Long Listing", "Show detailed file information."],
     ] }] },

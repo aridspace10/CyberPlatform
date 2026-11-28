@@ -665,7 +665,7 @@ class CommandLine:
             return CommandResult(0, stdout=self.useage(command))
 
         observed_args = tuple(ctx.args)
-        if command in {"ls", "cat", "wc"}:
+        if command in {"ls", "cat", "wc", "pwd"}:
             paths = [
                 arg for arg in observed_args
                 if arg != "--" and not arg.startswith("-")
@@ -676,8 +676,10 @@ class CommandLine:
             )
             if command == "ls" and not paths:
                 inode_ids = (sys.fs.current.inode.id,)
+            if command == "pwd":
+                inode_ids = (sys.fs.current.inode.id,)
         result = handler(ctx)
-        if command in {"ls", "cat", "wc"} and result.status == 0:
+        if command in {"ls", "cat", "wc", "pwd"} and result.status == 0:
             sys.shell.command_runs.append(
                 CommandRun(command, observed_args, inode_ids, tuple(result.stdout))
             )
