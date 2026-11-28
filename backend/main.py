@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from api.sessions import router as sessions_router
 from db.seed import seed_db
-from db.session import Base, SessionLocal, engine
+from db.session import SessionLocal, prepare_database
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from network.WebsocketServer import router as websocket_router
@@ -14,7 +14,7 @@ from routers import contact, users
 async def lifespan(app: FastAPI):
 
     # startup
-    Base.metadata.create_all(bind=engine)
+    prepare_database()
 
     db = SessionLocal()
     try:
