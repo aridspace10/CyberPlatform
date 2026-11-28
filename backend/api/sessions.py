@@ -9,10 +9,14 @@ from db.modals import JoinRequest, Scenario, ScenarioToSession, SessionShell
 from db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from game.GameManager import GameManager, QUESTION_MODES
+from game.GameManager import QUESTION_MODES, GameManager
 from jose import JWTError
 from network.SessionManger import session_manager
 from pydantic import BaseModel, ConfigDict, Field
+from services.public_launch import (
+    require_multiplayer_enabled,
+    require_public_sandbox_owner,
+)
 from services.session_logging import SessionLogger
 from services.session_service import (
     get_sandbox_session,
@@ -40,6 +44,7 @@ def require_session_member(db: Session, session_id: int, user_id: int):
     session = get_session(db, session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
+    require_public_sandbox_owner(db, session, user_id)
     if db.get(SessionShell, (session_id, user_id)) is None or not friend_scope_allows(
         db, session, user_id
     ):
@@ -104,6 +109,7 @@ class SessionCreate(BaseModel):
 ################### ROUTERS ###################
 @router.get("/sessions")
 def list_sessions(
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     credentials: HTTPAuthorizationCredentials | None = Depends(
         HTTPBearer(auto_error=False)
     ),
@@ -168,6 +174,7 @@ def list_sessions(
 @router.post("/session_create", status_code=201)
 async def session_create(
     body: SessionCreate,
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -257,6 +264,7 @@ async def session_create(
 @router.post("/session/{session_id}/requests", status_code=201)
 def request_session_join(
     session_id: int,
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -298,6 +306,7 @@ def request_session_join(
 @router.get("/session/{session_id}/access")
 def session_access(
     session_id: int,
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -342,6 +351,7 @@ def session_access(
 @router.get("/session/{session_id}/requests")
 def list_session_requests(
     session_id: int,
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -364,6 +374,7 @@ def list_session_requests(
 def accept_session_request(
     session_id: int,
     requester_id: int,
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -408,6 +419,7 @@ def accept_session_request(
 def decline_session_request(
     session_id: int,
     requester_id: int,
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -509,6 +521,7 @@ async def get_sandbox(
 
 @router.get("/shells")
 async def get_shells(
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     user_id: int = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     shells = db.query(SessionShell).filter_by(UserID=user_id).all()
@@ -526,6 +539,7 @@ async def get_shells(
 async def update_session_state(
     session_id: str,
     body: StateUpdate,
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -563,7 +577,10 @@ async def save_session_state(
 
 
 @router.get("/scenarios")
-async def get_scenarios(db: Session = Depends(get_db)):
+async def get_scenarios(
+    _launch_gate: None = Depends(require_multiplayer_enabled),
+    db: Session = Depends(get_db),
+):
     return {"scenarios": db.query(Scenario).all()}
 
 
@@ -617,6 +634,7 @@ def download_session_diagnostics(
 @router.get("/db/session/{session_id}")
 def debug_session(
     session_id: int,
+    _launch_gate: None = Depends(require_multiplayer_enabled),
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

@@ -5,6 +5,7 @@ import { useAuth } from "./auth/useAuth";
 import HomepageAd from "./HomepageAd";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
 import "./Homepage.css";
+import { PUBLIC_SANDBOX_ONLY } from "./publicLaunch";
 
 const steps = [
   ["01", "pwd · ls · cd", "Find your way around", "See where you are, discover what is nearby, and move through a virtual file system one command at a time."],
@@ -118,7 +119,7 @@ export default function Homepage() {
           {user ? sandboxButton("Enter your Sandbox") : <div className="home-cta-actions"><Link className="home-button home-button-primary" to="/signup">Create an account <span aria-hidden="true">↗</span></Link><Link to="/login">Already have an account? Sign in</Link></div>}
         </section>
 
-        {import.meta.env.DEV && <section className="home-dev-tools" aria-label="Local development tools"><h2>Local development tools</h2><p>Multiplayer sessions are still under development.</p><Link to="/sessions">Browse sessions</Link></section>}
+        {import.meta.env.DEV && !PUBLIC_SANDBOX_ONLY && <section className="home-dev-tools" aria-label="Local development tools"><h2>Local development tools</h2><p>Multiplayer sessions are still under development.</p><Link to="/sessions">Browse sessions</Link></section>}
       </main>
 
       <SiteFooter user={user} onLogout={logout} />

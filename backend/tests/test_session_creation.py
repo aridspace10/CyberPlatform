@@ -1023,3 +1023,62 @@ def test_friends_only_requires_accepted_friendship_and_single_player_stays_solo(
             else:
                 raise AssertionError("Guest entered single-player session")
         client.portal.call(session_manager.remove_session, str(solo_id))
+
+
+def test_public_launch_allows_only_owner_sandbox(monkeypatch):
+    client, _testing_session = make_client()
+    with client:
+        existing = client.post("/api/session_create", json=creation_payload("Versus"))
+        assert existing.status_code == 201
+        multiplayer_id = existing.json()["session_id"]
+
+        monkeypatch.setenv("CYBERPLATFORM_PUBLIC_SANDBOX_ONLY", "true")
+        for method, path, body in [
+            ("get", "/api/sessions", None),
+            ("post", "/api/session_create", creation_payload("Versus")),
+            ("post", f"/api/session/{multiplayer_id}/requests", None),
+            ("get", f"/api/session/{multiplayer_id}/access", None),
+            ("get", f"/api/session/{multiplayer_id}", None),
+            ("get", "/api/scenarios", None),
+        ]:
+            response = (
+                getattr(client, method)(path, json=body)
+                if body else getattr(client, method)(path)
+            )
+            assert response.status_code == 404, path
+
+        creator_token = authorization(42, "creator")["Authorization"].split()[1]
+        with client.websocket_connect(f"/ws/{multiplayer_id}") as websocket:
+            websocket.send_json({"token": creator_token})
+            with pytest.raises(WebSocketDisconnect) as error:
+                websocket.receive_json()
+            assert error.value.code == 4404
+
+        sandbox_response = client.post("/api/sandbox/42")
+        assert sandbox_response.status_code == 200
+        sandbox_id = sandbox_response.json()["session_id"]
+        assert client.get(f"/api/session/{sandbox_id}").status_code == 200
+
+        guest_headers = authorization(43, "guest")
+        assert (
+            client.get(f"/api/session/{sandbox_id}", headers=guest_headers).status_code
+            == 404
+        )
+        with client.websocket_connect(f"/ws/{sandbox_id}") as websocket:
+            websocket.send_json({"token": guest_headers["Authorization"].split()[1]})
+            with pytest.raises(WebSocketDisconnect) as error:
+                websocket.receive_json()
+            assert error.value.code == 4404
+
+        with client.websocket_connect(f"/ws/{sandbox_id}") as websocket:
+            websocket.send_json({"token": creator_token})
+            assert websocket.receive_json()["type"] == "system"
+            assert websocket.receive_json()["type"] == "lobby_update"
+            websocket.send_json({"type": "command", "input": "echo launch"})
+            assert "launch" in websocket.receive_json()["stdout"]
+            websocket.send_json({"type": "chat", "message": "hidden"})
+            assert websocket.receive_json()["message"] == "This feature is unavailable"
+            assert client.post(f"/api/sessions/{sandbox_id}/save").status_code == 200
+
+        client.portal.call(session_manager.remove_session, str(multiplayer_id))
+        client.portal.call(session_manager.remove_session, str(sandbox_id))

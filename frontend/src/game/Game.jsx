@@ -14,6 +14,7 @@ import { DEFAULT_SANDBOX_SETTINGS, loadSandboxSettings, saveSandboxSettings } fr
 import { WEBSOCKET_URL } from "../api/config";
 import { answerSessionRequest, getSessionAccess, getSessionRequests, requestSessionJoin } from "../api/sessions";
 import "./Gamescreen.css"
+import { PUBLIC_SANDBOX_ONLY } from "../publicLaunch";
 
 export default function Game() {
     const { sessionId } = useParams();
@@ -276,19 +277,19 @@ export default function Game() {
                 <span className="game-topbar-label">{isSandbox ? "SANDBOX / TERMINAL" : "SESSION / TERMINAL"}</span>
                 <nav className="game-topbar-links" aria-label="Site navigation">
                     <Link to="/">Home</Link>
-                    <Link to="/sessions">Sessions</Link>
+                    {!PUBLIC_SANDBOX_ONLY && <Link to="/sessions">Sessions</Link>}
                     <Link to="/profile">Profile</Link>
                 </nav>
             </header>
             <nav className="game-mobile-nav" aria-label="Game panels">
                 <button type="button" aria-controls="game-stage" aria-pressed={visibleCompactView === "game"} onClick={() => setCompactView("game")}>Game</button>
-                <button type="button" aria-controls="game-sidebar" aria-pressed={visibleCompactView === "sidebar"} onClick={() => setCompactView("sidebar")}>Session tabs</button>
+                <button type="button" aria-controls="game-sidebar" aria-pressed={visibleCompactView === "sidebar"} onClick={() => setCompactView("sidebar")}>{PUBLIC_SANDBOX_ONLY ? "Controls" : "Session tabs"}</button>
                 {hasQuestionPanel && <button type="button" aria-controls="game-questions" aria-pressed={visibleCompactView === "questions"} onClick={() => setCompactView("questions")}>Questions</button>}
             </nav>
             <div className={`game-workspace game-view-${visibleCompactView}`}>
             <div className="sidebar-page" id="game-sidebar">
                 <div className="sidebar-nav">
-                    {["General", "Settings", "Environment", "Chat"].map(tab => (
+                    {(PUBLIC_SANDBOX_ONLY ? ["General"] : ["General", "Settings", "Environment", "Chat"]).map(tab => (
                         <button
                             key={tab}
                             type="button"

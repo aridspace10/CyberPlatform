@@ -5,6 +5,7 @@ import { downloadSessionDiagnostics } from "../api/sessions";
 import { saveSessionRequest } from "../api/saveSession";
 import { API_URL } from "../api/config";
 import "./Tabs.css";
+import { PUBLIC_SANDBOX_ONLY } from "../publicLaunch";
 
 export default function GeneralTab({ isSandbox, onResetSandbox, resetPending, resetError }) {
     const { sessionId, addCommandLine } = useSession();
@@ -61,7 +62,7 @@ export default function GeneralTab({ isSandbox, onResetSandbox, resetPending, re
                 {diagnosticsError && <p role="alert">{diagnosticsError}</p>}
             </div>
             <button className="tab-button" onClick={handleReportIssue}>Report an issue</button>
-            {isSandbox && <>
+            {isSandbox && !PUBLIC_SANDBOX_ONLY && <>
                 <button className="tab-button" type="button" onClick={onResetSandbox} disabled={resetPending}>
                     {resetPending ? "Resetting…" : "Reset Sandbox"}
                 </button>
