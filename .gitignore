@@ -4,5 +4,7 @@ node_modules
 .coverage
 .coveragerc
 app.db
+*.db-shm
+*.db-wal
 /docs
 /backend/logs/

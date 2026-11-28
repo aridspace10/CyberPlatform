@@ -1,13 +1,16 @@
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
+from .configuration import check_database_storage, database_path, database_url
 from .modals import Base
 
-DATABASE_URL = "sqlite:///./app.db"
+DATABASE_PATH = database_path()
+DATABASE_URL = database_url(DATABASE_PATH)
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+SCHEMA_VERSION = 1
 
 
 def migrate_friendships(database_engine):
@@ -57,20 +60,46 @@ def migrate_friendships(database_engine):
         )
 
 
-Base.metadata.create_all(bind=engine)
-migrate_friendships(engine)
-if engine.dialect.name == "sqlite" and "session" in inspect(engine).get_table_names():
-    session_columns = {
-        column["name"] for column in inspect(engine).get_columns("session")
-    }
-    if "visibility" not in session_columns:
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "ALTER TABLE session ADD COLUMN visibility VARCHAR "
-                    "NOT NULL DEFAULT 'public'"
+def upgrade_schema(database_engine):
+    """Create current tables and apply idempotent upgrades to older SQLite data."""
+    if database_engine.dialect.name != "sqlite":
+        raise RuntimeError("Only SQLite databases are supported")
+    with database_engine.connect() as connection:
+        version = connection.execute(text("PRAGMA user_version")).scalar_one()
+    if version > SCHEMA_VERSION:
+        raise RuntimeError(
+            f"Database schema version {version} is newer than this application "
+            f"(version {SCHEMA_VERSION})"
+        )
+    if version == SCHEMA_VERSION:
+        return
+
+    Base.metadata.create_all(bind=database_engine)
+    migrate_friendships(database_engine)
+    if "session" in inspect(database_engine).get_table_names():
+        session_columns = {
+            column["name"] for column in inspect(database_engine).get_columns("session")
+        }
+        if "visibility" not in session_columns:
+            with database_engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE session ADD COLUMN visibility VARCHAR "
+                        "NOT NULL DEFAULT 'public'"
+                    )
                 )
-            )
+    with database_engine.begin() as connection:
+        connection.execute(text(f"PRAGMA user_version = {SCHEMA_VERSION}"))
+
+
+def prepare_database(database_engine=engine, path=DATABASE_PATH):
+    check_database_storage(path)
+    try:
+        upgrade_schema(database_engine)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Database startup or schema upgrade failed for {path}"
+        ) from exc
 
 
 def get_db():
